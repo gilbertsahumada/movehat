@@ -7,7 +7,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha",
+    "test:watch": "mocha --watch",
+    "test:message": "mocha tests/message.test.ts",
     "dev": "ts-node src/cli.ts",
     "compile": "ts-node src/cli.ts compile"
   },
@@ -26,6 +28,7 @@
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
