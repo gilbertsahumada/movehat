@@ -8,5 +8,8 @@ export default {
   account: process.env.MH_ACCOUNT!,
   privateKey: process.env.MH_PRIVATE_KEY!,
 
-  moveDir: "./move" // carpeta donde está tu Move.toml
+  moveDir: "./move", // carpeta donde está tu Move.toml
+  namedAddresses: {
+    counter: process.env.MH_ACCOUNT ?? "0x0"
+  }
 };

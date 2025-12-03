@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "ts-node src/cli.ts"
+    "dev": "ts-node src/cli.ts",
+    "compile": "ts-node src/cli.ts compile"
   },
   "bin": {
     "movehat": "./dist/movehat.js"

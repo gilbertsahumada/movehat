@@ -1,15 +1,17 @@
 [package]
-name = "first-contract"
+name = "hello_blockchain"
 version = "1.0.0"
 authors = []
 
 [addresses]
+#hello_blockchain = "_"
 
 [dev-addresses]
+#hello_blockchain = "_"
 
 [dependencies.AptosFramework]
 git = "https://github.com/movementlabsxyz/aptos-core.git"
 rev = "movement"
-subdir = "aptos-move/framework"
+subdir = "aptos-move/framework/aptos-framework"
 
 [dev-dependencies]
