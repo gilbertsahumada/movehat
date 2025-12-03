@@ -25,6 +25,39 @@ describe("Message Contract", () => {
       const txResult = await messageContract.call(env.account, "set_message", [
         testMessage,
       ]);
+
+      assertTransactionSuccess(txResult);
+
+      const retrievedMessage = await messageContract.view<string>(
+        "get_message",
+        [env.account.accountAddress.toString()]
+      );
+
+      expect(retrievedMessage).to.equal(testMessage);
+    });
+
+    it("should update an existing message", async function() {
+        this.timeout(30000);
+
+        const firstMessage = "First Message";
+        const secondMessage = "Updated Message";
+
+        await messageContract.call(env.account, "set_message", [firstMessage]);
+
+        const txResult = await messageContract.call(
+            env.account,
+            "set_message",
+            [secondMessage]
+        );
+
+        assertTransactionSuccess(txResult);
+
+        const retrievedMessage = await messageContract.view<string>(
+            "get_message",
+            [env.account.accountAddress.toString()]
+        );
+
+        expect(retrievedMessage).to.equal(secondMessage);
     });
   });
 });
