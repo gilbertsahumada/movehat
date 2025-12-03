@@ -1,4 +1,4 @@
-import config from "../../movehat.config.js";
+import config from "../movehat.config.js";
 import { exec } from "child_process";
 
 export default function deployCommand() { 
