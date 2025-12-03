@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+move/build/
+dist/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Movehat
+.movehat/
+deployments/
