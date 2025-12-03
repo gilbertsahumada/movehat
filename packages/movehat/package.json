@@ -21,13 +21,32 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "dist",
     "src/templates"
   ],
-  "keywords": ["move", "aptos", "movement", "blockchain", "smart-contracts"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gilbertsahumada/movehat.git"
+  },
+  "homepage": "https://github.com/gilbertsahumada/movehat#readme",
+  "bugs": {
+    "url": "https://github.com/gilbertsahumada/movehat/issues"
+  },
+  "keywords": [
+    "move",
+    "aptos",
+    "movement",
+    "blockchain",
+    "smart-contracts",
+    "hardhat",
+    "framework",
+    "web3",
+    "dapp"
+  ],
   "author": "Gilbert Sahumada",
   "license": "MIT",
   "dependencies": {
