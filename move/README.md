@@ -22,3 +22,17 @@ Alternative for Testnet
 movement init --network custom --rest-url https://testnet.movementnetwork.xyz/v1 --faucet-url https://faucet.testnet.movementnetwork.xyz/
 ```
 
+## Check subdir 
+
+CLI is setting 
+
+```toml
+subdir = "aptos-move/framework"
+```
+
+It must be
+
+
+```toml
+subdir = "aptos-move/framework/aptos-framework"
+```
