@@ -1,8 +1,8 @@
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
-import { setupTestEnvironment, type TestEnvironment } from "./helpers/setup.js";
-import { getContract, MoveContract } from "./helpers/contract.js";
-import { assertTransactionSuccess } from "./helpers/assertion.js";
+import { setupTestEnvironment, type TestEnvironment } from "movehat/helpers";
+import { getContract, MoveContract } from "movehat/helpers";
+import { assertTransactionSuccess } from "movehat/helpers";
 
 describe("Message Contract", () => {
   let env: TestEnvironment;
