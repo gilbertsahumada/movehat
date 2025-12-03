@@ -17,7 +17,7 @@ describe("Message Contract", () => {
   });
 
   describe("get_message", () => {
-    it("should set and retieve a message", async function () {
+    it("should set and retrieve a message", async function () {
       this.timeout(20000);
 
       const testMessage = "Hello, from MoveHat!";

@@ -86,7 +86,7 @@ export class MoveContract {
 }
 
 /**
- * Factory function para crear una instancia de contrato
+ * Factory function to create a contract instance
  */
 export function getContract(
     aptos: Aptos,

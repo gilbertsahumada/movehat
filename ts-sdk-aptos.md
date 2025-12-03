@@ -118,8 +118,8 @@ const { Account, Aptos, AptosConfig, Network, Ed25519PrivateKey } = require("@ap
 // Define the custom network configuration
 const config = new AptosConfig({
     network: Network.CUSTOM,
-    fullnode: 'https://testnet.bardock.movementnetwork.xyz/v1',
-    faucet: 'https://faucet.testnet.bardock.movementnetwork.xyz/',
+    fullnode: 'https://testnet.movementnetwork.xyz/v1',
+    faucet: 'https://faucet.testnet.movementnetwork.xyz/',
 });
 
 // Define the module address and functions
