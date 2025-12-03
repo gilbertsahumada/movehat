@@ -84,3 +84,14 @@ export class MoveContract {
     return `${this.moduleAddress}::${this.moduleName}`;
   }
 }
+
+/**
+ * Factory function para crear una instancia de contrato
+ */
+export function getContract(
+    aptos: Aptos,
+    moduleAddress: string,
+    moduleName: string
+): MoveContract {
+    return new MoveContract(aptos, moduleAddress, moduleName);
+}
