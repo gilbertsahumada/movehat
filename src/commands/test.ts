@@ -20,8 +20,8 @@ export default async function testCommand() {
 
     for (const file of testFiles) {
         console.log(`Executing test file: ${file}`);
-        // Aquí puedes agregar la lógica para ejecutar cada archivo de prueba Move
-        // Por ejemplo, podrías usar un comando CLI específico para ejecutar las pruebas
+        // Here you can add the logic to execute each Move test file
+        // For example, you could use a specific CLI command to run the tests
         await import(path.join(testDir, file));
     }
 
