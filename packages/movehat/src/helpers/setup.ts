@@ -6,13 +6,14 @@ import {
   Network,
 } from "@aptos-labs/ts-sdk";
 import { loadUserConfig } from "./config.js";
+import { MovehatConfig } from "../types/config.js";
 
-const config = await loadUserConfig();
+const config: MovehatConfig = await loadUserConfig();
 
 export interface TestEnvironment {
   aptos: Aptos;
   account: Account;
-  config: typeof config;
+  config: MovehatConfig;
 }
 
 export async function setupTestEnvironment(): Promise<TestEnvironment> {
