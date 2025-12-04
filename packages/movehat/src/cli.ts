@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import deployCommand from './commands/deploy.js';
 import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
+import initCommand from './commands/init.js';
 
 const program = new Command();
 
@@ -10,6 +11,13 @@ program
   .name('movehat')
   .description('A CLI tool for managing Move smart contracts')
   .version('1.0.0');
+
+program
+    .command('init')
+    .description('Initialize a new Move project in the current directory')
+    .action((options) => {
+        initCommand(options.name);
+    });
 
 program
     .command('deploy')
