@@ -1,8 +1,10 @@
-import config from "../movehat.config.js";
 import { exec } from "child_process";
+import { loadUserConfig } from "../helpers/config.js";
 
-export default function deployCommand() { 
+export default async function deployCommand() { 
     console.log("Deploying Move smart contracts...");
+
+    const config = await loadUserConfig();
 
     exec(
         `movement move publish --profile ${config.profile} --package-dir ${config.moveDir} --assume-yes`,

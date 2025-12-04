@@ -5,7 +5,9 @@ import {
   Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
-import config from "../../src/movehat.config.js";
+import { loadUserConfig } from "./config.js";
+
+const config = await loadUserConfig();
 
 export interface TestEnvironment {
   aptos: Aptos;

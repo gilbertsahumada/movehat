@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import config from "../movehat.config.js";
+import { loadUserConfig } from "../helpers/config.js";
 
 function run(command: string, cwd: string) {
   return new Promise<void>((resolve, reject) => {
@@ -18,6 +18,7 @@ function run(command: string, cwd: string) {
 }
 
 export default async function compileCommand() {
+  const config = await loadUserConfig();
   const moveDir = path.resolve(process.cwd(), config.moveDir);
   if (!fs.existsSync(moveDir)) {
     console.error(`Move directory not found: ${moveDir}. Update movehat.config.ts -> moveDir.`);
