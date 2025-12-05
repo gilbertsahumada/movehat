@@ -1,6 +1,6 @@
 {
   "name": "movehat",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "Hardhat-like development framework for Movement L1 and Aptos Move smart contracts",
   "bin": {

@@ -10,7 +10,7 @@ const program = new Command();
 program
   .name('movehat')
   .description('A CLI tool for managing Move smart contracts')
-  .version('1.0.0');
+  .version('0.0.1');
 
 program
     .command('init [project-name]')
