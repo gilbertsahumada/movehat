@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Hardhat-like development framework for Movement L1 and Aptos Move smart contracts",
   "bin": {
-    "movehat": "./dist/cli.js"
+    "movehat": "./bin/movehat.js"
   },
   "exports": {
     ".": {
@@ -24,7 +24,9 @@
     "prepublishOnly": "npm run build"
   },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    "bin"
   ],
   "repository": {
     "type": "git",

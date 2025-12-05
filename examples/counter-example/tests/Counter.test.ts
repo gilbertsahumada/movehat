@@ -1,33 +1,51 @@
-import config from "../src/movehat.config.js";
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { getMovehat } from "movehat";
+import { expect } from "chai";
 
-const aptos = new Aptos(
-    new AptosConfig({
-        network: config.network as Network,
-        fullnode: config.rpc,
-    })
-);
+describe("Counter Contract", () => {
+  it("should initialize with value 0", async () => {
+    // Get the Movehat Runtime Environment
+    const mh = await getMovehat();
 
-(async () => {
-    console.log("Fetching account resources...");
+    console.log(`\n✅ Testing on ${mh.network.name}`);
+    console.log(`   Account: ${mh.account.accountAddress.toString()}\n`);
 
-    const result = await aptos.view({
-        payload: {
-            function: `${config.account}::counter::get`,
-            typeArguments: [],
-            functionArguments: [],
-        }
-    });
+    // Get counter contract
+    const counter = mh.getContract(
+      mh.account.accountAddress.toString(),
+      "counter"
+    );
 
-    console.log("Account resources fetched:");
+    // Read counter value
+    const value = await counter.view<number>("get", [
+      mh.account.accountAddress.toString()
+    ]);
 
-    if(result[0] !== 0) {
-        throw new Error(`Unexpected counter value: ${result[0]}`);
-    }
+    console.log(`   Counter value: ${value}`);
 
-    console.log("Test passed: Counter value is 0 as expected.");
+    // Assert the counter is 0
+    expect(value).to.equal(0);
+  });
 
-})().catch((error: any) => {
-    console.error("Test failed:", error);
-    process.exit(1);
+  it("should increment counter", async () => {
+    const mh = await getMovehat();
+
+    const counter = mh.getContract(
+      mh.account.accountAddress.toString(),
+      "counter"
+    );
+
+    // Increment the counter
+    const tx = await counter.call(mh.account, "increment", []);
+    console.log(`   Transaction: ${tx.hash}`);
+
+    // Read new value
+    const value = await counter.view<number>("get", [
+      mh.account.accountAddress.toString()
+    ]);
+
+    console.log(`   New counter value: ${value}`);
+
+    // Should be 1 now
+    expect(value).to.equal(1);
+  });
 });
