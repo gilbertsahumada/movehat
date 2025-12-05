@@ -4,5 +4,6 @@ export interface MovehatConfig {
     privateKey: string;
     profile: string;
     moveDir: string;
+    account: string;
     namedAddresses?: Record<string, string>;
 }

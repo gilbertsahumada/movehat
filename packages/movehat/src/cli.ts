@@ -13,10 +13,10 @@ program
   .version('1.0.0');
 
 program
-    .command('init')
+    .command('init [project-name]')
     .description('Initialize a new Move project in the current directory')
-    .action((options) => {
-        initCommand(options.name);
+    .action((projectName) => {
+        initCommand(projectName);
     });
 
 program

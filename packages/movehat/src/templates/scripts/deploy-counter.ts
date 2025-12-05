@@ -1,5 +1,4 @@
-import { setupTestEnvironment } from "../node_modules/movehat/dist/helpers/setup.js";
-import { getContract } from "../node_modules/movehat/dist/helpers/contract.js";
+import { setupTestEnvironment, getContract } from "movehat/helpers";
 
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
