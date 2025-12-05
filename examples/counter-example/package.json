@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "test": "mocha",
+    "test:watch": "mocha --watch",
+    "deploy": "tsx scripts/deploy-counter.ts",
     "compile": "movehat compile"
   },
   "dependencies": {

@@ -7,6 +7,7 @@
     "build:movehat": "pnpm --filter movehat build",
     "dev": "pnpm --filter movehat dev",
     "test:example": "pnpm --filter counter-example test",
+    "test:runtime": "pnpm --filter counter-example run deploy",
     "clean": "pnpm -r clean"
   },
   "packageManager": "pnpm@9.0.0"

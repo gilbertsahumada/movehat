@@ -156,33 +156,45 @@ my-project/
 
 ## Testing
 
-To test the example project:
+The `examples/counter-example` project serves as the test bed for local development:
 
 ```bash
+# Test the example project
 cd examples/counter-example
 pnpm install
+
+# Test runtime
+pnpm run deploy
+
+# Run tests (requires deployed contract)
 pnpm test
 ```
 
-## Publishing (Future)
+The example uses `"movehat": "workspace:*"` to always use your local version during development.
 
-When you're ready to publish to npm:
+## Publishing
 
-1. **Update version**
-   ```bash
-   cd packages/movehat
-   # Edit package.json and update the version
-   ```
+Publishing is automated via GitHub Actions. The workflow automatically replaces `workspace:*` with the actual version.
 
-2. **Build**
-   ```bash
-   pnpm build:movehat
-   ```
+### Option 1: GitHub Release (Recommended)
 
-3. **Publish**
-   ```bash
-   npm publish
-   ```
+1. Create a new release on GitHub with a version tag (e.g., `v0.0.1`)
+2. The workflow automatically publishes to npm
+
+### Option 2: Manual Trigger
+
+1. Go to Actions > Publish to npm > Run workflow
+2. Enter the version (e.g., `0.0.1`)
+3. Workflow publishes and creates a git tag
+
+### Prerequisites
+
+Set `NPM_TOKEN` secret in GitHub repository settings:
+- Go to Settings > Secrets and variables > Actions
+- Create secret named `NPM_TOKEN`
+- Get token from https://www.npmjs.com/settings/YOUR_USERNAME/tokens
+
+See [.github/workflows/README.md](.github/workflows/README.md) for details.
 
 ## Troubleshooting
 
