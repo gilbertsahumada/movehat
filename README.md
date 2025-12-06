@@ -159,19 +159,25 @@ Deployment scripts use the **Movehat Runtime Environment (MRE)**:
 import { getMovehat } from "movehat";
 
 async function main() {
-  // Get the Movehat Runtime Environment
   const mh = await getMovehat();
 
   console.log("Deploying from:", mh.account.accountAddress.toString());
   console.log("Network:", mh.config.network);
 
-  // Your deployment logic here
-  const contract = mh.getContract(mh.account, "counter");
+  // Deploy (publish) the module
+  // Movehat automatically checks if already deployed
+  const deployment = await mh.deployContract("counter");
+
+  console.log("Module deployed at:", deployment.address);
+  console.log("Transaction:", deployment.txHash);
+
+  // Get contract instance
+  const contract = mh.getContract(deployment.address, "counter");
 
   // Initialize the counter
-  await contract.init();
+  await contract.call(mh.account, "init", []);
 
-  console.log("Counter deployed!");
+  console.log("Counter initialized!");
 }
 
 main().catch((error) => {
@@ -180,17 +186,84 @@ main().catch((error) => {
 });
 ```
 
+### Deployment Tracking
+
+Movehat **automatically tracks deployments** per network, similar to hardhat-deploy:
+
+```
+my-project/
+└── deployments/
+    ├── testnet/
+    │   ├── counter.json
+    │   └── token.json
+    ├── mainnet/
+    │   └── counter.json
+    └── local/
+        └── counter.json
+```
+
+Each deployment file contains:
+```json
+{
+  "address": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "moduleName": "counter",
+  "network": "testnet",
+  "deployer": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "timestamp": 1704985623564,
+  "txHash": "0x59cb0c2df832064174b50fc69909af5819c6e273cc644f9a2123102b20bb0ef2"
+}
+```
+
+### Automatic Deployment Check
+
+When you run a deployment script, Movehat **automatically checks** if the module is already deployed:
+
+**First time:**
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+# ✅ Deploys successfully
+```
+
+**Second time (already deployed):**
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+# ❌ Error: Module "counter" is already deployed on testnet
+#    Address: 0x662a...
+#    Deployed at: 12/5/2025, 11:38:14 PM
+#    Transaction: 0x59cb0c2df832...
+#
+#    💡 To redeploy, run with the --redeploy flag:
+#    movehat run <script> --network testnet --redeploy
+```
+
+**Force redeploy:**
+```bash
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
+# ✅ Redeploys and updates deployment info
+```
+
 ### Available Runtime Properties
 
 ```typescript
 const mh = await getMovehat();
 
+// Core
 mh.config         // Resolved configuration
 mh.network        // Network info (name, chainId, rpc)
 mh.aptos          // Aptos SDK client
 mh.account        // Primary account
 mh.accounts       // All configured accounts
+
+// Contract helpers
 mh.getContract    // Get contract helper
+
+// Deployment functions
+mh.deployContract       // Deploy and track module
+mh.getDeployment        // Get deployment info for a module
+mh.getDeployments       // Get all deployments for current network
+mh.getDeploymentAddress // Get deployed address for a module
+
+// Network management
 mh.switchNetwork  // Switch to different network
 ```
 
@@ -269,7 +342,7 @@ movehat compile
 
 **Note:** Compilation is network-independent and uses global configuration.
 
-### `movehat run <script> [--network <name>]`
+### `movehat run <script> [--network <name>] [--redeploy]`
 
 Execute a TypeScript/JavaScript script with the Movehat Runtime.
 
@@ -281,9 +354,16 @@ movehat run scripts/deploy-counter.ts
 movehat run scripts/deploy-counter.ts --network testnet
 movehat run scripts/deploy-counter.ts --network mainnet
 movehat run scripts/deploy-counter.ts --network local
+
+# Force redeploy (overrides deployment check)
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
 ```
 
-Supported file extensions: `.ts`, `.js`, `.mjs`
+**Flags:**
+- `--network <name>` - Network to use (testnet, mainnet, local, etc.)
+- `--redeploy` - Force redeploy even if module is already deployed
+
+**Supported file extensions:** `.ts`, `.js`, `.mjs`
 
 ### `movehat test`
 
@@ -330,15 +410,18 @@ import { getMovehat } from "movehat";
 async function main() {
   const mh = await getMovehat();
 
-  // 1. Publish module (handled by Movement CLI internally)
-  console.log("Publishing module...");
+  // 1. Deploy (publish) the module
+  // Automatically checks if already deployed
+  const deployment = await mh.deployContract("counter");
+  console.log("Module deployed at:", deployment.address);
+  console.log("Transaction:", deployment.txHash);
 
   // 2. Initialize
-  const contract = mh.getContract(mh.account, "counter");
-  await contract.init();
+  const contract = mh.getContract(deployment.address, "counter");
+  await contract.call(mh.account, "init", []);
 
   // 3. Verify
-  const value = await contract.getValue();
+  const value = await contract.view("getValue", []);
   console.log("Initial value:", value);
 }
 
@@ -358,7 +441,59 @@ async function main() {
     // Add confirmation logic
   }
 
-  // Deploy logic here
+  // Deploy module - automatically tracked per network
+  const deployment = await mh.deployContract("counter");
+  console.log(`Deployed on ${mh.config.network}:`, deployment.address);
+}
+
+main().catch(console.error);
+```
+
+### Using Deployment Info
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // Check if already deployed
+  const existing = mh.getDeployment("counter");
+  if (existing) {
+    console.log("Already deployed at:", existing.address);
+    console.log("Deployed on:", new Date(existing.timestamp).toLocaleString());
+    console.log("TX:", existing.txHash);
+
+    // Use existing deployment
+    const contract = mh.getContract(existing.address, "counter");
+    // ... interact with contract
+    return;
+  }
+
+  // Deploy new
+  const deployment = await mh.deployContract("counter");
+  // ... initialize
+}
+
+main().catch(console.error);
+```
+
+### Get All Deployments
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // Get all deployments for current network
+  const deployments = mh.getDeployments();
+
+  for (const [moduleName, info] of Object.entries(deployments)) {
+    console.log(`${moduleName}: ${info.address}`);
+    console.log(`  TX: ${info.txHash}`);
+    console.log(`  Deployed: ${new Date(info.timestamp).toLocaleString()}`);
+  }
 }
 
 main().catch(console.error);

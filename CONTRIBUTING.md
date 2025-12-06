@@ -212,15 +212,74 @@ Templates are copied when users run `movehat init`. During development:
 
 **Copy logic:** `packages/movehat/src/commands/init.ts`
 
+#### Deployment Tracking System
+
+Movehat automatically tracks deployments per network, similar to hardhat-deploy. This prevents accidental redeployments and maintains a deployment history.
+
+**How it works:**
+
+1. When `deployContract(moduleName)` is called:
+   - Checks if module is already deployed on current network
+   - If already deployed AND `--redeploy` flag not set:
+     - Shows error message with deployment details
+     - Suggests using `--redeploy` flag
+     - Exits with `process.exit(1)`
+   - If not deployed OR `--redeploy` flag is set:
+     - Deploys the module
+     - Saves deployment info to `deployments/<network>/<module>.json`
+
+2. The `--redeploy` flag flow:
+   - User passes flag: `movehat run script.ts --network testnet --redeploy`
+   - CLI `preAction` hook stores in env: `process.env.MH_CLI_REDEPLOY = 'true'`
+   - `deployContract()` reads env var and skips deployment check
+
+**Deployment file structure:**
+```
+my-project/
+└── deployments/
+    ├── testnet/
+    │   ├── counter.json
+    │   └── token.json
+    ├── mainnet/
+    │   └── counter.json
+    └── local/
+        └── counter.json
+```
+
+**Deployment JSON format:**
+```json
+{
+  "address": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "moduleName": "counter",
+  "network": "testnet",
+  "deployer": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "timestamp": 1704985623564,
+  "txHash": "0x59cb0c2df832064174b50fc69909af5819c6e273cc644f9a2123102b20bb0ef2"
+}
+```
+
+**Key functions:**
+- `deployContract(moduleName, options?)` - Deploy module with automatic check
+- `getDeployment(moduleName)` - Get deployment info for a module
+- `getDeployments()` - Get all deployments for current network
+- `getDeploymentAddress(moduleName)` - Get deployed address for a module
+
+**Location:**
+- `packages/movehat/src/runtime.ts` - `deployContract()` function
+- `packages/movehat/src/helpers/deployments.ts` - Deployment tracking helpers
+
 #### CLI Execution Flow
 
 1. User runs `movehat <command>`
 2. `bin/movehat.js` spawns `tsx` with `cli.ts`
 3. `cli.ts` (commander.js) parses arguments
-4. `preAction` hook stores `--network` flag in env
+4. `preAction` hook stores `--network` and `--redeploy` flags in env vars
 5. Command function executes
 6. For `run` command: spawns `tsx` with user's script
 7. User script calls `getMovehat()` to get MRE
+8. If user calls `deployContract()`:
+   - Checks deployment history for current network
+   - Either deploys or shows error with `--redeploy` suggestion
 
 ## Available Commands
 
@@ -296,6 +355,9 @@ Before submitting a PR, ensure:
 - [ ] `movehat compile` works in example project
 - [ ] `movehat run` executes scripts correctly
 - [ ] `--network` flag works properly
+- [ ] `--redeploy` flag works properly
+- [ ] Deployment tracking works (first deploy, already deployed error, force redeploy)
+- [ ] Deployment files are created correctly in `deployments/<network>/`
 - [ ] Templates are copied correctly (no dev files)
 - [ ] TypeScript types are correct
 - [ ] Error messages are clear and helpful
@@ -395,6 +457,76 @@ movehat run scripts/deploy-counter.ts --network local
 
 # Test env var override
 MH_CLI_NETWORK=testnet movehat run scripts/deploy-counter.ts
+```
+
+### Test Deployment Tracking System
+
+The deployment tracking system is critical to test thoroughly:
+
+```bash
+cd examples/counter-example
+
+# Scenario 1: First deployment
+movehat run scripts/deploy-counter.ts --network testnet
+# Expected: ✅ Deploys successfully
+# Expected: Creates deployments/testnet/counter.json
+
+# Scenario 2: Already deployed (should fail)
+movehat run scripts/deploy-counter.ts --network testnet
+# Expected: ❌ Error message showing:
+#   - Module "counter" is already deployed on testnet
+#   - Deployment address
+#   - Deployment timestamp
+#   - Transaction hash
+#   - Suggestion to use --redeploy flag
+# Expected: Exits with code 1
+
+# Scenario 3: Force redeploy
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
+# Expected: 🔄 Shows "Redeploying module..." message
+# Expected: ✅ Deploys successfully
+# Expected: Updates deployments/testnet/counter.json
+
+# Scenario 4: Different network (should work)
+movehat run scripts/deploy-counter.ts --network local
+# Expected: ✅ Deploys successfully (different network)
+# Expected: Creates deployments/local/counter.json
+
+# Verify deployment files
+cat deployments/testnet/counter.json
+# Expected: Valid JSON with address, moduleName, network, deployer, timestamp, txHash
+```
+
+**Testing deployment helper functions:**
+
+Create a test script to verify the deployment query functions work correctly:
+
+```typescript
+// test-deployments.ts
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // Test getDeployment
+  const deployment = mh.getDeployment("counter");
+  console.log("Single deployment:", deployment);
+
+  // Test getDeployments
+  const allDeployments = mh.getDeployments();
+  console.log("All deployments:", allDeployments);
+
+  // Test getDeploymentAddress
+  const address = mh.getDeploymentAddress("counter");
+  console.log("Counter address:", address);
+}
+
+main().catch(console.error);
+```
+
+Run with:
+```bash
+movehat run test-deployments.ts --network testnet
 ```
 
 ## Publishing

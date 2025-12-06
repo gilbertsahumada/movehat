@@ -4,8 +4,11 @@ import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
+import { printMovehatBanner } from './helpers/banner.js';
 
 const program = new Command();
+
+printMovehatBanner();
 
 program
   .name('movehat')
