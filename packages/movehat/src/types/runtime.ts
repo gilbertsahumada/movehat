@@ -1,6 +1,7 @@
 import { Aptos, Account } from "@aptos-labs/ts-sdk";
 import { MovehatConfig } from "./config.js";
 import { MoveContract } from "../helpers/contract.js";
+import { DeploymentInfo } from "../helpers/deployments.js";
 
 export interface NetworkInfo {
   name: string;
@@ -26,7 +27,17 @@ export interface MovehatRuntime {
 
   // Helper functions
   getContract: (address: string, moduleName: string) => MoveContract;
-  deployContract: (moduleName: string, metadataBytes?: Uint8Array, byteCode?: Uint8Array) => Promise<any>;
+
+  // Deployment functions
+  deployContract: (
+    moduleName: string,
+    options?: {
+      packageDir?: string;
+    }
+  ) => Promise<DeploymentInfo>;
+  getDeployment: (moduleName: string) => DeploymentInfo | null;
+  getDeployments: () => Record<string, DeploymentInfo>;
+  getDeploymentAddress: (moduleName: string) => string | null;
 
   // Account management
   createAccount: () => Account;

@@ -1,7 +1,9 @@
 import { spawn } from "child_process";
-import { join, dirname } from "path";
+import { join, 
+  //dirname
+ } from "path";
 import { existsSync } from "fs";
-import { fileURLToPath } from "url";
+//import { fileURLToPath } from "url";
 
 export default async function testCommand() {
   const testDir = join(process.cwd(), "tests");

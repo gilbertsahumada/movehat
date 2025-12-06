@@ -7,6 +7,12 @@ export {
   assertTransactionSuccess,
   assertTransactionFailed,
 } from "./assertions.js";
-
+export {
+  saveDeployment,
+  loadDeployment,
+  getAllDeployments,
+  getDeployedAddress,
+} from "./deployments.js";
+export type { DeploymentInfo } from "./deployments.js";
 
 export type { MovehatConfig } from "../types/config.js";

@@ -21,15 +21,36 @@ declare module 'movehat' {
     namedAddresses?: Record<string, string>;
   }
 
+  export interface DeploymentInfo {
+    address: string;
+    moduleName: string;
+    network: string;
+    deployer: string;
+    timestamp: number;
+    txHash?: string;
+    blockNumber?: string;
+  }
+
   export interface MovehatRuntime {
     config: MovehatConfig;
     network: NetworkInfo;
     aptos: Aptos;
     account: Account;
+    accounts: Account[];
     getContract: (address: string, moduleName: string) => any;
-    deployContract: (moduleName: string, metadataBytes?: Uint8Array, byteCode?: Uint8Array) => Promise<any>;
+    deployContract: (
+      moduleName: string,
+      options?: {
+        packageDir?: string;
+      }
+    ) => Promise<DeploymentInfo>;
+    getDeployment: (moduleName: string) => DeploymentInfo | null;
+    getDeployments: () => Record<string, DeploymentInfo>;
+    getDeploymentAddress: (moduleName: string) => string | null;
     createAccount: () => Account;
     getAccount: (privateKey: string) => Account;
+    getAccountByIndex: (index: number) => Account;
+    switchNetwork: (networkName: string) => Promise<void>;
   }
 
   export function getMovehat(): Promise<MovehatRuntime>;
@@ -61,9 +82,23 @@ declare module 'movehat/helpers' {
     success: boolean;
   }
 
+  export interface DeploymentInfo {
+    address: string;
+    moduleName: string;
+    network: string;
+    deployer: string;
+    timestamp: number;
+    txHash?: string;
+    blockNumber?: string;
+  }
+
   export function setupTestEnvironment(): Promise<TestEnvironment>;
   export function createTestAccount(): Account;
   export function getContract(aptos: Aptos, address: string, moduleName: string): MoveContract;
   export function assertTransactionSuccess(result: TransactionResult): void;
   export function assertTransactionFailed(result: TransactionResult): void;
+  export function saveDeployment(deployment: DeploymentInfo): void;
+  export function loadDeployment(network: string, moduleName: string): DeploymentInfo | null;
+  export function getAllDeployments(network: string): Record<string, DeploymentInfo>;
+  export function getDeployedAddress(network: string, moduleName: string): string | null;
 }
