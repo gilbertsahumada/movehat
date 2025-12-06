@@ -1,29 +1,43 @@
-import fs from "fs";
-import path from "path";
+import { spawn } from "child_process";
+import { join, dirname } from "path";
+import { existsSync } from "fs";
+import { fileURLToPath } from "url";
 
 export default async function testCommand() {
-    console.log("Running tests for Move smart contracts...");
+  const testDir = join(process.cwd(), "tests");
 
-    const testDir = path.join(process.cwd(), "tests");
+  if (!existsSync(testDir)) {
+    console.error("❌ No tests directory found.");
+    console.error("   Create a 'tests' directory with your TypeScript test files.");
+    process.exit(1);
+  }
 
-    if (!fs.existsSync(testDir)) {
-        console.error("No tests directory found. Please create a 'tests' directory with your test files.");
-        return;
-    }
+  console.log("🧪 Running TypeScript tests with Mocha...\n");
 
-    const testFiles = fs.readdirSync(testDir).filter(file => file.endsWith(".move"));
+  // Find mocha from project's node_modules
+  const mochaPath = join(process.cwd(), "node_modules", ".bin", "mocha");
 
-    if (testFiles.length === 0) {
-        console.error("No Move test files found in the 'tests' directory.");
-        return;
-    }
+  if (!existsSync(mochaPath)) {
+    console.error("❌ Mocha not found in project dependencies.");
+    console.error("   Install it with: npm install --save-dev mocha");
+    process.exit(1);
+  }
 
-    for (const file of testFiles) {
-        console.log(`Executing test file: ${file}`);
-        // Here you can add the logic to execute each Move test file
-        // For example, you could use a specific CLI command to run the tests
-        await import(path.join(testDir, file));
-    }
+  // Run mocha with TypeScript support
+  const child = spawn(mochaPath, [], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      // Inherit network if set
+    },
+  });
 
-    console.log("All tests executed.");
+  child.on("exit", (code) => {
+    process.exit(code || 0);
+  });
+
+  child.on("error", (error) => {
+    console.error(`❌ Failed to run tests: ${error.message}`);
+    process.exit(1);
+  });
 }

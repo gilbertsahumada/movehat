@@ -1,248 +1,464 @@
 # Movehat
 
-Hardhat-like development framework for Movement L1 and Aptos Move smart contracts.
+A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts.
 
-## Description
+Write your tests and deployment scripts in TypeScript while building Move smart contracts.
 
-Movehat is a CLI tool that enables developers to build, compile, test, and deploy Move smart contracts for Movement L1, with a Hardhat-like developer experience. The goal is to provide a TypeScript-based development environment for writing tests and deployment scripts.
+## Features
 
-## Project Structure
+- **TypeScript-first** - Write tests and deployment scripts in TypeScript
+- **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
+- **Hardhat-like workflow** - Familiar commands and project structure
+- **Movehat Runtime Environment** - Global context object similar to Hardhat's HRE
+- **Movement CLI integration** - Wraps Movement CLI for compilation and publishing
 
-```
-movehat/
-├── packages/
-│   └── movehat/              # Main CLI package
-│       ├── src/
-│       │   ├── cli.ts        # CLI entry point
-│       │   ├── commands/     # Commands (init, compile, deploy, test)
-│       │   ├── helpers/      # Helper functions
-│       │   ├── templates/    # Templates for new projects
-│       │   └── types/        # TypeScript definitions
-│       ├── dist/             # Compiled code
-│       └── package.json
-├── examples/
-│   └── counter-example/      # Example project
-└── package.json              # Workspace root
-```
-
-## Local Development
-
-### Prerequisites
-
-- Node.js >= 18
-- pnpm >= 9.0.0
-
-### Initial Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/gilbertsahumada/movehat.git
-   cd movehat
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
-
-3. **Build the package**
-   ```bash
-   pnpm build:movehat
-   ```
-
-### Testing the CLI Locally (without publishing to npm)
-
-To test the CLI globally without publishing it to npm:
-
-1. **Link the package globally**
-   ```bash
-   cd packages/movehat
-   npm link
-   ```
-
-   This creates a symlink on your system pointing to your local code. Any changes you compile will be immediately available.
-
-2. **Verify the command is available**
-   ```bash
-   which movehat
-   # Should show: ~/.nvm/versions/node/vX.X.X/bin/movehat
-
-   movehat --version
-   # Should show: 1.0.0
-   ```
-
-3. **Test the init command**
-   ```bash
-   # In any directory
-   cd /tmp
-   mkdir test-project
-   cd test-project
-
-   # Initialize a new project
-   movehat init my-move-project
-   ```
-
-### Development Workflow
-
-1. **Make changes to the source code**
-   ```bash
-   # Edit files in packages/movehat/src/
-   vim packages/movehat/src/commands/init.ts
-   ```
-
-2. **Rebuild**
-   ```bash
-   # From the project root
-   pnpm build:movehat
-
-   # Or in watch mode (auto-recompiles)
-   pnpm dev
-   ```
-
-3. **Test changes immediately**
-   ```bash
-   # The movehat command uses the latest compiled code
-   movehat init test-project
-   ```
-
-### Unlink when finished
-
-When you're done developing and want to remove the global command:
+## Installation
 
 ```bash
-cd packages/movehat
-npm unlink -g movehat
+npm install -g movehat
+# or
+pnpm install -g movehat
 ```
 
-## Available Commands
+## Quick Start
 
-### Workspace (from root)
+### 1. Initialize a new project
 
-- `pnpm build` - Builds all packages
-- `pnpm build:movehat` - Builds only the movehat package
-- `pnpm dev` - Watch mode for development
-- `pnpm clean` - Cleans compiled files
-- `pnpm test:example` - Runs example project tests
+```bash
+mkdir my-move-project
+cd my-move-project
+movehat init
+```
 
-### Movehat CLI
-
-Once installed or linked:
-
-- `movehat init [project-name]` - Initialize a new Move project
-- `movehat compile` - Compile Move contracts
-- `movehat test` - Run TypeScript tests
-- `movehat deploy` - Deploy contracts to the network
-
-## Movehat Project Structure
-
-When you run `movehat init my-project`, the following structure is generated:
+This creates the following structure:
 
 ```
-my-project/
-├── move/                     # Move code
-│   ├── Move.toml            # Move project configuration
+my-move-project/
+├── move/                     # Move smart contracts
+│   ├── Move.toml
 │   └── sources/
-│       └── Counter.move     # Example contract
-├── scripts/                 # Deployment scripts
+│       └── Counter.move
+├── scripts/                  # Deployment scripts (TypeScript)
 │   └── deploy-counter.ts
-├── tests/                   # TypeScript tests
+├── tests/                    # Test files (TypeScript)
 │   └── Counter.test.ts
-├── movehat.config.ts        # Movehat configuration
-├── package.json
-├── tsconfig.json
+├── movehat.config.ts         # Movehat configuration
 ├── .env.example
-└── README.md
+├── package.json
+└── tsconfig.json
 ```
 
-## Testing
+### 2. Configure your environment
 
-The `examples/counter-example` project serves as the test bed for local development:
+Copy `.env.example` to `.env` and add your private keys:
 
 ```bash
-# Test the example project
-cd examples/counter-example
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```bash
+# Testnet
+MH_TESTNET_PRIVATE_KEY=0x1234...
+MH_TESTNET_RPC=https://testnet.movementnetwork.xyz/v1
+
+# Mainnet
+MH_MAINNET_PRIVATE_KEY=0x5678...
+MH_MAINNET_RPC=https://mainnet.movementnetwork.xyz/v1
+
+# Local development
+MH_LOCAL_PRIVATE_KEY=0x9abc...
+```
+
+### 3. Install dependencies
+
+```bash
+npm install
+# or
 pnpm install
+```
 
-# Test runtime
-pnpm run deploy
+### 4. Compile your contracts
 
-# Run tests (requires deployed contract)
+```bash
+movehat compile
+```
+
+### 5. Run deployment scripts
+
+```bash
+# Deploy to testnet (default)
+movehat run scripts/deploy-counter.ts
+
+# Deploy to specific network
+movehat run scripts/deploy-counter.ts --network mainnet
+movehat run scripts/deploy-counter.ts --network local
+```
+
+### 6. Run tests
+
+```bash
+npm test
+# or
 pnpm test
 ```
 
-The example uses `"movehat": "workspace:*"` to always use your local version during development.
+## Configuration
 
-## Publishing
+### Network Configuration
 
-Publishing is automated via GitHub Actions. The workflow automatically replaces `workspace:*` with the actual version.
+Edit `movehat.config.ts` to configure your networks:
 
-### Option 1: GitHub Release (Recommended)
+```typescript
+export default {
+  defaultNetwork: "testnet",
 
-1. Create a new release on GitHub with a version tag (e.g., `v0.0.1`)
-2. The workflow automatically publishes to npm
+  networks: {
+    testnet: {
+      url: process.env.MH_TESTNET_RPC || "https://testnet.movementnetwork.xyz/v1",
+      accounts: [process.env.MH_TESTNET_PRIVATE_KEY || ""],
+      chainId: "testnet",
+      profile: "default",
+    },
+    mainnet: {
+      url: process.env.MH_MAINNET_RPC || "https://mainnet.movementnetwork.xyz/v1",
+      accounts: [process.env.MH_MAINNET_PRIVATE_KEY || ""],
+      chainId: "mainnet",
+    },
+    local: {
+      url: "http://localhost:8080/v1",
+      accounts: [process.env.MH_LOCAL_PRIVATE_KEY || ""],
+    },
+  },
 
-### Option 2: Manual Trigger
+  moveDir: "./move",
 
-1. Go to Actions > Publish to npm > Run workflow
-2. Enter the version (e.g., `0.0.1`)
-3. Workflow publishes and creates a git tag
+  namedAddresses: {
+    counter: process.env.MH_ACCOUNT || "0x0",
+  },
+};
+```
 
-### Prerequisites
+### Network Selection Priority
 
-Set `NPM_TOKEN` secret in GitHub repository settings:
-- Go to Settings > Secrets and variables > Actions
-- Create secret named `NPM_TOKEN`
-- Get token from https://www.npmjs.com/settings/YOUR_USERNAME/tokens
+Movehat selects networks in this order:
 
-See [.github/workflows/README.md](.github/workflows/README.md) for details.
+1. `--network` CLI flag
+2. `MH_CLI_NETWORK` environment variable
+3. `MH_DEFAULT_NETWORK` environment variable
+4. `defaultNetwork` in config
+5. `"testnet"` (fallback)
+
+## Writing Deployment Scripts
+
+Deployment scripts use the **Movehat Runtime Environment (MRE)**:
+
+```typescript
+// scripts/deploy-counter.ts
+import { getMovehat } from "movehat";
+
+async function main() {
+  // Get the Movehat Runtime Environment
+  const mh = await getMovehat();
+
+  console.log("Deploying from:", mh.account.accountAddress.toString());
+  console.log("Network:", mh.config.network);
+
+  // Your deployment logic here
+  const contract = mh.getContract(mh.account, "counter");
+
+  // Initialize the counter
+  await contract.init();
+
+  console.log("Counter deployed!");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+```
+
+### Available Runtime Properties
+
+```typescript
+const mh = await getMovehat();
+
+mh.config         // Resolved configuration
+mh.network        // Network info (name, chainId, rpc)
+mh.aptos          // Aptos SDK client
+mh.account        // Primary account
+mh.accounts       // All configured accounts
+mh.getContract    // Get contract helper
+mh.switchNetwork  // Switch to different network
+```
+
+### Using Multiple Accounts
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // Use primary account (accounts[0])
+  console.log("Primary:", mh.account.accountAddress.toString());
+
+  // Access other accounts
+  const secondAccount = mh.accounts[1];
+  console.log("Second:", secondAccount.accountAddress.toString());
+
+  // Or use helper
+  const thirdAccount = mh.getAccountByIndex(2);
+}
+```
+
+## Writing Tests
+
+Tests use Mocha and Chai with the Movehat Runtime:
+
+```typescript
+// tests/Counter.test.ts
+import { expect } from "chai";
+import { getMovehat } from "movehat";
+
+describe("Counter", () => {
+  let mh: any;
+
+  before(async () => {
+    mh = await getMovehat();
+  });
+
+  it("should initialize counter", async () => {
+    const contract = mh.getContract(mh.account, "counter");
+    await contract.init();
+
+    const value = await contract.getValue();
+    expect(value).to.equal(0);
+  });
+
+  it("should increment counter", async () => {
+    const contract = mh.getContract(mh.account, "counter");
+    await contract.increment();
+
+    const value = await contract.getValue();
+    expect(value).to.equal(1);
+  });
+});
+```
+
+## CLI Commands
+
+### `movehat init [project-name]`
+
+Initialize a new Movehat project.
+
+```bash
+movehat init my-project
+movehat init  # Uses current directory
+```
+
+### `movehat compile`
+
+Compile Move smart contracts using Movement CLI.
+
+```bash
+movehat compile
+```
+
+**Note:** Compilation is network-independent and uses global configuration.
+
+### `movehat run <script> [--network <name>]`
+
+Execute a TypeScript/JavaScript script with the Movehat Runtime.
+
+```bash
+# Run with default network
+movehat run scripts/deploy-counter.ts
+
+# Run with specific network
+movehat run scripts/deploy-counter.ts --network testnet
+movehat run scripts/deploy-counter.ts --network mainnet
+movehat run scripts/deploy-counter.ts --network local
+```
+
+Supported file extensions: `.ts`, `.js`, `.mjs`
+
+### `movehat test`
+
+Run your TypeScript test suite.
+
+```bash
+movehat test
+```
+
+This runs your Mocha tests in the `tests/` directory.
+
+## Environment Variables
+
+### Per-Network Private Keys
+
+```bash
+MH_TESTNET_PRIVATE_KEY=0x...   # Testnet private key
+MH_MAINNET_PRIVATE_KEY=0x...   # Mainnet private key
+MH_LOCAL_PRIVATE_KEY=0x...     # Local private key
+```
+
+### Per-Network RPC URLs
+
+```bash
+MH_TESTNET_RPC=https://...     # Custom testnet RPC
+MH_MAINNET_RPC=https://...     # Custom mainnet RPC
+```
+
+### Global Settings
+
+```bash
+MH_PRIVATE_KEY=0x...           # Fallback private key (if network has no accounts)
+MH_CLI_NETWORK=testnet         # Override default network
+MH_DEFAULT_NETWORK=mainnet     # Set default network
+```
+
+## Examples
+
+### Deploy and Initialize
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // 1. Publish module (handled by Movement CLI internally)
+  console.log("Publishing module...");
+
+  // 2. Initialize
+  const contract = mh.getContract(mh.account, "counter");
+  await contract.init();
+
+  // 3. Verify
+  const value = await contract.getValue();
+  console.log("Initial value:", value);
+}
+
+main().catch(console.error);
+```
+
+### Multi-Network Deployment
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  if (mh.config.network === "mainnet") {
+    console.log("⚠️  Deploying to MAINNET");
+    // Add confirmation logic
+  }
+
+  // Deploy logic here
+}
+
+main().catch(console.error);
+```
+
+### Using Named Addresses
+
+```typescript
+// movehat.config.ts
+export default {
+  namedAddresses: {
+    deployer: process.env.MH_DEPLOYER_ADDRESS,
+    counter: process.env.MH_COUNTER_ADDRESS,
+  },
+  // ... rest of config
+};
+
+// In your script
+const mh = await getMovehat();
+console.log("Deployer:", mh.config.namedAddresses.deployer);
+console.log("Counter:", mh.config.namedAddresses.counter);
+```
+
+## Project Structure Best Practices
+
+```
+my-project/
+├── move/
+│   ├── Move.toml
+│   └── sources/
+│       ├── Counter.move
+│       ├── Token.move
+│       └── ...
+├── scripts/
+│   ├── deploy-counter.ts
+│   ├── deploy-token.ts
+│   ├── initialize.ts
+│   └── ...
+├── tests/
+│   ├── Counter.test.ts
+│   ├── Token.test.ts
+│   └── integration/
+│       └── ...
+├── movehat.config.ts
+├── .env
+├── .env.example
+└── package.json
+```
 
 ## Troubleshooting
 
-### `movehat` command not found
+### "Configuration file not found"
 
-If after `npm link` you can't find the command:
+Make sure you have `movehat.config.ts` or `movehat.config.js` in your project root.
 
-```bash
-# Verify the link was created
-ls -la $(npm root -g)/movehat
+### "Network 'X' not found in configuration"
 
-# Check your PATH
-echo $PATH
+Check that the network is defined in your `movehat.config.ts`:
 
-# Re-link
-cd packages/movehat
-npm unlink -g movehat
-npm link
+```typescript
+networks: {
+  testnet: { /* ... */ },
+  mainnet: { /* ... */ },
+}
 ```
 
-### Changes are not reflected
+### "Network 'X' has no accounts configured"
 
-Make sure to rebuild after making changes:
+Set the private key environment variable:
 
 ```bash
-pnpm build:movehat
+# For testnet
+export MH_TESTNET_PRIVATE_KEY=0x...
+
+# Or add to .env file
+echo "MH_TESTNET_PRIVATE_KEY=0x..." >> .env
 ```
 
-### Error "templates not found"
+### "Module not found"
 
-If you see errors about missing templates, ensure the `copy-templates` script ran:
+Make sure you've compiled your contracts first:
 
 ```bash
-cd packages/movehat
-npm run copy-templates
+movehat compile
 ```
 
 ## Contributing
 
-1. Fork the project
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
 MIT
+
+## Links
+
+- [GitHub Repository](https://github.com/gilbertsahumada/movehat)
+- [NPM Package](https://www.npmjs.com/package/movehat)
+- [Movement Documentation](https://docs.movementlabs.xyz/)
+- [Aptos SDK](https://aptos.dev/sdks/ts-sdk/)
 
 ## Author
 

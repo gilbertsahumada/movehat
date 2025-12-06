@@ -18,8 +18,11 @@ export interface MovehatRuntime {
   // Aptos client instance
   aptos: Aptos;
 
-  // Default account from config
+  // Default account from config (accounts[0])
   account: Account;
+
+  // All accounts for this network
+  accounts: Account[];
 
   // Helper functions
   getContract: (address: string, moduleName: string) => MoveContract;
@@ -28,4 +31,8 @@ export interface MovehatRuntime {
   // Account management
   createAccount: () => Account;
   getAccount: (privateKey: string) => Account;
+  getAccountByIndex: (index: number) => Account;
+
+  // Network switching
+  switchNetwork: (networkName: string) => Promise<void>;
 }
