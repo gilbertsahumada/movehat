@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
 
 export interface DeploymentInfo {
@@ -12,6 +12,43 @@ export interface DeploymentInfo {
 }
 
 /**
+ * Validates that a name is safe for use in file paths
+ * Only allows alphanumeric characters, hyphens, and underscores
+ * Prevents path traversal attacks
+ */
+function validateSafeName(name: string, type: "network" | "module"): void {
+  if (!name || typeof name !== "string") {
+    throw new Error(`Invalid ${type} name: must be a non-empty string`);
+  }
+
+  // Check for path traversal sequences
+  if (name.includes("..") || name.includes("/") || name.includes("\\")) {
+    throw new Error(
+      `Invalid ${type} name: "${name}"\n` +
+      `Path traversal sequences are not allowed.\n` +
+      `Use only alphanumeric characters, hyphens, and underscores.`
+    );
+  }
+
+  // Only allow alphanumeric, hyphens, underscores
+  const safePattern = /^[a-zA-Z0-9_-]+$/;
+  if (!safePattern.test(name)) {
+    throw new Error(
+      `Invalid ${type} name: "${name}"\n` +
+      `Only alphanumeric characters, hyphens (-), and underscores (_) are allowed.`
+    );
+  }
+
+  // Additional check: prevent starting with dot (hidden files)
+  if (name.startsWith(".")) {
+    throw new Error(
+      `Invalid ${type} name: "${name}"\n` +
+      `Names cannot start with a dot (.) to prevent hidden file creation.`
+    );
+  }
+}
+
+/**
  * Get the deployments directory path
  */
 function getDeploymentsDir(): string {
@@ -22,6 +59,9 @@ function getDeploymentsDir(): string {
  * Get the network-specific deployments directory
  */
 function getNetworkDeploymentsDir(network: string): string {
+  // Validate network name to prevent path traversal
+  validateSafeName(network, "network");
+
   const deploymentsDir = getDeploymentsDir();
   const networkDir = join(deploymentsDir, network);
 
@@ -40,6 +80,10 @@ function getNetworkDeploymentsDir(network: string): string {
  * Save a deployment
  */
 export function saveDeployment(deployment: DeploymentInfo): void {
+  // Validate both network and module name
+  validateSafeName(deployment.network, "network");
+  validateSafeName(deployment.moduleName, "module");
+
   const networkDir = getNetworkDeploymentsDir(deployment.network);
   const filePath = join(networkDir, `${deployment.moduleName}.json`);
 
@@ -52,6 +96,10 @@ export function saveDeployment(deployment: DeploymentInfo): void {
  * Load a deployment
  */
 export function loadDeployment(network: string, moduleName: string): DeploymentInfo | null {
+  // Validate both network and module name
+  validateSafeName(network, "network");
+  validateSafeName(moduleName, "module");
+
   const networkDir = getNetworkDeploymentsDir(network);
   const filePath = join(networkDir, `${moduleName}.json`);
 
@@ -72,19 +120,22 @@ export function loadDeployment(network: string, moduleName: string): DeploymentI
  * Get all deployments for a network
  */
 export function getAllDeployments(network: string): Record<string, DeploymentInfo> {
+  // Validate network name
+  validateSafeName(network, "network");
+
   const networkDir = getNetworkDeploymentsDir(network);
 
   if (!existsSync(networkDir)) {
     return {};
   }
 
-  const { readdirSync } = require("fs");
   const files = readdirSync(networkDir).filter((f: string) => f.endsWith(".json"));
 
   const deployments: Record<string, DeploymentInfo> = {};
 
   for (const file of files) {
     const moduleName = file.replace(".json", "");
+    // loadDeployment will validate moduleName internally
     const deployment = loadDeployment(network, moduleName);
     if (deployment) {
       deployments[moduleName] = deployment;
@@ -98,6 +149,7 @@ export function getAllDeployments(network: string): Record<string, DeploymentInf
  * Get deployed address for a module
  */
 export function getDeployedAddress(network: string, moduleName: string): string | null {
+  // Validation happens in loadDeployment
   const deployment = loadDeployment(network, moduleName);
   return deployment ? deployment.address : null;
 }

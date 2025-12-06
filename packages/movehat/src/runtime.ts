@@ -85,9 +85,10 @@ export async function initRuntime(
   ): Promise<DeploymentInfo> => {
     const { exec } = await import("child_process");
     const { promisify } = await import("util");
-    const { existsSync, mkdirSync, writeFileSync } = await import("fs");
+    const { existsSync, mkdirSync, writeFileSync, chmodSync } = await import("fs");
     const { join } = await import("path");
     const { homedir } = await import("os");
+    const { validateAndEscapePath, validateAndEscapeProfile } = await import("./helpers/shell.js");
     const execAsync = promisify(exec);
 
     // Check if --redeploy flag was passed via CLI
@@ -96,15 +97,32 @@ export async function initRuntime(
     // Check if already deployed
     const existingDeployment = loadDeployment(config.network, moduleName);
     if (existingDeployment && !forceRedeploy) {
-      console.error(`\n❌ Module "${moduleName}" is already deployed on ${config.network}`);
-      console.error(`   Address: ${existingDeployment.address}`);
-      console.error(`   Deployed at: ${new Date(existingDeployment.timestamp).toLocaleString()}`);
-      if (existingDeployment.txHash) {
-        console.error(`   Transaction: ${existingDeployment.txHash}`);
-      }
-      console.error(`\n💡 To redeploy, run with the --redeploy flag:`);
-      console.error(`   movehat run <script> --network ${config.network} --redeploy\n`);
-      process.exit(1);
+      // Build detailed error message with all deployment info
+      const errorDetails = [
+        `Module "${moduleName}" is already deployed on ${config.network}`,
+        `Address: ${existingDeployment.address}`,
+        `Deployed at: ${new Date(existingDeployment.timestamp).toLocaleString()}`,
+        existingDeployment.txHash ? `Transaction: ${existingDeployment.txHash}` : null,
+        `\nTo redeploy, run with the --redeploy flag:`,
+        `movehat run <script> --network ${config.network} --redeploy`,
+      ].filter(Boolean).join('\n');
+
+      // Log formatted error message for user
+      const formattedMessage = [
+        `\n❌ Module "${moduleName}" is already deployed on ${config.network}`,
+        `   Address: ${existingDeployment.address}`,
+        `   Deployed at: ${new Date(existingDeployment.timestamp).toLocaleString()}`,
+        existingDeployment.txHash ? `   Transaction: ${existingDeployment.txHash}` : null,
+        `\n💡 To redeploy, run with the --redeploy flag:`,
+        `   movehat run <script> --network ${config.network} --redeploy\n`,
+      ].filter(Boolean).join('\n');
+
+      console.error(formattedMessage);
+
+      // Throw error with complete context for programmatic handling
+      const error = new Error(errorDetails);
+      error.name = 'ModuleAlreadyDeployedError';
+      throw error;
     }
 
     if (forceRedeploy && existingDeployment) {
@@ -113,6 +131,10 @@ export async function initRuntime(
 
     const dir = options?.packageDir || config.moveDir;
     const profile = config.profile || "default";
+
+    // Validate and escape to prevent command injection
+    const safeDir = validateAndEscapePath(dir, "package directory");
+    const safeProfile = validateAndEscapeProfile(profile);
 
     console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
 
@@ -137,17 +159,27 @@ profiles:
     rest_url: "${config.rpc}"
 `;
         writeFileSync(aptosConfigPath, configContent, "utf-8");
+
+        // Restrict file permissions to owner only (600) for security
+        // This prevents other users from reading the private key
+        try {
+          chmodSync(aptosConfigPath, 0o600);
+        } catch (error) {
+          // chmod may fail on Windows, but that's okay
+          // Windows has different permission model (ACLs)
+          console.warn("⚠️  Could not set file permissions (this is normal on Windows)");
+        }
       }
 
       // Build first
       console.log("🔨 Building package...");
-      const buildCmd = `movement move build --package-dir ${dir}`;
+      const buildCmd = `movement move build --package-dir ${safeDir}`;
       const { stdout: buildOut } = await execAsync(buildCmd);
       if (buildOut) console.log(buildOut.trim());
 
       // Publish
       console.log("📤 Publishing to blockchain...");
-      const publishCmd = `movement move publish --profile ${profile} --package-dir ${dir} --assume-yes`;
+      const publishCmd = `movement move publish --profile ${safeProfile} --package-dir ${safeDir} --assume-yes`;
       const { stdout: publishOut } = await execAsync(publishCmd);
       if (publishOut) console.log(publishOut.trim());
 
