@@ -87,9 +87,18 @@ export function saveDeployment(deployment: DeploymentInfo): void {
   const networkDir = getNetworkDeploymentsDir(deployment.network);
   const filePath = join(networkDir, `${deployment.moduleName}.json`);
 
-  writeFileSync(filePath, JSON.stringify(deployment, null, 2), "utf-8");
-
-  console.log(`💾 Deployment saved: deployments/${deployment.network}/${deployment.moduleName}.json`);
+  try {
+    writeFileSync(filePath, JSON.stringify(deployment, null, 2), "utf-8");
+    console.log(
+      `💾 Deployment saved: deployments/${deployment.network}/${deployment.moduleName}.json`
+    );
+  } catch (error) {
+    console.error(
+      `Failed to save deployment for ${deployment.moduleName} on ${deployment.network} at ${filePath}:`,
+      error
+    );
+    throw error;
+  }
 }
 
 /**

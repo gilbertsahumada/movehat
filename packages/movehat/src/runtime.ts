@@ -6,7 +6,7 @@ import {
   Network,
 } from "@aptos-labs/ts-sdk";
 import { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
-import { MovehatConfig, MovehatUserConfig } from "./types/config.js";
+import { MovehatUserConfig } from "./types/config.js";
 import { loadUserConfig, resolveNetworkConfig } from "./helpers/config.js";
 import { getContract, MoveContract } from "./helpers/contract.js";
 import {
