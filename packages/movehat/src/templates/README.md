@@ -11,60 +11,60 @@ A Move smart contract project built with Movehat.
 
 ### 1. Install dependencies
 
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### 2. Configure environment
 
-Copy \`.env.example\` to \`.env\` and fill in your credentials:
+Copy `.env.example` to `.env` and fill in your credentials:
 
-\`\`\`bash
+```bash
 cp .env.example .env
-\`\`\`
+```
 
-Edit \`.env\`:
-\`\`\`
+Edit `.env`:
+```
 MH_PRIVATE_KEY=your_private_key_here
 MH_ACCOUNT=your_account_address_here
 MH_NETWORK=testnet
-\`\`\`
+```
 
 ### 3. Update Move.toml
 
-Edit \`move/Move.toml\` and set the \`counter\` address to your account address:
+Edit `move/Move.toml` and set the `counter` address to your account address:
 
-\`\`\`toml
+```toml
 [addresses]
 counter = "0xYOUR_ACCOUNT_ADDRESS"
-\`\`\`
+```
 
 ### 4. Compile contracts
 
-\`\`\`bash
+```bash
 npm run compile
-\`\`\`
+```
 
 ### 5. Deploy
 
-\`\`\`bash
+```bash
 npx tsx scripts/deploy-counter.ts
-\`\`\`
+```
 
 Or use the Movement CLI directly:
-\`\`\`bash
+```bash
 movement move publish --package-dir ./move --profile default --assume-yes
-\`\`\`
+```
 
 ### 6. Run tests
 
-\`\`\`bash
+```bash
 npm test
-\`\`\`
+```
 
 ## Project Structure
 
-\`\`\`
+```
 {{PROJECT_NAME}}/
 ├── move/                   # Move smart contracts
 │   ├── sources/
@@ -76,14 +76,14 @@ npm test
 │   └── Counter.test.ts
 ├── movehat.config.ts       # Movehat configuration
 └── .env                    # Environment variables (git-ignored)
-\`\`\`
+```
 
 ## Available Commands
 
-- \`npm run compile\` - Compile Move contracts
-- \`npm test\` - Run integration tests
-- \`npm run test:watch\` - Run tests in watch mode
-- \`npx tsx scripts/deploy-counter.ts\` - Deploy and initialize counter
+- `npm run compile` - Compile Move contracts
+- `npm test` - Run integration tests
+- `npm run test:watch` - Run tests in watch mode
+- `npx tsx scripts/deploy-counter.ts` - Deploy and initialize counter
 
 ## Learn More
 

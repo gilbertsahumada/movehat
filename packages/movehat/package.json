@@ -1,12 +1,10 @@
 {
   "name": "movehat",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
-  "description": "Hardhat-like framework for Movement L1 and Aptos Move",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "description": "Hardhat-like development framework for Movement L1 and Aptos Move smart contracts",
   "bin": {
-    "movehat": "./dist/cli.js"
+    "movehat": "./bin/movehat.js"
   },
   "exports": {
     ".": {
@@ -19,14 +17,16 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-templates",
+    "copy-templates": "cp -r src/templates dist/",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build"
   },
   "files": [
     "dist",
-    "src/templates"
+    "src",
+    "bin"
   ],
   "repository": {
     "type": "git",
@@ -47,13 +47,13 @@
     "web3",
     "dapp"
   ],
-  "author": "Gilbert Sahumada",
+  "author": "Gilberts Ahumada",
   "license": "MIT",
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.5",
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
-    "axios": "^1.13.2"
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

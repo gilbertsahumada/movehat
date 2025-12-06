@@ -5,15 +5,21 @@ import {
   Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
-import config from "../../src/movehat.config.js";
+import { loadUserConfig, resolveNetworkConfig } from "./config.js";
+import { MovehatConfig } from "../types/config.js";
 
 export interface TestEnvironment {
   aptos: Aptos;
   account: Account;
-  config: typeof config;
+  config: MovehatConfig;
 }
 
-export async function setupTestEnvironment(): Promise<TestEnvironment> {
+export async function setupTestEnvironment(networkName?: string): Promise<TestEnvironment> {
+  // Load and resolve config for selected network
+  const userConfig = await loadUserConfig();
+  const network = networkName || process.env.MH_CLI_NETWORK;
+  const config = await resolveNetworkConfig(userConfig, network);
+
   const aptosConfig = new AptosConfig({
     network: config.network as Network,
     fullnode: config.rpc,
@@ -36,7 +42,7 @@ export async function setupTestEnvironment(): Promise<TestEnvironment> {
   }
 }
 
-export function createTestAccount(): Account { 
+export function createTestAccount(): Account {
     return Account.generate();
 }
 

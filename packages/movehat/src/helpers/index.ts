@@ -7,3 +7,6 @@ export {
   assertTransactionSuccess,
   assertTransactionFailed,
 } from "./assertions.js";
+
+
+export type { MovehatConfig } from "../types/config.js";

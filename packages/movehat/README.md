@@ -1,4 +1,3 @@
-cat > packages/movehat/README.md << 'EOF'
 # Movehat
 
 > Hardhat-like development framework for Movement L1 and Aptos Move smart contracts
@@ -16,15 +15,15 @@ cat > packages/movehat/README.md << 'EOF'
 
 ## Installation
 
-\`\`\`bash
+```bash
 npm install -g movehat
 # or
 pnpm add -g movehat
-\`\`\`
+```
 
 ## Quick Start
 
-\`\`\`bash
+```bash
 # Create a new project
 npx movehat init my-move-project
 
@@ -42,11 +41,11 @@ npx movehat deploy
 
 # Run tests
 npm test
-\`\`\`
+```
 
 ## Project Structure
 
-\`\`\`
+```
 my-move-project/
 ├── move/                   # Move smart contracts
 │   ├── sources/
@@ -58,13 +57,13 @@ my-move-project/
 │   └── Counter.test.ts
 ├── movehat.config.ts       # Configuration
 └── .env                    # Environment variables
-\`\`\`
+```
 
 ## Configuration
 
 Edit `movehat.config.ts`:
 
-\`\`\`typescript
+```typescript
 export default {
   network: "movement-testnet",
   rpc: "https://testnet.movementnetwork.xyz/v1",
@@ -75,19 +74,19 @@ export default {
     counter: process.env.MH_ACCOUNT ?? "0x0",
   },
 };
-\`\`\`
+```
 
 Set up your environment variables in `.env`:
 
-\`\`\`bash
+```bash
 MH_PRIVATE_KEY=your_private_key_here
 MH_ACCOUNT=your_account_address_here
 MH_NETWORK=testnet
-\`\`\`
+```
 
 ## Writing Tests
 
-\`\`\`typescript
+```typescript
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { setupTestEnvironment, getContract, assertTransactionSuccess } from "movehat/helpers";
@@ -120,11 +119,11 @@ describe("Counter Contract", () => {
     expect(value).to.be.greaterThan(0);
   });
 });
-\`\`\`
+```
 
 ## Writing Deployment Scripts
 
-\`\`\`typescript
+```typescript
 import { setupTestEnvironment, getContract } from "movehat/helpers";
 
 async function main() {
@@ -138,81 +137,81 @@ async function main() {
     "counter"
   );
 
-  console.log(\`Contract address: \${env.account.accountAddress.toString()}::counter\`);
+  console.log(`Contract address: ${env.account.accountAddress.toString()}::counter`);
   
   // Initialize the counter
   console.log("\nInitializing counter...");
   const txResult = await counter.call(env.account, "init", []);
   
-  console.log(\`Transaction hash: \${txResult.hash}\`);
-  console.log(\`Counter initialized successfully!\`);
+  console.log(`Transaction hash: ${txResult.hash}`);
+  console.log(`Counter initialized successfully!`);
   
   // Verify
   const value = await counter.view<number>("get", [
     env.account.accountAddress.toString()
   ]);
   
-  console.log(\`\nInitial counter value: \${value}\`);
+  console.log(`Initial counter value: ${value}`);
 }
 
 main().catch((error) => {
   console.error("Deployment failed:", error);
   process.exit(1);
 });
-\`\`\`
+```
 
 ## API Reference
 
 ### Helpers
 
-#### \`setupTestEnvironment()\`
+#### `setupTestEnvironment()`
 
 Sets up the test environment with Aptos client and account.
 
-\`\`\`typescript
+```typescript
 const env = await setupTestEnvironment();
 // Returns: { aptos: Aptos, account: Account, config: MovehatConfig }
-\`\`\`
+```
 
-#### \`getContract(aptos, moduleAddress, moduleName)\`
+#### `getContract(aptos, moduleAddress, moduleName)`
 
 Creates a contract wrapper for easy interaction.
 
-\`\`\`typescript
+```typescript
 const counter = getContract(aptos, accountAddress, "counter");
-\`\`\`
+```
 
-#### \`contract.call(signer, functionName, args, typeArgs)\`
+#### `contract.call(signer, functionName, args, typeArgs)`
 
 Executes an entry function (transaction).
 
-\`\`\`typescript
+```typescript
 const tx = await counter.call(account, "increment", []);
-\`\`\`
+```
 
-#### \`contract.view(functionName, args, typeArgs)\`
+#### `contract.view(functionName, args, typeArgs)`
 
 Reads data from a view function (no transaction).
 
-\`\`\`typescript
+```typescript
 const value = await counter.view<number>("get", [address]);
-\`\`\`
+```
 
-#### \`assertTransactionSuccess(result)\`
+#### `assertTransactionSuccess(result)`
 
 Asserts that a transaction was successful.
 
-\`\`\`typescript
+```typescript
 assertTransactionSuccess(txResult);
-\`\`\`
+```
 
 ## Available Commands
 
-\`\`\`bash
+```bash
 npx movehat compile          # Compile Move contracts
 npx movehat deploy          # Deploy contracts
 npx movehat test            # Run tests
-\`\`\`
+```
 
 ## Prerequisites
 

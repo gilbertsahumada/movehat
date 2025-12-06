@@ -1,14 +1,14 @@
 {
-  "name": "{{PROJECT_NAME}}",
+  "name": "{{projectName}}",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "test": "mocha",
     "test:watch": "mocha --watch",
-    "compile": "tsx node_modules/movehat/dist/cli.js compile",
-    "deploy": "tsx node_modules/movehat/dist/cli.js deploy"
+    "deploy": "movehat run scripts/deploy-counter.ts"
   },
   "dependencies": {
+    "movehat": "workspace:*",
     "@aptos-labs/ts-sdk": "^5.1.5",
     "dotenv": "^17.2.3"
   },
