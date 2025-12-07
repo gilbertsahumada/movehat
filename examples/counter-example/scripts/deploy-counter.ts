@@ -11,13 +11,17 @@ async function main() {
   console.log(`   Network: ${mh.network.name}`);
   console.log(`   RPC: ${mh.network.rpc}\n`);
 
-  // Get contract instance
-  const counter = mh.getContract(
-    mh.account.accountAddress.toString(),
-    "counter"
-  );
+  // Deploy (publish) the module
+  // Automatically checks if already deployed and suggests --redeploy if needed
+  const deployment = await mh.deployContract("counter");
 
-  console.log(`📍 Contract address: ${mh.account.accountAddress.toString()}::counter`);
+  console.log(`\n✅ Module deployed at: ${deployment.address}::counter`);
+  if (deployment.txHash) {
+    console.log(`   Transaction: ${deployment.txHash}`);
+  }
+
+  // Get contract instance
+  const counter = mh.getContract(deployment.address, "counter");
 
   // Initialize the counter
   console.log("\n📝 Initializing counter...");
@@ -35,6 +39,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("❌ Deployment failed:", error);
+  // ModuleAlreadyDeployedError is already logged with full details by deployContract()
+  // For other errors, show the message
+  if (error.name !== 'ModuleAlreadyDeployedError') {
+    console.error("❌ Deployment failed:", error.message || error);
+  }
   process.exit(1);
 });

@@ -4,19 +4,26 @@ import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
+import { printMovehatBanner } from './helpers/banner.js';
 
 const program = new Command();
+
+printMovehatBanner();
 
 program
   .name('movehat')
   .description('A CLI tool for managing Move smart contracts')
   .version('0.0.1')
   .option('--network <name>', 'Network to use (testnet, mainnet, local, etc.)')
+  .option('--redeploy', 'Force redeploy even if already deployed')
   .hook('preAction', (thisCommand) => {
     // Store network option in environment for commands to access
     const options = thisCommand.opts();
     if (options.network) {
       process.env.MH_CLI_NETWORK = options.network;
+    }
+    if (options.redeploy) {
+      process.env.MH_CLI_REDEPLOY = 'true';
     }
   });
 

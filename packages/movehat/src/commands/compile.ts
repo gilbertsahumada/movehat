@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { loadUserConfig } from "../helpers/config.js";
+import { validateAndEscapePath, escapeShellArg } from "../helpers/shell.js";
 
 function run(command: string, cwd: string) {
   return new Promise<void>((resolve, reject) => {
@@ -31,16 +32,42 @@ export default async function compileCommand() {
       return;
     }
 
+    // Validate and escape to prevent command injection
+    const safeMoveDir = validateAndEscapePath(moveDir, "Move directory");
+
     // Use global named addresses for compilation
     const namedAddresses = userConfig.namedAddresses ?? {};
-    const namedAddressesArg =
-      Object.keys(namedAddresses).length > 0
-        ? `--named-addresses ${Object.entries(namedAddresses)
-            .map(([k, v]) => `${k}=${v}`)
-            .join(",")}`
-        : "";
+    let namedAddressesArg = "";
 
-    const command = `movement move build --package-dir ${moveDir} ${namedAddressesArg}`.trim();
+    if (Object.keys(namedAddresses).length > 0) {
+      // Validate and escape each address name and value
+      const escapedAddresses = Object.entries(namedAddresses)
+        .map(([k, v]) => {
+          // Validate address name (alphanumeric, underscore only)
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)) {
+            throw new Error(
+              `Invalid named address "${k}". ` +
+              `Names must start with a letter or underscore and contain only alphanumeric characters and underscores.`
+            );
+          }
+
+          // Validate address value (should be hex address)
+          if (!/^0x[a-fA-F0-9]+$/.test(v)) {
+            throw new Error(
+              `Invalid address value for "${k}": "${v}". ` +
+              `Address values must be hex strings starting with "0x".`
+            );
+          }
+
+          // No need to escape since we validated the format
+          return `${k}=${v}`;
+        })
+        .join(",");
+
+      namedAddressesArg = `--named-addresses ${escapeShellArg(escapedAddresses)}`;
+    }
+
+    const command = `movement move build --package-dir ${safeMoveDir} ${namedAddressesArg}`.trim();
 
     console.log(`   Move directory: ${moveDir}`);
     if (Object.keys(namedAddresses).length > 0) {
