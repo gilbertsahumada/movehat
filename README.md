@@ -10,6 +10,14 @@
   [![NPM Version](https://img.shields.io/npm/v/movehat)](https://www.npmjs.com/package/movehat)
   [![License](https://img.shields.io/npm/l/movehat)](./LICENSE)
 
+  ---
+
+  Created by [**@gilbertsahumada**](https://gilbertsahumada.com)
+
+  [![Twitter](https://img.shields.io/badge/Twitter-@gilbertsahumada-1DA1F2?logo=x&logoColor=white)](https://x.com/@gilbertsahumada)
+  [![YouTube](https://img.shields.io/badge/YouTube-@gilbertsahumada-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@gilbertsahumada)
+  [![Website](https://img.shields.io/badge/Website-gilbertsahumada.com-blue)](https://gilbertsahumada.com)
+
 </div>
 
 ## Features
@@ -728,4 +736,9 @@ MIT
 
 ## Author
 
-Gilberts Ahumada
+**Gilberts Ahumada**
+
+- Website: [gilbertsahumada.com](https://gilbertsahumada.com)
+- Twitter/X: [@gilbertsahumada](https://x.com/@gilbertsahumada)
+- YouTube: [@gilbertsahumada](https://www.youtube.com/@gilbertsahumada)
+- GitHub: [@gilbertsahumada](https://github.com/gilbertsahumada)
