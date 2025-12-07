@@ -16,7 +16,7 @@ export interface DeploymentInfo {
  * Only allows alphanumeric characters, hyphens, and underscores
  * Prevents path traversal attacks
  */
-function validateSafeName(name: string, type: "network" | "module"): void {
+export function validateSafeName(name: string, type: "network" | "module"): void {
   if (!name || typeof name !== "string") {
     throw new Error(`Invalid ${type} name: must be a non-empty string`);
   }

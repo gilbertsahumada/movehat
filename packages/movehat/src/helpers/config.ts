@@ -1,7 +1,7 @@
 import { pathToFileURL } from "url";
 import { join } from "path";
 import { existsSync } from "fs";
-import { MovehatConfig, MovehatUserConfig, NetworkConfig } from "../types/config.js";
+import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 
 /**
  * Loads the user's movehat.config.js from the current working directory.

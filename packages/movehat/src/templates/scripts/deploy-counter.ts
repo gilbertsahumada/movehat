@@ -1,4 +1,4 @@
-import { getMovehat } from "movehat";
+import { getMovehat, ModuleAlreadyDeployedError } from "movehat";
 
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
@@ -41,8 +41,8 @@ async function main() {
 main().catch((error) => {
   // ModuleAlreadyDeployedError is already logged with full details by deployContract()
   // For other errors, show the message
-  if (error.name !== 'ModuleAlreadyDeployedError') {
-    console.error("❌ Deployment failed:", error.message || error);
+  if (!(error instanceof ModuleAlreadyDeployedError)) {
+    console.error("❌ Deployment failed:", error?.message || error);
   }
   process.exit(1);
 });

@@ -15,7 +15,9 @@ import {
   getAllDeployments,
   getDeployedAddress,
   DeploymentInfo,
+  validateSafeName,
 } from "./helpers/deployments.js";
+import { ModuleAlreadyDeployedError } from "./errors.js";
 
 let cachedRuntime: MovehatRuntime | null = null;
 
@@ -83,11 +85,15 @@ export async function initRuntime(
       packageDir?: string;
     }
   ): Promise<DeploymentInfo> => {
+    // Validate moduleName early
+    validateSafeName(moduleName, "module");
+
     const { exec } = await import("child_process");
     const { promisify } = await import("util");
     const { existsSync, mkdirSync, writeFileSync, chmodSync } = await import("fs");
     const { join } = await import("path");
     const { homedir } = await import("os");
+    const yaml = await import("js-yaml");
     const { validateAndEscapePath, validateAndEscapeProfile } = await import("./helpers/shell.js");
     const execAsync = promisify(exec);
 
@@ -119,10 +125,15 @@ export async function initRuntime(
 
       console.error(formattedMessage);
 
-      // Throw error with complete context for programmatic handling
-      const error = new Error(errorDetails);
-      error.name = 'ModuleAlreadyDeployedError';
-      throw error;
+      // Throw custom error with complete context for programmatic handling
+      throw new ModuleAlreadyDeployedError(
+        errorDetails,
+        moduleName,
+        config.network,
+        existingDeployment.address,
+        existingDeployment.timestamp,
+        existingDeployment.txHash
+      );
     }
 
     if (forceRedeploy && existingDeployment) {
@@ -149,15 +160,18 @@ export async function initRuntime(
           mkdirSync(aptosConfigDir, { recursive: true });
         }
 
-        // Create minimal config.yaml
-        const configContent = `---
-profiles:
-  ${profile}:
-    private_key: "${config.privateKey}"
-    public_key: "${account.publicKey.toString()}"
-    account: ${account.accountAddress.toString()}
-    rest_url: "${config.rpc}"
-`;
+        // Create minimal config.yaml using js-yaml to prevent YAML injection
+        const configData = {
+          profiles: {
+            [profile]: {
+              private_key: config.privateKey,
+              public_key: account.publicKey.toString(),
+              account: account.accountAddress.toString(),
+              rest_url: config.rpc,
+            },
+          },
+        };
+        const configContent = yaml.dump(configData);
         writeFileSync(aptosConfigPath, configContent, "utf-8");
 
         // Restrict file permissions to owner only (600) for security
@@ -184,10 +198,18 @@ profiles:
       if (publishOut) console.log(publishOut.trim());
 
       // Extract transaction hash from output
+      // Look for patterns like "Transaction hash: 0x..." or "Txn: 0x..." or just a 64-char hex
+      // The regex tries to match with context first, then falls back to any 64-char hex
       let txHash: string | undefined;
-      const txHashMatch = publishOut.match(/0x[a-fA-F0-9]{64}/);
-      if (txHashMatch) {
-        txHash = txHashMatch[0];
+      const txHashMatchWithContext = publishOut.match(/(?:transaction\s*(?:hash)?|txn\s*(?:hash)?|hash):\s*(0x[a-fA-F0-9]{64})\b/i);
+      if (txHashMatchWithContext) {
+        txHash = txHashMatchWithContext[1];
+      } else {
+        // Fallback: try to find any 64-char hex string (exactly, not more)
+        const txHashMatch = publishOut.match(/\b(0x[a-fA-F0-9]{64})\b/);
+        if (txHashMatch) {
+          txHash = txHashMatch[1];
+        }
       }
 
       console.log(`✅ Module published successfully!`);
