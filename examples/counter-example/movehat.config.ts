@@ -8,30 +8,30 @@ export default {
   // Network configurations
   networks: {
     testnet: {
-      url: process.env.MH_TESTNET_RPC || "https://testnet.movementnetwork.xyz/v1",
-      accounts: [process.env.MH_TESTNET_PRIVATE_KEY || process.env.MH_PRIVATE_KEY || ""],
+      url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
-      profile: "default",
     },
     mainnet: {
-      url: process.env.MH_MAINNET_RPC || "https://mainnet.movementnetwork.xyz/v1",
-      accounts: [process.env.MH_MAINNET_PRIVATE_KEY || ""],
+      url: "https://mainnet.movementnetwork.xyz/v1",
       chainId: "mainnet",
-      profile: "default",
     },
     local: {
-      url: process.env.MH_LOCAL_RPC || "http://localhost:8080/v1",
-      accounts: [process.env.MH_LOCAL_PRIVATE_KEY || ""],
+      url: "http://localhost:8080/v1",
       chainId: "local",
-      profile: "default",
     },
   },
+
+  // Global accounts configuration (Hardhat-style)
+  // Uses PRIVATE_KEY from .env by default
+  // You can also specify accounts here directly:
+  // accounts: ["0x1234..."],
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
 
   // Global settings
   moveDir: "./move",
 
   // Named addresses (can be overridden per-network in network config)
   namedAddresses: {
-    counter: process.env.MH_ACCOUNT || "0x0",
+    // Example: counter: "0x1234...",
   },
 };

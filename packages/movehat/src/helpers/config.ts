@@ -94,26 +94,37 @@ export async function resolveNetworkConfig(
     );
   }
 
-  // Get accounts with environment variable support
-  const networkEnvPrefix = `MH_${selectedNetwork.toUpperCase()}_PRIVATE_KEY`;
-  const globalEnvKey = process.env.MH_PRIVATE_KEY;
-  const networkEnvKey = process.env[networkEnvPrefix];
+  // Get accounts using Hardhat-style resolution:
+  // 1. Network-specific accounts (if defined)
+  // 2. Global accounts from config (if defined)
+  // 3. PRIVATE_KEY environment variable (Hardhat-style, no MH_ prefix)
+  // 4. Error if nothing found
 
-  let accounts = [...networkConfig.accounts];
+  let accounts: string[] = [];
 
-  // If env var is set, use it (prepend to accounts array)
-  if (networkEnvKey) {
-    accounts = [networkEnvKey, ...accounts.filter(a => a !== networkEnvKey)];
-  } else if (globalEnvKey && accounts.length === 0) {
-    // Fallback to global env var if no accounts configured
-    accounts = [globalEnvKey];
+  // 1. Check network-specific accounts
+  if (networkConfig.accounts && networkConfig.accounts.length > 0) {
+    accounts = [...networkConfig.accounts].filter(Boolean);
   }
 
-  // Validate we have at least one account
+  // 2. If no network-specific accounts, use global accounts
+  if (accounts.length === 0 && userConfig.accounts && userConfig.accounts.length > 0) {
+    accounts = [...userConfig.accounts].filter(Boolean);
+  }
+
+  // 3. If still no accounts, check PRIVATE_KEY env var (Hardhat-style)
+  if (accounts.length === 0 && process.env.PRIVATE_KEY) {
+    accounts = [process.env.PRIVATE_KEY];
+  }
+
+  // 4. Validate we have at least one account
   if (accounts.length === 0 || !accounts[0]) {
     throw new Error(
       `Network '${selectedNetwork}' has no accounts configured.\n` +
-      `Set ${networkEnvPrefix} in your .env file or configure accounts in movehat.config.ts`
+      `Options:\n` +
+      `  1. Set PRIVATE_KEY in your .env file (recommended)\n` +
+      `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
+      `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config`
     );
   }
 
