@@ -165,9 +165,9 @@ export default {
 ```
 
 **Key differences from other frameworks:**
-- ✅ **One account for all networks** - Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
-- ✅ **Simpler configuration** - Networks only need to define their RPC URL
-- ✅ **Flexible** - You can still specify different accounts per network if needed by adding `accounts` to a specific network config
+- **One account for all networks** - Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
+- **Simpler configuration** - Networks only need to define their RPC URL
+- **Flexible** - You can still specify different accounts per network if needed by adding `accounts` to a specific network config
 
 ### Network Selection Priority
 
@@ -476,53 +476,6 @@ export default {
   },
 };
 ```
-
-## Migration from Previous Versions
-
-If you're upgrading from an earlier version of Movehat that used network-specific private keys:
-
-### Old Configuration (v0.0.x)
-```bash
-# .env
-MH_TESTNET_PRIVATE_KEY=0x123...
-MH_MAINNET_PRIVATE_KEY=0x123...
-MH_LOCAL_PRIVATE_KEY=0x123...
-```
-
-```typescript
-// movehat.config.ts
-networks: {
-  testnet: {
-    url: "...",
-    accounts: [process.env.MH_TESTNET_PRIVATE_KEY || ""],
-  },
-}
-```
-
-### New Configuration (v0.1.0+)
-```bash
-# .env
-PRIVATE_KEY=0x123...
-```
-
-```typescript
-// movehat.config.ts
-export default {
-  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-
-  networks: {
-    testnet: { url: "..." },  // ← No accounts needed!
-    mainnet: { url: "..." },
-    local: { url: "..." },
-  },
-};
-```
-
-**Benefits of the new approach:**
-- ✅ Simpler - One `PRIVATE_KEY` instead of three
-- ✅ More realistic - Same wallet across all networks
-- ✅ Hardhat-compatible - Familiar to Ethereum developers
-- ✅ Less error-prone - Fewer environment variables to manage
 
 ## Examples
 
