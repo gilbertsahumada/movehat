@@ -31,6 +31,21 @@
 - **Deployment tracking** - Automatic per-network deployment tracking (like hardhat-deploy)
 - **Security-focused** - Built-in protection against path traversal, command injection, and YAML injection
 
+## Prerequisites
+
+Before installing Movehat, make sure you have:
+
+- **Node.js** (v18 or later)
+- **Movement CLI** - Required for compiling and deploying Move contracts
+
+  Install Movement CLI by following the official guide:
+  📖 [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementcli)
+
+  Verify installation:
+  ```bash
+  movement --version
+  ```
+
 ## Installation
 
 ```bash
@@ -167,17 +182,7 @@ export default {
 **Key differences from other frameworks:**
 - **One account for all networks** - Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
 - **Simpler configuration** - Networks only need to define their RPC URL
-- **Flexible** - You can still specify different accounts per network if needed by adding `accounts` to a specific network config
-
-### Network Selection Priority
-
-Movehat selects networks in this order:
-
-1. `--network` CLI flag
-2. `MH_CLI_NETWORK` environment variable
-3. `MH_DEFAULT_NETWORK` environment variable
-4. `defaultNetwork` in config
-5. `"testnet"` (fallback)
+- **Flexible** - You can still specify different accounts per network if needed
 
 ## Writing Deployment Scripts
 
@@ -298,46 +303,19 @@ mh.switchNetwork  // Switch to different network
 
 ### Using Multiple Accounts
 
-You can configure multiple accounts globally:
-
 ```typescript
-// movehat.config.ts
+// movehat.config.ts - Configure multiple accounts
 export default {
   accounts: [
-    process.env.PRIVATE_KEY,        // Primary account
-    process.env.SECONDARY_KEY,      // Secondary account
-    process.env.TERTIARY_KEY,       // Tertiary account
-  ].filter(Boolean),  // Filter out undefined values
-
-  networks: {
-    testnet: { url: "..." },
-  },
+    process.env.PRIVATE_KEY,     // Primary (mh.account)
+    process.env.SECONDARY_KEY,   // mh.accounts[1]
+  ].filter(Boolean),
 };
-```
 
-Then access them in your scripts:
-
-```typescript
-import { getMovehat } from "movehat";
-
-async function main() {
-  const mh = await getMovehat();
-
-  // Use primary account (accounts[0])
-  console.log("Primary:", mh.account.accountAddress.toString());
-
-  // Access other accounts
-  const secondAccount = mh.accounts[1];
-  console.log("Second:", secondAccount.accountAddress.toString());
-
-  // Or use helper
-  const thirdAccount = mh.getAccountByIndex(2);
-  console.log("Third:", thirdAccount.accountAddress.toString());
-
-  // Deploy with secondary account
-  const contract = mh.getContract(deployment.address, "counter");
-  await contract.call(secondAccount, "init", []);
-}
+// In your script - Access accounts
+const mh = await getMovehat();
+const primaryAccount = mh.account;               // accounts[0]
+const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
 ```
 
 ## Writing Tests
@@ -386,96 +364,34 @@ movehat init  # Uses current directory
 ```
 
 ### `movehat compile`
-
 Compile Move smart contracts using Movement CLI.
 
-```bash
-movehat compile
-```
-
-**Note:** Compilation is network-independent and uses global configuration.
-
 ### `movehat run <script> [--network <name>] [--redeploy]`
-
 Execute a TypeScript/JavaScript script with the Movehat Runtime.
 
 ```bash
-# Run with default network
-movehat run scripts/deploy-counter.ts
-
-# Run with specific network
 movehat run scripts/deploy-counter.ts --network testnet
-movehat run scripts/deploy-counter.ts --network mainnet
-movehat run scripts/deploy-counter.ts --network local
-
-# Force redeploy (overrides deployment check)
-movehat run scripts/deploy-counter.ts --network testnet --redeploy
+movehat run scripts/deploy-counter.ts --network testnet --redeploy  # Force redeploy
 ```
-
-**Flags:**
-- `--network <name>` - Network to use (testnet, mainnet, local, etc.)
-- `--redeploy` - Force redeploy even if module is already deployed
-
-**Supported file extensions:** `.ts`, `.js`, `.mjs`
 
 ### `movehat test`
-
-Run your TypeScript test suite.
-
-```bash
-movehat test
-```
-
-This runs your Mocha tests in the `tests/` directory.
+Run your Mocha test suite in the `tests/` directory.
 
 ## Environment Variables
 
-### Primary Configuration (Hardhat-style)
-
 ```bash
-# Your wallet private key (works on all networks)
+# Required: Your wallet private key (works on all networks - Hardhat-style)
 PRIVATE_KEY=0x1234567890abcdef...
-```
 
-### Optional Overrides
-
-```bash
-# Override RPC URL for current network
+# Optional: Override RPC URL or default network
 MOVEMENT_RPC_URL=https://custom-testnet.movementnetwork.xyz/v1
-
-# Override default network from config
 MH_DEFAULT_NETWORK=mainnet
-
-# Override network via environment (alternative to --network flag)
-MH_CLI_NETWORK=testnet
 ```
 
-### Account Resolution Priority
-
-Movehat resolves accounts in this order:
-1. **Network-specific accounts** in `movehat.config.ts` (if defined)
-2. **Global `accounts`** in `movehat.config.ts` (if defined)
-3. **`PRIVATE_KEY`** environment variable
-4. Error if none found
-
-**Example:**
-```typescript
-// movehat.config.ts
-export default {
-  // Option 1: Global accounts (recommended - Hardhat-style)
-  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-
-  networks: {
-    testnet: { url: "..." },
-
-    // Option 2: Network-specific accounts (advanced use case)
-    mainnet: {
-      url: "...",
-      accounts: [process.env.MAINNET_PRIVATE_KEY]  // Different key for mainnet
-    },
-  },
-};
-```
+**Account resolution:** Movehat looks for accounts in this order:
+1. Network-specific `accounts` in config
+2. Global `accounts` in config
+3. `PRIVATE_KEY` env variable
 
 ## Examples
 
@@ -526,151 +442,17 @@ async function main() {
 main().catch(console.error);
 ```
 
-### Using Deployment Info
-
-```typescript
-import { getMovehat } from "movehat";
-
-async function main() {
-  const mh = await getMovehat();
-
-  // Check if already deployed
-  const existing = mh.getDeployment("counter");
-  if (existing) {
-    console.log("Already deployed at:", existing.address);
-    console.log("Deployed on:", new Date(existing.timestamp).toLocaleString());
-    console.log("TX:", existing.txHash);
-
-    // Use existing deployment
-    const contract = mh.getContract(existing.address, "counter");
-    // ... interact with contract
-    return;
-  }
-
-  // Deploy new
-  const deployment = await mh.deployContract("counter");
-  // ... initialize
-}
-
-main().catch(console.error);
-```
-
-### Get All Deployments
-
-```typescript
-import { getMovehat } from "movehat";
-
-async function main() {
-  const mh = await getMovehat();
-
-  // Get all deployments for current network
-  const deployments = mh.getDeployments();
-
-  for (const [moduleName, info] of Object.entries(deployments)) {
-    console.log(`${moduleName}: ${info.address}`);
-    console.log(`  TX: ${info.txHash}`);
-    console.log(`  Deployed: ${new Date(info.timestamp).toLocaleString()}`);
-  }
-}
-
-main().catch(console.error);
-```
-
-### Using Named Addresses
-
-```typescript
-// movehat.config.ts
-export default {
-  namedAddresses: {
-    deployer: process.env.MH_DEPLOYER_ADDRESS,
-    counter: process.env.MH_COUNTER_ADDRESS,
-  },
-  // ... rest of config
-};
-
-// In your script
-const mh = await getMovehat();
-console.log("Deployer:", mh.config.namedAddresses.deployer);
-console.log("Counter:", mh.config.namedAddresses.counter);
-```
-
-## Project Structure Best Practices
-
-```
-my-project/
-├── move/
-│   ├── Move.toml
-│   └── sources/
-│       ├── Counter.move
-│       ├── Token.move
-│       └── ...
-├── scripts/
-│   ├── deploy-counter.ts
-│   ├── deploy-token.ts
-│   ├── initialize.ts
-│   └── ...
-├── tests/
-│   ├── Counter.test.ts
-│   ├── Token.test.ts
-│   └── integration/
-│       └── ...
-├── movehat.config.ts
-├── .env
-├── .env.example
-└── package.json
-```
-
 ## Troubleshooting
 
-### "Configuration file not found"
+### Common Errors
 
-Make sure you have `movehat.config.ts` or `movehat.config.js` in your project root.
-
-### "Network 'X' not found in configuration"
-
-Check that the network is defined in your `movehat.config.ts`:
-
-```typescript
-networks: {
-  testnet: { /* ... */ },
-  mainnet: { /* ... */ },
-}
-```
-
-### "Network 'X' has no accounts configured"
-
-Movehat provides helpful suggestions when no accounts are found:
-
-```
-Network 'testnet' has no accounts configured.
-Options:
-  1. Set PRIVATE_KEY in your .env file (recommended)
-  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts
-  3. Add 'accounts: ["0x..."]' to the 'testnet' network config
-```
-
-**Solution (recommended):**
-```bash
-# Add to .env file
-echo "PRIVATE_KEY=0x1234567890abcdef..." >> .env
-```
-
-**Alternative - In config:**
-```typescript
-// movehat.config.ts
-export default {
-  accounts: ["0x1234567890abcdef..."],
-  // ... rest of config
-};
-```
-
-### "Module not found"
-
-Make sure you've compiled your contracts first:
-
-```bash
-movehat compile
-```
+| Error | Solution |
+|-------|----------|
+| "Configuration file not found" | Create `movehat.config.ts` in your project root |
+| "Network 'X' not found" | Add the network to `networks` in config |
+| "No accounts configured" | Set `PRIVATE_KEY` in `.env` |
+| "Module not found" | Run `movehat compile` first |
+| "Movement CLI not found" | Install [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli) |
 
 ## Contributing
 
@@ -690,8 +472,3 @@ MIT
 ## Author
 
 **Gilberts Ahumada**
-
-- Website: [gilbertsahumada.com](https://gilbertsahumada.com)
-- Twitter/X: [@gilbertsahumada](https://x.com/@gilbertsahumada)
-- YouTube: [@gilbertsahumada](https://www.youtube.com/@gilbertsahumada)
-- GitHub: [@gilbertsahumada](https://github.com/gilbertsahumada)
