@@ -3,7 +3,7 @@
  */
 export interface NetworkConfig {
     url: string;
-    accounts: string[];
+    accounts?: string[]; // Optional: if not provided, uses global accounts
     chainId?: string;
     profile?: string;
     namedAddresses?: Record<string, string>;
@@ -15,6 +15,7 @@ export interface NetworkConfig {
 export interface MovehatUserConfig {
     defaultNetwork?: string;
     networks: Record<string, NetworkConfig>;
+    accounts?: string[]; // Global accounts (Hardhat-style)
     moveDir?: string;
     namedAddresses?: Record<string, string>;
 }

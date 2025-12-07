@@ -1,16 +1,27 @@
-# Movehat
+<div align="center">
+  <img src="./packages/movehat/public/movehat.png" alt="Movehat" width="200"/>
 
-A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts.
+  # Movehat
 
-Write your tests and deployment scripts in TypeScript while building Move smart contracts.
+  **A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts**
+
+  Write your tests and deployment scripts in TypeScript while building Move smart contracts.
+
+  [![NPM Version](https://img.shields.io/npm/v/movehat)](https://www.npmjs.com/package/movehat)
+  [![License](https://img.shields.io/npm/l/movehat)](./LICENSE)
+
+</div>
 
 ## Features
 
 - **TypeScript-first** - Write tests and deployment scripts in TypeScript
+- **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
 - **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
 - **Hardhat-like workflow** - Familiar commands and project structure
 - **Movehat Runtime Environment** - Global context object similar to Hardhat's HRE
 - **Movement CLI integration** - Wraps Movement CLI for compilation and publishing
+- **Deployment tracking** - Automatic per-network deployment tracking (like hardhat-deploy)
+- **Security-focused** - Built-in protection against path traversal, command injection, and YAML injection
 
 ## Installation
 
@@ -50,7 +61,7 @@ my-move-project/
 
 ### 2. Configure your environment
 
-Copy `.env.example` to `.env` and add your private keys:
+Copy `.env.example` to `.env` and add your private key:
 
 ```bash
 cp .env.example .env
@@ -59,17 +70,14 @@ cp .env.example .env
 Edit `.env`:
 
 ```bash
-# Testnet
-MH_TESTNET_PRIVATE_KEY=0x1234...
-MH_TESTNET_RPC=https://testnet.movementnetwork.xyz/v1
+# Your private key (works on all networks - Hardhat-style)
+PRIVATE_KEY=0x1234567890abcdef...
 
-# Mainnet
-MH_MAINNET_PRIVATE_KEY=0x5678...
-MH_MAINNET_RPC=https://mainnet.movementnetwork.xyz/v1
-
-# Local development
-MH_LOCAL_PRIVATE_KEY=0x9abc...
+# Optional: Override RPC URL
+MOVEMENT_RPC_URL=https://custom-testnet.movementnetwork.xyz/v1
 ```
+
+**Note:** Like Hardhat, Movehat uses a single `PRIVATE_KEY` that works across all networks (testnet, mainnet, local). This simplifies configuration and matches real-world usage.
 
 ### 3. Install dependencies
 
@@ -111,34 +119,47 @@ pnpm test
 Edit `movehat.config.ts` to configure your networks:
 
 ```typescript
+import dotenv from "dotenv";
+dotenv.config();
+
 export default {
+  // Default network to use when no --network flag is provided
   defaultNetwork: "testnet",
 
+  // Network configurations
   networks: {
     testnet: {
-      url: process.env.MH_TESTNET_RPC || "https://testnet.movementnetwork.xyz/v1",
-      accounts: [process.env.MH_TESTNET_PRIVATE_KEY || ""],
+      url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
-      profile: "default",
     },
     mainnet: {
-      url: process.env.MH_MAINNET_RPC || "https://mainnet.movementnetwork.xyz/v1",
-      accounts: [process.env.MH_MAINNET_PRIVATE_KEY || ""],
+      url: "https://mainnet.movementnetwork.xyz/v1",
       chainId: "mainnet",
     },
     local: {
       url: "http://localhost:8080/v1",
-      accounts: [process.env.MH_LOCAL_PRIVATE_KEY || ""],
+      chainId: "local",
     },
   },
 
+  // Global accounts configuration (Hardhat-style)
+  // Uses PRIVATE_KEY from .env by default
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+
+  // Move source directory
   moveDir: "./move",
 
+  // Named addresses (optional)
   namedAddresses: {
-    counter: process.env.MH_ACCOUNT || "0x0",
+    // Example: counter: "0x1234...",
   },
 };
 ```
+
+**Key differences from other frameworks:**
+- ✅ **One account for all networks** - Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
+- ✅ **Simpler configuration** - Networks only need to define their RPC URL
+- ✅ **Flexible** - You can still specify different accounts per network if needed by adding `accounts` to a specific network config
 
 ### Network Selection Priority
 
@@ -269,6 +290,25 @@ mh.switchNetwork  // Switch to different network
 
 ### Using Multiple Accounts
 
+You can configure multiple accounts globally:
+
+```typescript
+// movehat.config.ts
+export default {
+  accounts: [
+    process.env.PRIVATE_KEY,        // Primary account
+    process.env.SECONDARY_KEY,      // Secondary account
+    process.env.TERTIARY_KEY,       // Tertiary account
+  ].filter(Boolean),  // Filter out undefined values
+
+  networks: {
+    testnet: { url: "..." },
+  },
+};
+```
+
+Then access them in your scripts:
+
 ```typescript
 import { getMovehat } from "movehat";
 
@@ -284,6 +324,11 @@ async function main() {
 
   // Or use helper
   const thirdAccount = mh.getAccountByIndex(2);
+  console.log("Third:", thirdAccount.accountAddress.toString());
+
+  // Deploy with secondary account
+  const contract = mh.getContract(deployment.address, "counter");
+  await contract.call(secondAccount, "init", []);
 }
 ```
 
@@ -377,28 +422,99 @@ This runs your Mocha tests in the `tests/` directory.
 
 ## Environment Variables
 
-### Per-Network Private Keys
+### Primary Configuration (Hardhat-style)
 
 ```bash
-MH_TESTNET_PRIVATE_KEY=0x...   # Testnet private key
-MH_MAINNET_PRIVATE_KEY=0x...   # Mainnet private key
-MH_LOCAL_PRIVATE_KEY=0x...     # Local private key
+# Your wallet private key (works on all networks)
+PRIVATE_KEY=0x1234567890abcdef...
 ```
 
-### Per-Network RPC URLs
+### Optional Overrides
 
 ```bash
-MH_TESTNET_RPC=https://...     # Custom testnet RPC
-MH_MAINNET_RPC=https://...     # Custom mainnet RPC
+# Override RPC URL for current network
+MOVEMENT_RPC_URL=https://custom-testnet.movementnetwork.xyz/v1
+
+# Override default network from config
+MH_DEFAULT_NETWORK=mainnet
+
+# Override network via environment (alternative to --network flag)
+MH_CLI_NETWORK=testnet
 ```
 
-### Global Settings
+### Account Resolution Priority
 
+Movehat resolves accounts in this order:
+1. **Network-specific accounts** in `movehat.config.ts` (if defined)
+2. **Global `accounts`** in `movehat.config.ts` (if defined)
+3. **`PRIVATE_KEY`** environment variable
+4. Error if none found
+
+**Example:**
+```typescript
+// movehat.config.ts
+export default {
+  // Option 1: Global accounts (recommended - Hardhat-style)
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+
+  networks: {
+    testnet: { url: "..." },
+
+    // Option 2: Network-specific accounts (advanced use case)
+    mainnet: {
+      url: "...",
+      accounts: [process.env.MAINNET_PRIVATE_KEY]  // Different key for mainnet
+    },
+  },
+};
+```
+
+## Migration from Previous Versions
+
+If you're upgrading from an earlier version of Movehat that used network-specific private keys:
+
+### Old Configuration (v0.0.x)
 ```bash
-MH_PRIVATE_KEY=0x...           # Fallback private key (if network has no accounts)
-MH_CLI_NETWORK=testnet         # Override default network
-MH_DEFAULT_NETWORK=mainnet     # Set default network
+# .env
+MH_TESTNET_PRIVATE_KEY=0x123...
+MH_MAINNET_PRIVATE_KEY=0x123...
+MH_LOCAL_PRIVATE_KEY=0x123...
 ```
+
+```typescript
+// movehat.config.ts
+networks: {
+  testnet: {
+    url: "...",
+    accounts: [process.env.MH_TESTNET_PRIVATE_KEY || ""],
+  },
+}
+```
+
+### New Configuration (v0.1.0+)
+```bash
+# .env
+PRIVATE_KEY=0x123...
+```
+
+```typescript
+// movehat.config.ts
+export default {
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+
+  networks: {
+    testnet: { url: "..." },  // ← No accounts needed!
+    mainnet: { url: "..." },
+    local: { url: "..." },
+  },
+};
+```
+
+**Benefits of the new approach:**
+- ✅ Simpler - One `PRIVATE_KEY` instead of three
+- ✅ More realistic - Same wallet across all networks
+- ✅ Hardhat-compatible - Familiar to Ethereum developers
+- ✅ Less error-prone - Fewer environment variables to manage
 
 ## Examples
 
@@ -562,14 +678,29 @@ networks: {
 
 ### "Network 'X' has no accounts configured"
 
-Set the private key environment variable:
+Movehat provides helpful suggestions when no accounts are found:
 
+```
+Network 'testnet' has no accounts configured.
+Options:
+  1. Set PRIVATE_KEY in your .env file (recommended)
+  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts
+  3. Add 'accounts: ["0x..."]' to the 'testnet' network config
+```
+
+**Solution (recommended):**
 ```bash
-# For testnet
-export MH_TESTNET_PRIVATE_KEY=0x...
+# Add to .env file
+echo "PRIVATE_KEY=0x1234567890abcdef..." >> .env
+```
 
-# Or add to .env file
-echo "MH_TESTNET_PRIVATE_KEY=0x..." >> .env
+**Alternative - In config:**
+```typescript
+// movehat.config.ts
+export default {
+  accounts: ["0x1234567890abcdef..."],
+  // ... rest of config
+};
 ```
 
 ### "Module not found"
