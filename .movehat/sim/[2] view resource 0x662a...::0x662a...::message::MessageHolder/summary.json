@@ -1,0 +1,17 @@
+{
+  "view_resource": {
+    "resource_type": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9::message::MessageHolder",
+    "resource_value": {
+      "message": "Updated Message",
+      "message_change_events": {
+        "counter": "5",
+        "guid": {
+          "id": {
+            "addr": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+            "creation_num": "4"
+          }
+        }
+      }
+    }
+  }
+}

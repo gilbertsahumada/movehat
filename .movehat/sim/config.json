@@ -1,0 +1,10 @@
+{
+  "base": {
+    "Remote": {
+      "node_url": "https://testnet.movementnetwork.xyz/v1",
+      "network_version": 49418806,
+      "api_key": null
+    }
+  },
+  "ops": 6
+}
