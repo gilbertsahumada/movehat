@@ -1,20 +1,37 @@
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import prompts from "prompts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default async function initCommand(projectName?: string) {
-  const targetDir = projectName || ".";
+  // if name is not given 
+  if (!projectName) {
+    const response = await prompts({
+      type: 'text',
+      name: 'projectName',
+      message: 'Project name:',
+      initial: 'first-project'
+    });
+
+    // If the user cancels (Ctrl+C), exit
+    if (!response.projectName) {
+      console.log('\n❌ Project initialization cancelled.');
+      process.exit(0);
+    }
+
+    projectName = response.projectName;
+  }
+
+  const targetDir = projectName!;
   const projectPath = path.resolve(process.cwd(), targetDir);
 
-  console.log(`Initializing new Movehat project in ${projectPath}...`);
+  console.log(`\nInitializing new Movehat project in ${projectPath}...`);
 
   try {
-    if (projectName) {
-      await fs.mkdir(projectPath, { recursive: true });
-    }
+    await fs.mkdir(projectPath, { recursive: true });
 
     const templatesDir = path.join(__dirname, "..", "templates");
 
@@ -23,7 +40,7 @@ export default async function initCommand(projectName?: string) {
     await copyFile(
       path.join(templatesDir, "package.json"),
       path.join(projectPath, "package.json"),
-      { projectName: projectName || "my-move-project" }
+      { projectName: projectName! }
     );
 
     await copyFile(
@@ -54,7 +71,7 @@ export default async function initCommand(projectName?: string) {
     await copyFile(
       path.join(templatesDir, "README.md"),
       path.join(projectPath, "README.md"),
-      { projectName: projectName || "my-move-project" }
+      { projectName: projectName! }
     );
 
     // 3. Copiar carpeta move/
@@ -80,9 +97,7 @@ export default async function initCommand(projectName?: string) {
 
     console.log("\n✅ Project created successfully!\n");
     console.log("📝 Next steps:\n");
-    if (projectName) {
-      console.log(`   cd ${projectName}`);
-    }
+    console.log(`   cd ${projectName}`);
     console.log(`   cp .env.example .env`);
     console.log(`   # Edit .env with your credentials`);
     console.log(`   npm install`);
