@@ -22,6 +22,7 @@
 
 ## Features
 
+- **Native Fork System** - Create local snapshots of Movement L1 with actual network state (JSON-based, no BCS issues)
 - **TypeScript-first** - Write tests and deployment scripts in TypeScript
 - **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
 - **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
@@ -39,7 +40,7 @@ Before installing Movehat, make sure you have:
 - **Movement CLI** - Required for compiling and deploying Move contracts
 
   Install Movement CLI by following the official guide:
-  📖 [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementcli)
+  [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementcli)
 
   Verify installation:
   ```bash
@@ -134,6 +135,80 @@ npm test
 # or
 pnpm test
 ```
+
+### 7. Use Fork System
+
+MoveHat includes a native fork system for creating local snapshots of Movement L1 network state. This allows you to test against real network data without deploying to testnet.
+
+**Create a fork:**
+```bash
+movehat fork create --network testnet --name my-fork
+```
+
+This creates a snapshot at the current ledger version with real network state (Chain ID: 250, actual balances, deployed contracts, etc.)
+
+**View resources from the fork:**
+```bash
+movehat fork view-resource \
+  --fork .movehat/forks/my-fork \
+  --account 0x1 \
+  --resource "0x1::coin::CoinInfo<0x1::aptos_coin::AptosCoin>"
+```
+
+**Fund accounts for testing:**
+```bash
+movehat fork fund \
+  --fork .movehat/forks/my-fork \
+  --account 0x123 \
+  --amount 5000000000
+```
+
+**List all available forks:**
+```bash
+movehat fork list
+```
+
+**Use in tests (programmatic API):**
+```typescript
+import { ForkManager } from 'movehat';
+
+describe('Token Tests', () => {
+  let fork: ForkManager;
+
+  before(async () => {
+    fork = new ForkManager('.movehat/forks/test');
+    await fork.initialize('https://testnet.movementnetwork.xyz/v1', 'testnet');
+  });
+
+  it('should read real network data', async () => {
+    const coinInfo = await fork.getResource(
+      '0x1',
+      '0x1::coin::CoinInfo<0x1::aptos_coin::AptosCoin>'
+    );
+    expect(coinInfo.name).to.equal('Move Coin');
+  });
+
+  it('should modify fork state for testing', async () => {
+    await fork.fundAccount('0x123', 5_000_000_000);
+
+    const coinStore = await fork.getResource(
+      '0x123',
+      '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+    );
+    expect(coinStore.coin.value).to.equal('5000000000');
+  });
+});
+```
+
+**Why use forks?**
+- Test against real network state with actual balances and deployed contracts
+- No need to deploy contracts to testnet for every test
+- Modify state locally without affecting the network
+- Lazy loading - only fetches resources you actually access
+- JSON-based storage - human-readable and easy to inspect
+- Works natively with Movement L1 (no BCS compatibility issues)
+
+See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete fork system documentation including architecture details and advanced usage.
 
 ## Configuration
 
@@ -430,7 +505,7 @@ async function main() {
   const mh = await getMovehat();
 
   if (mh.config.network === "mainnet") {
-    console.log("⚠️  Deploying to MAINNET");
+    console.log("WARNING: Deploying to MAINNET");
     // Add confirmation logic
   }
 

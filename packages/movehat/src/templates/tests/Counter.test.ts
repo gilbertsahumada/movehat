@@ -1,8 +1,8 @@
-import { describe, it, before } from "mocha";
+import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
 import { getMovehat, type MovehatRuntime } from "movehat";
 import type { MoveContract } from "movehat/helpers";
-import { assertTransactionSuccess } from "movehat/helpers";
+import { assertTransactionSuccess, snapshot } from "movehat/helpers";
 
 describe("Counter Contract", () => {
   let mh: MovehatRuntime;
@@ -57,4 +57,19 @@ describe("Counter Contract", () => {
       console.log(`   ✓ Counter incremented: ${initialValue} → ${newValue}`);
     });
   });
+
+  // Optional: Create a snapshot after tests for debugging
+  // Uncomment to enable
+  /*
+  after(async function () {
+    this.timeout(30000);
+
+    const snapshotPath = await snapshot({
+      name: 'counter-test-final'
+    });
+
+    console.log(`\n📸 Snapshot created: ${snapshotPath}`);
+    console.log(`   Use 'aptos move sim view-resource --session ${snapshotPath}' to inspect state\n`);
+  });
+  */
 });

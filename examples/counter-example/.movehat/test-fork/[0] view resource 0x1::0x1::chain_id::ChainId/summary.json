@@ -2,7 +2,7 @@
   "view_resource": {
     "resource_type": "0x1::chain_id::ChainId",
     "resource_value": {
-      "id": 250
+      "id": 4
     }
   }
 }

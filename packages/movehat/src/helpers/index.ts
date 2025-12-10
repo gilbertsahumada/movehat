@@ -14,5 +14,13 @@ export {
   getDeployedAddress,
 } from "./deployments.js";
 export type { DeploymentInfo } from "./deployments.js";
+export {
+  snapshot,
+  getForkInfo,
+  viewForkResource,
+  compareForkState,
+  listSnapshots,
+} from "./test-fork.js";
+export type { SnapshotOptions, ForkInfo } from "./test-fork.js";
 
 export type { MovehatConfig } from "../types/config.js";
