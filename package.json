@@ -10,5 +10,8 @@
     "test:runtime": "pnpm --filter counter-example run deploy",
     "clean": "pnpm -r clean"
   },
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "pnpm@9.0.0",
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
 }

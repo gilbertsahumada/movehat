@@ -54,11 +54,13 @@
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
     "js-yaml": "^4.1.1",
+    "prompts": "^2.4.2",
     "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
+    "@types/prompts": "^2.4.9",
     "typescript": "^5.9.3"
   }
 }
