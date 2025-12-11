@@ -5,7 +5,7 @@ import {
   Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
-import { loadUserConfig, resolveNetworkConfig } from "./config.js";
+import { loadUserConfig, resolveNetworkConfig } from "../core/config.js";
 import { MovehatConfig } from "../types/config.js";
 
 export interface TestEnvironment {
