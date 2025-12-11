@@ -7,8 +7,8 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
 import { MovehatUserConfig } from "./types/config.js";
-import { loadUserConfig, resolveNetworkConfig } from "./helpers/config.js";
-import { getContract, MoveContract } from "./helpers/contract.js";
+import { loadUserConfig, resolveNetworkConfig } from "./core/config.js";
+import { getContract, MoveContract } from "./core/contract.js";
 import {
   saveDeployment,
   loadDeployment,
@@ -16,7 +16,7 @@ import {
   getDeployedAddress,
   DeploymentInfo,
   validateSafeName,
-} from "./helpers/deployments.js";
+} from "./core/deployments.js";
 import { ModuleAlreadyDeployedError } from "./errors.js";
 
 let cachedRuntime: MovehatRuntime | null = null;
@@ -94,7 +94,7 @@ export async function initRuntime(
     const { join } = await import("path");
     const { homedir } = await import("os");
     const yaml = await import("js-yaml");
-    const { validateAndEscapePath, validateAndEscapeProfile } = await import("./helpers/shell.js");
+    const { validateAndEscapePath, validateAndEscapeProfile } = await import("./core/shell.js");
     const execAsync = promisify(exec);
 
     // Check if --redeploy flag was passed via CLI

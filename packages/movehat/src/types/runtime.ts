@@ -1,7 +1,7 @@
 import { Aptos, Account } from "@aptos-labs/ts-sdk";
 import { MovehatConfig } from "./config.js";
-import { MoveContract } from "../helpers/contract.js";
-import { DeploymentInfo } from "../helpers/deployments.js";
+import { MoveContract } from "../core/contract.js";
+import { DeploymentInfo } from "../core/deployments.js";
 
 export interface NetworkInfo {
   name: string;

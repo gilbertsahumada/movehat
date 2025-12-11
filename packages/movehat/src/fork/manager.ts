@@ -1,5 +1,5 @@
-import { MovementApiClient } from './movement-api.js';
-import { ForkStorage } from './fork-storage.js';
+import { MovementApiClient } from './api.js';
+import { ForkStorage } from './storage.js';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 
 /**

@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { existsSync, readdirSync, statSync } from 'fs';
-import { ForkStorage } from '../helpers/fork-storage.js';
+import { ForkStorage } from '../../fork/storage.js';
 
 /**
  * Fork list command: List all available forks

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
-import type { ForkMetadata, AccountState, ResourceData } from '../types/fork.js';
+import { join } from 'path';
+import type { ForkMetadata, AccountState } from '../types/fork.js';
 
 /**
  * Sanitize address to create a safe filename

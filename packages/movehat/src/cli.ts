@@ -4,10 +4,10 @@ import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
-import forkCreateCommand from './commands/fork-create.js';
-import forkViewResourceCommand from './commands/fork-view-resource.js';
-import forkFundCommand from './commands/fork-fund.js';
-import forkListCommand from './commands/fork-list.js';
+import forkCreateCommand from './commands/fork/create.js';
+import forkViewResourceCommand from './commands/fork/view-resource.js';
+import forkFundCommand from './commands/fork/fund.js';
+import forkListCommand from './commands/fork/list.js';
 import { printMovehatBanner } from './helpers/banner.js';
 
 const program = new Command();

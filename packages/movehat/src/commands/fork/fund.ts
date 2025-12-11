@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { ForkManager } from '../helpers/fork-manager.js';
+import { ForkManager } from '../../fork/manager.js';
 
 interface ForkFundOptions {
   fork?: string;

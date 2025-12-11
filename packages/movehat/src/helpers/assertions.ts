@@ -1,4 +1,4 @@
-import { type TransactionResult } from "./contract.js";
+import { type TransactionResult } from "../core/contract.js";
 
 /**
  * Assert that a transaction was successful

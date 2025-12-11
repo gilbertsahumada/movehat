@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
-import { loadUserConfig } from "../helpers/config.js";
-import { validateAndEscapePath, escapeShellArg } from "../helpers/shell.js";
+import { loadUserConfig } from "../core/config.js";
+import { validateAndEscapePath, escapeShellArg } from "../core/shell.js";
 
 function run(command: string, cwd: string) {
   return new Promise<void>((resolve, reject) => {

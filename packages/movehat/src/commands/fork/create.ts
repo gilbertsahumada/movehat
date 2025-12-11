@@ -1,8 +1,8 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
 import prompts from 'prompts';
-import { loadUserConfig, resolveNetworkConfig } from '../helpers/config.js';
-import { ForkManager } from '../helpers/fork-manager.js';
+import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
+import { ForkManager } from '../../fork/manager.js';
 
 interface ForkCreateOptions {
   network?: string;

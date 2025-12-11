@@ -18,11 +18,6 @@ export interface AccountState {
   authenticationKey: string;
 }
 
-export interface ResourceData {
-  type: string;
-  data: any;
-}
-
 export interface LedgerInfo {
   chain_id: number;
   epoch: string;
