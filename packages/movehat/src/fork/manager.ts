@@ -175,7 +175,7 @@ export class ForkManager {
   }
 
   /**
-   * Fund an account with coins
+   * Fund an account with coins (adds to existing balance)
    */
   async fundAccount(address: string, amount: number, coinType: string = '0x1::aptos_coin::AptosCoin'): Promise<void> {
     const normalizedAddress = this.normalizeAddress(address);
@@ -185,7 +185,12 @@ export class ForkManager {
     let coinStore: any;
     try {
       coinStore = await this.getResource(normalizedAddress, resourceType);
-    } catch (error) {
+    } catch (error: any) {
+      // Only catch "not found" errors, rethrow others (network, API, etc.)
+      if (!error.message || !error.message.includes('not found')) {
+        throw error;
+      }
+
       // If doesn't exist, create new one
       coinStore = {
         coin: { value: '0' },
@@ -211,8 +216,10 @@ export class ForkManager {
       };
     }
 
-    // Update balance
-    coinStore.coin.value = String(amount);
+    // Add to existing balance (instead of replacing it)
+    const currentBalance = BigInt(coinStore.coin.value ?? '0');
+    const newBalance = currentBalance + BigInt(amount);
+    coinStore.coin.value = newBalance.toString();
 
     // Save
     await this.setResource(normalizedAddress, resourceType, coinStore);
