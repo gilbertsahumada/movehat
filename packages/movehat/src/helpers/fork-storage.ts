@@ -3,6 +3,31 @@ import { join, dirname } from 'path';
 import type { ForkMetadata, AccountState, ResourceData } from '../types/fork.js';
 
 /**
+ * Sanitize address to create a safe filename
+ * Prevents path traversal by encoding the address
+ */
+function sanitizeAddressForFilename(address: string): string {
+  // Remove any path separators and normalize
+  const normalized = address.toLowerCase().replace(/^0x/, '');
+
+  // Validate that it's a valid hex string
+  if (!/^[0-9a-f]+$/.test(normalized)) {
+    throw new Error(`Invalid address format: ${address}. Expected hexadecimal string.`);
+  }
+
+  // Encode to prevent any path traversal
+  // Use the normalized hex string directly as it's safe
+  const safe = `0x${normalized}`;
+
+  // Validate no path separators in result
+  if (safe.includes('/') || safe.includes('\\') || safe.includes('..')) {
+    throw new Error(`Address contains invalid characters: ${address}`);
+  }
+
+  return safe;
+}
+
+/**
  * Storage system for fork state
  * Manages the file structure and I/O for fork data
  */
@@ -11,6 +36,15 @@ export class ForkStorage {
 
   constructor(forkPath: string) {
     this.forkPath = forkPath;
+  }
+
+  /**
+   * Get safe resource file path for an address
+   * Prevents path traversal attacks
+   */
+  private getResourceFilePath(address: string): string {
+    const safeFilename = sanitizeAddressForFilename(address);
+    return join(this.forkPath, 'resources', `${safeFilename}.json`);
   }
 
   /**
@@ -108,7 +142,7 @@ export class ForkStorage {
    * Get resource for an account
    */
   getResource(address: string, resourceType: string): any | null {
-    const resourceFilePath = join(this.forkPath, 'resources', `${address}.json`);
+    const resourceFilePath = this.getResourceFilePath(address);
 
     if (!existsSync(resourceFilePath)) {
       return null;
@@ -122,7 +156,7 @@ export class ForkStorage {
    * Get all resources for an account
    */
   getAllResources(address: string): Record<string, any> {
-    const resourceFilePath = join(this.forkPath, 'resources', `${address}.json`);
+    const resourceFilePath = this.getResourceFilePath(address);
 
     if (!existsSync(resourceFilePath)) {
       return {};
@@ -135,7 +169,13 @@ export class ForkStorage {
    * Save resource for an account
    */
   saveResource(address: string, resourceType: string, data: any): void {
-    const resourceFilePath = join(this.forkPath, 'resources', `${address}.json`);
+    const resourceFilePath = this.getResourceFilePath(address);
+
+    // Ensure resources directory exists
+    const resourcesDir = join(this.forkPath, 'resources');
+    if (!existsSync(resourcesDir)) {
+      mkdirSync(resourcesDir, { recursive: true });
+    }
 
     let resources: Record<string, any> = {};
     if (existsSync(resourceFilePath)) {
@@ -150,7 +190,14 @@ export class ForkStorage {
    * Save all resources for an account
    */
   saveAllResources(address: string, resources: Record<string, any>): void {
-    const resourceFilePath = join(this.forkPath, 'resources', `${address}.json`);
+    const resourceFilePath = this.getResourceFilePath(address);
+
+    // Ensure resources directory exists
+    const resourcesDir = join(this.forkPath, 'resources');
+    if (!existsSync(resourcesDir)) {
+      mkdirSync(resourcesDir, { recursive: true });
+    }
+
     writeFileSync(resourceFilePath, JSON.stringify(resources, null, 2));
   }
 

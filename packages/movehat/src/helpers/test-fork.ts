@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface SnapshotOptions {
   path?: string;
@@ -41,9 +41,14 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
 
   try {
     // Initialize fork/snapshot using aptos CLI
-    const { stdout, stderr } = await execAsync(
-      `aptos move sim init --path "${snapshotPath}"`
-    );
+    // Use execFile with argument array to prevent command injection
+    const { stdout, stderr } = await execFileAsync('aptos', [
+      'move',
+      'sim',
+      'init',
+      '--path',
+      snapshotPath
+    ]);
 
     if (stderr && !stderr.includes('Success')) {
       throw new Error(stderr);
@@ -120,9 +125,18 @@ export async function viewForkResource(
   resourceType: string
 ): Promise<any> {
   try {
-    const { stdout } = await execAsync(
-      `aptos move sim view-resource --session "${sessionPath}" --account ${account} --resource '${resourceType}'`
-    );
+    // Use execFile with argument array to prevent command injection
+    const { stdout } = await execFileAsync('aptos', [
+      'move',
+      'sim',
+      'view-resource',
+      '--session',
+      sessionPath,
+      '--account',
+      account,
+      '--resource',
+      resourceType
+    ]);
 
     const result = JSON.parse(stdout);
 

@@ -330,25 +330,25 @@ When you run a deployment script, Movehat **automatically checks** if the module
 **First time:**
 ```bash
 movehat run scripts/deploy-counter.ts --network testnet
-# ✅ Deploys successfully
+# Deploys successfully
 ```
 
 **Second time (already deployed):**
 ```bash
 movehat run scripts/deploy-counter.ts --network testnet
-# ❌ Error: Module "counter" is already deployed on testnet
+# Error: Module "counter" is already deployed on testnet
 #    Address: 0x662a...
 #    Deployed at: 12/5/2025, 11:38:14 PM
 #    Transaction: 0x59cb0c2df832...
 #
-#    💡 To redeploy, run with the --redeploy flag:
+#    To redeploy, run with the --redeploy flag:
 #    movehat run <script> --network testnet --redeploy
 ```
 
 **Force redeploy:**
 ```bash
 movehat run scripts/deploy-counter.ts --network testnet --redeploy
-# ✅ Redeploys and updates deployment info
+# Redeploys and updates deployment info
 ```
 
 ### Available Runtime Properties
