@@ -12,8 +12,6 @@
 
   ---
 
-  Created by [**@gilbertsahumada**](https://gilbertsahumada.com)
-
   [![Twitter](https://img.shields.io/badge/Twitter-@gilbertsahumada-1DA1F2?logo=x&logoColor=white)](https://x.com/@gilbertsahumada)
   [![YouTube](https://img.shields.io/badge/YouTube-@gilbertsahumada-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@gilbertsahumada)
   [![Website](https://img.shields.io/badge/Website-gilbertsahumada.com-blue)](https://gilbertsahumada.com)
