@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+import { Command, InvalidOptionArgumentError } from 'commander';
 import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
@@ -10,6 +10,17 @@ import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
 import forkServeCommand from './commands/fork/serve.js';
 import { printMovehatBanner } from './helpers/banner.js';
+
+/**
+ * Parse and validate port number
+ */
+function parsePort(value: string): number {
+  const port = Number.parseInt(value, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new InvalidOptionArgumentError('Port must be an integer between 1 and 65535');
+  }
+  return port;
+}
 
 const program = new Command();
 
@@ -92,7 +103,7 @@ fork
     .command('serve')
     .description('Start a local RPC server serving the fork')
     .option('-f, --fork <path>', 'Path to the fork')
-    .option('-p, --port <port>', 'Port to listen on (default: 8080)', '8080')
-    .action((options) => forkServeCommand({ ...options, port: parseInt(options.port) }));
+    .option('-p, --port <port>', 'Port to listen on (default: 8080)', parsePort, 8080)
+    .action((options) => forkServeCommand(options));
 
 program.parse(process.argv);
