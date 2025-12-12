@@ -457,6 +457,28 @@ movehat run scripts/deploy-counter.ts --network testnet --redeploy  # Force rede
 ### `movehat test`
 Run your Mocha test suite in the `tests/` directory.
 
+### `movehat fork <command>`
+
+Manage local forks of Movement/Aptos networks. See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete documentation.
+
+**Available commands:**
+- `fork create` - Create a new fork from a network
+- `fork list` - List all available forks
+- `fork view-resource` - View a resource from the fork
+- `fork fund` - Fund an account in the fork
+- `fork serve` - Start a local RPC server serving the fork
+
+```bash
+# Create a fork
+movehat fork create --network testnet --name my-fork
+
+# Start fork server
+movehat fork serve --fork .movehat/forks/my-fork --port 8080
+
+# List all forks
+movehat fork list
+```
+
 ## Environment Variables
 
 ```bash

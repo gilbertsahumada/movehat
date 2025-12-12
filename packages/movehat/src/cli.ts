@@ -9,7 +9,6 @@ import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
 import forkServeCommand from './commands/fork/serve.js';
-import { printMovehatBanner } from './helpers/banner.js';
 
 /**
  * Parse and validate port number
@@ -23,8 +22,6 @@ function parsePort(value: string): number {
 }
 
 const program = new Command();
-
-printMovehatBanner();
 
 program
   .name('movehat')

@@ -128,6 +128,46 @@ This starts an HTTP server that emulates a Movement L1 node using your fork's da
 - `GET /v1/accounts/:address/resource/:type` - Specific resource
 - `GET /v1/accounts/:address/resources` - All resources for an account
 
+**Error Handling:**
+
+The fork server returns JSON error responses with appropriate HTTP status codes and specific error codes:
+
+- **404 Errors**:
+  ```json
+  {
+    "message": "Endpoint not found: /v1/invalid",
+    "error_code": "endpoint_not_found",
+    "vm_error_code": null
+  }
+  ```
+
+  ```json
+  {
+    "message": "Account not found: 0x123...",
+    "error_code": "account_not_found",
+    "vm_error_code": null
+  }
+  ```
+
+  ```json
+  {
+    "message": "Resource not found: 0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+    "error_code": "resource_not_found",
+    "vm_error_code": null
+  }
+  ```
+
+- **500 Errors**:
+  ```json
+  {
+    "message": "Internal server error",
+    "error_code": "internal_error",
+    "vm_error_code": null
+  }
+  ```
+
+All responses include CORS headers for cross-origin requests.
+
 **Usage with Aptos SDK:**
 ```typescript
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
@@ -463,6 +503,18 @@ movehat fork create --network mainnet --name mainnet-fork
 - Always use absolute paths when outside project directory
 - Default fork path: `.movehat/forks/<name>`
 - Check with `movehat fork list`
+
+### Fork server port already in use
+
+If you see `Port 8080 is already in use`:
+- Use a different port: `movehat fork serve --port 8081`
+- Or stop the process using the port: `lsof -ti:8080 | xargs kill`
+
+### Fork server permission denied
+
+If you see `Permission denied to bind to port`:
+- Use a port above 1024 (ports below 1024 require root privileges)
+- Try: `movehat fork serve --port 8080` (or any port above 1024)
 
 ## Examples
 

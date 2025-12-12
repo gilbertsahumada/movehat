@@ -2,12 +2,16 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import prompts from "prompts";
+import { printMovehatBanner } from "../helpers/banner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default async function initCommand(projectName?: string) {
-  // if name is not given 
+  // Show banner only on init command
+  printMovehatBanner();
+
+  // if name is not given
   if (!projectName) {
     const response = await prompts({
       type: 'text',
