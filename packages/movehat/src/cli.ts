@@ -8,6 +8,7 @@ import forkCreateCommand from './commands/fork/create.js';
 import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
+import forkServeCommand from './commands/fork/serve.js';
 import { printMovehatBanner } from './helpers/banner.js';
 
 const program = new Command();
@@ -86,5 +87,12 @@ fork
     .command('list')
     .description('List all available forks')
     .action(() => forkListCommand());
+
+fork
+    .command('serve')
+    .description('Start a local RPC server serving the fork')
+    .option('-f, --fork <path>', 'Path to the fork')
+    .option('-p, --port <port>', 'Port to listen on (default: 8080)', '8080')
+    .action((options) => forkServeCommand({ ...options, port: parseInt(options.port) }));
 
 program.parse(process.argv);
