@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
+import { loadUserConfig } from '../../core/config.js';
 import { ForkServer } from '../../fork/server.js';
 
 interface ForkServeOptions {
@@ -23,7 +23,14 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
       // Use default fork path based on current network
       const config = await loadUserConfig();
       const networkName = process.env.MH_CLI_NETWORK || config.defaultNetwork || 'testnet';
-      await resolveNetworkConfig(config, networkName); // Validate network exists
+
+      // Lightweight validation: only check if network exists in config
+      // Don't validate accounts/keys since fork serve only reads data
+      if (networkName !== 'testnet' && networkName !== 'mainnet' && networkName !== 'local') {
+        if (!config.networks || !config.networks[networkName]) {
+          throw new Error(`Network "${networkName}" not found in config. Available networks: ${Object.keys(config.networks || {}).join(', ')}`);
+        }
+      }
 
       forkPath = join(process.cwd(), '.movehat', 'forks', `${networkName}-fork`);
     }
@@ -36,21 +43,21 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
       process.exit(1);
     }
 
-    // Get port
-    const port = options.port || 8080;
+    // Get port (already validated by Commander's parsePort in cli.ts)
+    const port = options.port ?? 8080;
 
     // Create and start server
     const server = new ForkServer(forkPath, port);
 
-    // Handle graceful shutdown
+    // Handle graceful shutdown (use 'once' to prevent duplicate shutdowns)
     const shutdown = async () => {
       console.log('\n\nShutting down...');
       await server.stop();
       process.exit(0);
     };
 
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
 
     // Start server
     await server.start();

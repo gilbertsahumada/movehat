@@ -32,17 +32,45 @@ export class ForkServer {
 
     this.server = http.createServer((req, res) => {
       this.handleRequest(req, res).catch((error) => {
+        // Log full error server-side for diagnostics
         console.error(`Error handling request:`, error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          message: 'Internal server error',
-          error: error.message
-        }));
+
+        // Only send response if headers haven't been sent yet
+        if (!res.headersSent) {
+          // Add CORS headers (same as in handleRequest)
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+          // Send generic error response (no internal details exposed)
+          this.sendJSON(res, 500, {
+            message: 'Internal server error',
+            error_code: 'internal_error',
+            vm_error_code: null
+          });
+        }
       });
     });
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      // Handle server errors (port in use, permission denied, etc.)
+      const onError = (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          reject(new Error(`Port ${this.port} is already in use. Please use a different port with --port <number>`));
+        } else if (error.code === 'EACCES') {
+          reject(new Error(`Permission denied to bind to port ${this.port}. Try using a port above 1024 or run with appropriate permissions.`));
+        } else {
+          reject(new Error(`Failed to start server: ${error.message}`));
+        }
+      };
+
+      // Listen for errors during startup
+      this.server!.once('error', onError);
+
       this.server!.listen(this.port, () => {
+        // Remove error listener after successful start
+        this.server!.removeListener('error', onError);
+
         console.log(`\nFork Server listening on http://localhost:${this.port}`);
         console.log(`  Ledger Info: http://localhost:${this.port}/v1/`);
         console.log(`\nPress Ctrl+C to stop`);
@@ -110,7 +138,7 @@ export class ForkServer {
         const address = pathname.split('/')[3];
         await this.handleGetResources(address, res);
       } else {
-        this.send404(res, `Endpoint not found: ${pathname}`);
+        this.send404(res, `Endpoint not found: ${pathname}`, 'endpoint_not_found');
       }
     } catch (error: any) {
       this.sendError(res, 500, error.message);
@@ -186,7 +214,7 @@ export class ForkServer {
       });
     } catch (error: any) {
       if (error.message.includes('not found')) {
-        this.send404(res, `Resource not found: ${resourceType}`);
+        this.send404(res, `Resource not found: ${resourceType}`, 'resource_not_found');
       } else {
         throw error;
       }
@@ -242,10 +270,10 @@ export class ForkServer {
   /**
    * Send 404 error
    */
-  private send404(res: http.ServerResponse, message: string): void {
+  private send404(res: http.ServerResponse, message: string, errorCode: string = 'account_not_found'): void {
     this.sendJSON(res, 404, {
       message,
-      error_code: 'account_not_found',
+      error_code: errorCode,
       vm_error_code: null
     });
   }
