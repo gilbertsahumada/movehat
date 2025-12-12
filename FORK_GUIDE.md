@@ -48,6 +48,14 @@ movehat fork list
 
 Shows all available forks with their metadata.
 
+### 5. Serve Fork via RPC
+
+```bash
+movehat fork serve --fork .movehat/forks/my-fork --port 8080
+```
+
+Start a local RPC server that serves the fork. Connect your Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork.
+
 ## CLI Commands
 
 ### `movehat fork create`
@@ -98,6 +106,42 @@ movehat fork fund --account 0xABC --amount 1000000000
 ### `movehat fork list`
 
 List all available forks with metadata.
+
+### `movehat fork serve`
+
+Start a local RPC server that serves fork data via the Movement/Aptos API.
+
+**Options:**
+- `--fork <path>` - Path to the fork (default: `.movehat/forks/<network>-fork`)
+- `--port <port>` - Port to listen on (default: 8080)
+
+**Example:**
+```bash
+movehat fork serve --fork .movehat/forks/my-fork --port 8080
+```
+
+This starts an HTTP server that emulates a Movement L1 node using your fork's data. You can then connect the Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork state.
+
+**Supported Endpoints:**
+- `GET /v1/` - Ledger info (chain ID, version, block height)
+- `GET /v1/accounts/:address` - Account data
+- `GET /v1/accounts/:address/resource/:type` - Specific resource
+- `GET /v1/accounts/:address/resources` - All resources for an account
+
+**Usage with Aptos SDK:**
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({
+  network: Network.CUSTOM,
+  fullnode: "http://localhost:8080/v1",
+});
+const aptos = new Aptos(config);
+
+// Query the fork
+const ledgerInfo = await aptos.getLedgerInfo();
+const account = await aptos.getAccountInfo({ accountAddress: "0x1" });
+```
 
 ## Programmatic API
 
@@ -427,6 +471,7 @@ See `examples/counter-example/` for a complete example project using forks.
 ## Contributing
 
 Fork system improvements welcome! See:
-- `packages/movehat/src/helpers/fork-manager.ts` - Main logic
-- `packages/movehat/src/helpers/movement-api.ts` - API client
-- `packages/movehat/src/helpers/fork-storage.ts` - Storage layer
+- `packages/movehat/src/fork/manager.ts` - Main logic
+- `packages/movehat/src/fork/api.ts` - API client
+- `packages/movehat/src/fork/storage.ts` - Storage layer
+- `packages/movehat/src/fork/server.ts` - RPC server

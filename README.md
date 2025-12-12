@@ -166,6 +166,13 @@ movehat fork fund \
 movehat fork list
 ```
 
+**Serve fork via RPC:**
+```bash
+movehat fork serve --fork .movehat/forks/my-fork --port 8080
+```
+
+This starts a local RPC server that emulates a Movement L1 node using your fork's data. You can connect the Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork state.
+
 **Use in tests (programmatic API):**
 ```typescript
 import { ForkManager } from 'movehat';
