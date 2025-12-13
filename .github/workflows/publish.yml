@@ -2,7 +2,7 @@ name: Publish to npm
 
 on:
   release:
-    types: [created]
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -56,7 +56,7 @@ jobs:
         run: |
           cd packages/movehat/src/templates
           sed -i 's/"movehat": "workspace:\*"/"movehat": "^${{ steps.get_version.outputs.version }}"/' package.json
-          echo "✅ Template package.json updated"
+          echo "Template package.json updated"
           cat package.json
 
       - name: Build package
@@ -65,7 +65,14 @@ jobs:
       - name: Publish to npm
         run: |
           cd packages/movehat
-          npm publish --access public
+          VERSION=${{ steps.get_version.outputs.version }}
+
+          # If version is alpha/beta/rc , publish with tag
+          if [[ "$VERSION" == *"-alpha"* || "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
+            npm publish --access public --tag next
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
