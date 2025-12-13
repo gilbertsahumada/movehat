@@ -56,11 +56,21 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
       process.exit(0);
     };
 
-    process.once('SIGINT', shutdown);
-    process.once('SIGTERM', shutdown);
+    // Use named handlers so we can remove them if needed
+    const sigintHandler = () => { void shutdown(); };
+    const sigtermHandler = () => { void shutdown(); };
 
-    // Start server
-    await server.start();
+    process.once('SIGINT', sigintHandler);
+    process.once('SIGTERM', sigtermHandler);
+
+    try {
+      // Start server
+      await server.start();
+    } finally {
+      // Remove handlers in case server is stopped by other means
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+    }
 
   } catch (error: any) {
     console.error(`\nError starting fork server:`, error.message);

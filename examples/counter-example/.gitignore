@@ -5,7 +5,12 @@ node_modules/
 .env
 
 # MoveHat generated files
-.movehat/
+# Ignore all of .movehat except example fork data
+.movehat/*
+!.movehat/forks/
+!.movehat/forks/test-server/
+!.movehat/forks/test-server/metadata.json
+!.movehat/forks/test-server/accounts.json
 deployments/
 
 # Build output

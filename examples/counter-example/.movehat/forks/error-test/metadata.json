@@ -1,0 +1,10 @@
+{
+  "network": "testnet",
+  "nodeUrl": "https://testnet.movementnetwork.xyz/v1",
+  "chainId": 250,
+  "ledgerVersion": "50793528",
+  "timestamp": "1765551663628767",
+  "epoch": "2112110",
+  "blockHeight": "15573372",
+  "createdAt": "2025-12-12T15:01:04.102Z"
+}
