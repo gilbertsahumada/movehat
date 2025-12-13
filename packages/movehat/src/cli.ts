@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { Command, InvalidOptionArgumentError } from 'commander';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import testCommand from './commands/test.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
@@ -9,6 +12,11 @@ import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
 import forkServeCommand from './commands/fork/serve.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
+const version = packageJson.version;
 
 /**
  * Parse and validate port number
@@ -26,7 +34,7 @@ const program = new Command();
 program
   .name('movehat')
   .description('A CLI tool for managing Move smart contracts')
-  .version('0.0.1')
+  .version(version)
   .option('--network <name>', 'Network to use (testnet, mainnet, local, etc.)')
   .option('--redeploy', 'Force redeploy even if already deployed')
   .hook('preAction', (thisCommand) => {
