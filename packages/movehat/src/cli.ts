@@ -15,7 +15,7 @@ import forkServeCommand from './commands/fork/serve.js';
  */
 function parsePort(value: string): number {
   const port = Number.parseInt(value, 10);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  if (isNaN(port) || port < 1 || port > 65535) {
     throw new InvalidOptionArgumentError('Port must be an integer between 1 and 65535');
   }
   return port;

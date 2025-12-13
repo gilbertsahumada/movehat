@@ -141,7 +141,11 @@ export class ForkServer {
         this.send404(res, `Endpoint not found: ${pathname}`, 'endpoint_not_found');
       }
     } catch (error: any) {
-      this.sendError(res, 500, error.message);
+      // Log full error server-side for diagnostics
+      console.error('Error handling request:', error);
+
+      // Send generic error to client (don't expose internal details)
+      this.sendError(res, 500, 'Internal server error');
     }
   }
 
