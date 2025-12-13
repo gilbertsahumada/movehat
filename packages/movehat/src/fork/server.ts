@@ -124,17 +124,17 @@ export class ForkServer {
       // Route requests
       if (pathname === '/v1' || pathname === '/v1/') {
         await this.handleLedgerInfo(res);
-      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]+$/)) {
+      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}$/)) {
         const address = pathname.split('/').pop()!;
         await this.handleGetAccount(address, res);
-      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]+\/resource\/.+$/)) {
+      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}\/resource\/.+$/)) {
         const parts = pathname.split('/');
         const accountIndex = parts.indexOf('accounts') + 1;
         const resourceIndex = parts.indexOf('resource') + 1;
         const address = parts[accountIndex];
         const resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
         await this.handleGetResource(address, resourceType, res);
-      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]+\/resources$/)) {
+      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}\/resources$/)) {
         const address = pathname.split('/')[3];
         await this.handleGetResources(address, res);
       } else {
