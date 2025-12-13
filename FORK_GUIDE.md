@@ -166,7 +166,11 @@ The fork server returns JSON error responses with appropriate HTTP status codes 
   }
   ```
 
-All responses include CORS headers for cross-origin requests.
+**Security Features:**
+- All responses include CORS headers for cross-origin requests
+- Long pathnames are automatically truncated to prevent log injection attacks
+- Account addresses are validated to be between 1-64 hex characters
+- Internal error details are never exposed to clients
 
 **Usage with Aptos SDK:**
 ```typescript
