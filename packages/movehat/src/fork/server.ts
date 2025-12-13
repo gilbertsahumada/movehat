@@ -96,6 +96,16 @@ export class ForkServer {
   }
 
   /**
+   * Sanitize pathname for error messages to prevent log injection
+   */
+  private sanitizePathname(pathname: string): string {
+    // Remove control characters and newlines
+    const sanitized = pathname.replace(/[\x00-\x1F\x7F]/g, '');
+    // Truncate to reasonable length
+    return sanitized.length > 100 ? sanitized.substring(0, 100) + '...' : sanitized;
+  }
+
+  /**
    * Handle incoming HTTP requests
    */
   private async handleRequest(
@@ -134,11 +144,17 @@ export class ForkServer {
         const address = parts[accountIndex];
         const resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
         await this.handleGetResource(address, resourceType, res);
-      } else if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}\/resources$/)) {
-        const address = pathname.split('/')[3];
-        await this.handleGetResources(address, res);
       } else {
-        this.send404(res, `Endpoint not found: ${pathname}`, 'endpoint_not_found');
+        // Use regex capture for resources endpoint
+        const resourcesMatch = pathname.match(/^\/v1\/accounts\/(0x[a-fA-F0-9]{1,64})\/resources$/);
+        if (resourcesMatch) {
+          const address = resourcesMatch[1];
+          await this.handleGetResources(address, res);
+        } else {
+          // Sanitize pathname to prevent log injection
+          const safePath = this.sanitizePathname(pathname);
+          this.send404(res, `Endpoint not found: ${safePath}`, 'endpoint_not_found');
+        }
       }
     } catch (error: any) {
       // Log full error server-side for diagnostics

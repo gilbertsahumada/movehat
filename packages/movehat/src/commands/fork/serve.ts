@@ -26,10 +26,8 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
 
       // Lightweight validation: only check if network exists in config
       // Don't validate accounts/keys since fork serve only reads data
-      if (networkName !== 'testnet' && networkName !== 'mainnet' && networkName !== 'local') {
-        if (!config.networks || !config.networks[networkName]) {
-          throw new Error(`Network "${networkName}" not found in config. Available networks: ${Object.keys(config.networks || {}).join(', ')}`);
-        }
+      if (!config.networks || !config.networks[networkName]) {
+        throw new Error(`Network "${networkName}" not found in config. Available networks: ${Object.keys(config.networks || {}).join(', ')}`);
       }
 
       forkPath = join(process.cwd(), '.movehat', 'forks', `${networkName}-fork`);
