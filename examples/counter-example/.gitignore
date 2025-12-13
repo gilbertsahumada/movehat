@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# MoveHat generated files
+# Ignore all of .movehat except example fork data
+.movehat/*
+!.movehat/forks/
+!.movehat/forks/test-server/
+!.movehat/forks/test-server/metadata.json
+!.movehat/forks/test-server/accounts.json
+deployments/
+
+# Build output
+dist/
+build/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

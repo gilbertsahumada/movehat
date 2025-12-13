@@ -10,6 +10,7 @@ export type { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
 export { ForkManager } from "./fork/manager.js";
 export { MovementApiClient } from "./fork/api.js";
 export { ForkStorage } from "./fork/storage.js";
+export { ForkServer } from "./fork/server.js";
 export type { ForkMetadata, AccountState, LedgerInfo, AccountData, AccountResource } from "./types/fork.js";
 
 // Export custom errors
