@@ -68,7 +68,7 @@ export default async function initCommand(projectName?: string) {
     );
 
     await copyFile(
-      path.join(templatesDir, ".gitignore"),
+      path.join(templatesDir, "gitignore"),
       path.join(projectPath, ".gitignore")
     );
 
