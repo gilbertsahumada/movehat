@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./packages/movehat/public/movehat.png" alt="Movehat" width="200"/>
+  <img src="./packages/movehat/public/movehat_banner.png" alt="Movehat" width="200"/>
 
   # Movehat
 
