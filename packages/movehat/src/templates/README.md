@@ -52,6 +52,12 @@ npm run compile
 npm test
 ```
 
+**How it works:**
+- Tests use **Transaction Simulation** - no real blockchain required
+- Runs instantly without gas costs
+- Uses Movement testnet by default with auto-generated test accounts
+- Perfect for TDD and CI/CD workflows
+
 ### 5. Deploy (optional)
 
 ```bash

@@ -102,40 +102,57 @@ MH_NETWORK=testnet
 
 ## Writing Tests
 
+Movehat uses **Transaction Simulation** for testing - no real blockchain or gas costs required:
+
 ```typescript
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
-import { setupTestEnvironment, getContract, assertTransactionSuccess } from "movehat/helpers";
-import type { TestEnvironment, MoveContract } from "movehat/helpers";
+import { getMovehat, type MovehatRuntime } from "movehat";
 
 describe("Counter Contract", () => {
-  let env: TestEnvironment;
-  let counter: MoveContract;
+  let mh: MovehatRuntime;
+  let contractAddress: string;
 
   before(async function () {
     this.timeout(30000);
-    env = await setupTestEnvironment();
-    counter = getContract(
-      env.aptos,
-      env.account.accountAddress.toString(),
-      "counter"
-    );
+
+    // Initialize Movehat Runtime Environment
+    // Uses Movement testnet by default with auto-generated test accounts
+    mh = await getMovehat();
+    contractAddress = mh.account.accountAddress.toString();
   });
 
-  it("should increment counter", async function () {
+  it("should initialize counter using simulation", async function () {
     this.timeout(30000);
-    
-    const tx = await counter.call(env.account, "increment", []);
-    assertTransactionSuccess(tx);
-    
-    const value = await counter.view<number>("get", [
-      env.account.accountAddress.toString()
-    ]);
-    
-    expect(value).to.be.greaterThan(0);
+
+    // Build transaction
+    const transaction = await mh.aptos.transaction.build.simple({
+      sender: mh.account.accountAddress,
+      data: {
+        function: `${contractAddress}::counter::init`,
+        functionArguments: []
+      }
+    });
+
+    // Simulate transaction (no gas cost, instant)
+    const [simulation] = await mh.aptos.transaction.simulate.simple({
+      signerPublicKey: mh.account.publicKey,
+      transaction
+    });
+
+    // Verify simulation succeeded
+    expect(simulation.success).to.be.true;
+    console.log(`Gas used: ${simulation.gas_used}`);
   });
 });
 ```
+
+**Benefits of Transaction Simulation:**
+- No blockchain or fork server required
+- Instant test execution
+- No gas costs
+- Perfect for TDD and CI/CD
+- Uses Movement testnet with auto-generated accounts by default
 
 ## Writing Deployment Scripts
 

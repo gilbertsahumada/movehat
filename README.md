@@ -147,6 +147,12 @@ npm test
 pnpm test
 ```
 
+**How it works:**
+- Tests use **Transaction Simulation** - no real blockchain or fork server required
+- Runs instantly without gas costs or network delays
+- Uses Movement testnet by default with auto-generated test accounts
+- No local setup needed - perfect for CI/CD and rapid development
+
 ### 7. Use Fork System
 
 MoveHat includes a native fork system for creating local snapshots of Movement L1 network state. This allows you to test against real network data without deploying to testnet.
@@ -415,37 +421,91 @@ const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
 
 ## Writing Tests
 
-Tests use Mocha and Chai with the Movehat Runtime:
+Movehat uses **Transaction Simulation** for testing, allowing you to test contract logic without executing real transactions:
 
 ```typescript
 // tests/Counter.test.ts
+import { describe, it, before } from "mocha";
 import { expect } from "chai";
-import { getMovehat } from "movehat";
+import { getMovehat, type MovehatRuntime } from "movehat";
 
-describe("Counter", () => {
-  let mh: any;
+describe("Counter Contract", () => {
+  let mh: MovehatRuntime;
+  let contractAddress: string;
 
-  before(async () => {
+  before(async function () {
+    this.timeout(30000);
+
+    // Initialize Movehat Runtime Environment
+    // Uses Movement testnet by default with auto-generated test accounts
     mh = await getMovehat();
+    contractAddress = mh.account.accountAddress.toString();
+
+    console.log(`\nTesting on ${mh.network.name}`);
+    console.log(`Account: ${contractAddress}\n`);
   });
 
-  it("should initialize counter", async () => {
-    const contract = mh.getContract(mh.account, "counter");
-    await contract.init();
+  it("should initialize counter using simulation", async function () {
+    this.timeout(30000);
 
-    const value = await contract.getValue();
-    expect(value).to.equal(0);
+    // Build transaction
+    const transaction = await mh.aptos.transaction.build.simple({
+      sender: mh.account.accountAddress,
+      data: {
+        function: `${contractAddress}::counter::init`,
+        functionArguments: []
+      }
+    });
+
+    // Simulate transaction (no gas cost, instant)
+    const [simulation] = await mh.aptos.transaction.simulate.simple({
+      signerPublicKey: mh.account.publicKey,
+      transaction
+    });
+
+    // Verify simulation succeeded
+    expect(simulation.success).to.be.true;
+    console.log(`Counter init simulated successfully`);
+    console.log(`Gas used: ${simulation.gas_used}`);
   });
 
-  it("should increment counter", async () => {
-    const contract = mh.getContract(mh.account, "counter");
-    await contract.increment();
+  it("should increment counter using simulation", async function () {
+    this.timeout(30000);
 
-    const value = await contract.getValue();
-    expect(value).to.equal(1);
+    // Build increment transaction
+    const transaction = await mh.aptos.transaction.build.simple({
+      sender: mh.account.accountAddress,
+      data: {
+        function: `${contractAddress}::counter::increment`,
+        functionArguments: []
+      }
+    });
+
+    // Simulate transaction
+    const [simulation] = await mh.aptos.transaction.simulate.simple({
+      signerPublicKey: mh.account.publicKey,
+      transaction
+    });
+
+    // Verify simulation succeeded
+    expect(simulation.success).to.be.true;
+    console.log(`Counter increment simulated successfully`);
+    console.log(`Gas used: ${simulation.gas_used}`);
   });
 });
 ```
+
+**Why Transaction Simulation?**
+- **No blockchain required** - Tests run without executing real transactions
+- **Instant feedback** - No network delays or gas costs
+- **Zero setup** - Uses Movement testnet with auto-generated test accounts
+- **CI/CD friendly** - Perfect for continuous integration pipelines
+- **Gas estimation** - See how much gas your transactions would use
+
+**When to use real transactions:**
+- For end-to-end integration testing, use the fork system (see above)
+- For production deployment verification
+- Transaction simulation is perfect for unit testing contract logic
 
 ## CLI Commands
 

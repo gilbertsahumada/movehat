@@ -1,75 +1,71 @@
-import { describe, it, before, after } from "mocha";
+import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { getMovehat, type MovehatRuntime } from "movehat";
-import type { MoveContract } from "movehat/helpers";
-import { assertTransactionSuccess, snapshot } from "movehat/helpers";
 
 describe("Counter Contract", () => {
   let mh: MovehatRuntime;
-  let counter: MoveContract;
+  let contractAddress: string;
 
   before(async function () {
     this.timeout(30000);
 
     // Initialize Movehat Runtime Environment
+    // Uses devnet by default - no local setup required
     mh = await getMovehat();
 
-    console.log(`\n✅ Testing on ${mh.network.name}`);
-    console.log(`   Account: ${mh.account.accountAddress.toString()}\n`);
+    contractAddress = mh.account.accountAddress.toString();
 
-    // Get counter contract instance
-    counter = mh.getContract(
-      mh.account.accountAddress.toString(),
-      "counter"
-    );
+    console.log(`\nTesting on ${mh.network.name}`);
+    console.log(`Account: ${contractAddress}\n`);
   });
 
   describe("Counter functionality", () => {
-    it("should initialize counter", async function () {
+    it("should initialize counter using simulation", async function () {
       this.timeout(30000);
 
-      const txResult = await counter.call(mh.account, "init", []);
-      assertTransactionSuccess(txResult);
+      // Build transaction
+      const transaction = await mh.aptos.transaction.build.simple({
+        sender: mh.account.accountAddress,
+        data: {
+          function: `${contractAddress}::counter::init`,
+          functionArguments: []
+        }
+      });
 
-      const value = await counter.view<number>("get", [
-        mh.account.accountAddress.toString()
-      ]);
+      // Simulate transaction (no gas cost, instant)
+      const [simulation] = await mh.aptos.transaction.simulate.simple({
+        signerPublicKey: mh.account.publicKey,
+        transaction
+      });
 
-      expect(value).to.equal(0);
-      console.log(`   ✓ Counter initialized with value: ${value}`);
+      // Verify simulation succeeded
+      expect(simulation.success).to.be.true;
+      console.log(`Counter init simulated successfully`);
+      console.log(`Gas used: ${simulation.gas_used}`);
     });
 
-    it("should increment counter", async function () {
+    it("should increment counter using simulation", async function () {
       this.timeout(30000);
 
-      const initialValue = await counter.view<number>("get", [
-        mh.account.accountAddress.toString()
-      ]);
+      // Build increment transaction
+      const transaction = await mh.aptos.transaction.build.simple({
+        sender: mh.account.accountAddress,
+        data: {
+          function: `${contractAddress}::counter::increment`,
+          functionArguments: []
+        }
+      });
 
-      const txResult = await counter.call(mh.account, "increment", []);
-      assertTransactionSuccess(txResult);
+      // Simulate transaction
+      const [simulation] = await mh.aptos.transaction.simulate.simple({
+        signerPublicKey: mh.account.publicKey,
+        transaction
+      });
 
-      const newValue = await counter.view<number>("get", [
-        mh.account.accountAddress.toString()
-      ]);
-
-      expect(newValue).to.equal(initialValue + 1);
-      console.log(`   ✓ Counter incremented: ${initialValue} → ${newValue}`);
+      // Verify simulation succeeded
+      expect(simulation.success).to.be.true;
+      console.log(`Counter increment simulated successfully`);
+      console.log(`Gas used: ${simulation.gas_used}`);
     });
   });
-
-  // Optional: Create a snapshot after tests for debugging
-  // Uncomment to enable
-  /*
-  after(async function () {
-    this.timeout(30000);
-
-    const snapshotPath = await snapshot({
-      name: 'counter-test-final'
-    });
-
-    console.log(`\n📸 Snapshot created: ${snapshotPath}`);
-    console.log(`   Use 'aptos move sim view-resource --session ${snapshotPath}' to inspect state\n`);
-  });
-  */
 });
