@@ -10,16 +10,12 @@
   [![NPM Version](https://img.shields.io/npm/v/movehat)](https://www.npmjs.com/package/movehat)
   [![License](https://img.shields.io/npm/l/movehat)](./LICENSE)
 
-  ---
-
-  [![Twitter](https://img.shields.io/badge/Twitter-@gilbertsahumada-1DA1F2?logo=x&logoColor=white)](https://x.com/@gilbertsahumada)
-  [![YouTube](https://img.shields.io/badge/YouTube-@gilbertsahumada-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@gilbertsahumada)
-  [![Website](https://img.shields.io/badge/Website-gilbertsahumada.com-blue)](https://gilbertsahumada.com)
-
 </div>
 
 ## Features
 
+- **Transaction Simulation Testing** - Test your contracts without blockchain or gas costs (instant feedback)
+- **Zero Setup Testing** - Auto-generated test accounts on Movement testnet (no configuration needed)
 - **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code (like Hardhat)
 - **Native Fork System** - Create local snapshots of Movement L1 with actual network state (JSON-based, no BCS issues)
 - **TypeScript-first** - Write tests and deployment scripts in TypeScript
@@ -46,9 +42,9 @@ Before installing Movehat, make sure you have:
   movement --version
   ```
 
-  **⚠️ Important:** Without Movement CLI installed, compilation will fail with:
+  ** Important:** Without Movement CLI installed, compilation will fail with:
   ```
-  ❌ Compilation failed: Command failed: movement move build
+  Compilation failed: Command failed: movement move build
   /bin/sh: movement: command not found
   ```
 
@@ -60,7 +56,38 @@ npm install -g movehat
 pnpm install -g movehat
 ```
 
-## Quick Start
+## Quick Start (30 seconds)
+
+Get started with Movehat in 4 commands:
+
+```bash
+# 1. Create project
+npx movehat init my-project && cd my-project
+
+# 2. Install dependencies
+npm install
+
+# 3. Compile contracts (auto-detects addresses)
+npx movehat compile
+
+# 4. Run tests (uses simulation - no setup needed)
+npm test
+```
+
+That's it! No blockchain, no accounts, no configuration needed to start testing.
+
+**What just happened?**
+- Tests run using **Transaction Simulation** (no real blockchain)
+- Uses Movement testnet with **auto-generated test accounts**
+- Zero setup - perfect for learning and rapid development
+
+**Ready to deploy?** Set `PRIVATE_KEY` in `.env` and run deployment scripts. See detailed guide below.
+
+**Want more details?** Check out the [complete Quick Start guide](./QUICKSTART.md).
+
+---
+
+## Detailed Setup Guide
 
 ### 1. Initialize a new project
 
@@ -88,9 +115,11 @@ my-move-project/
 └── tsconfig.json
 ```
 
-### 2. Configure your environment
+### 2. Configure your environment (Optional for testing)
 
-Copy `.env.example` to `.env` and add your private key:
+**For testing only?** Skip this step! Tests use simulation with auto-generated accounts.
+
+**For real deployment?** Configure your private key:
 
 ```bash
 cp .env.example .env
@@ -107,6 +136,11 @@ MOVEMENT_RPC_URL=https://custom-testnet.movementnetwork.xyz/v1
 ```
 
 **Note:** Like Hardhat, Movehat uses a single `PRIVATE_KEY` that works across all networks (testnet, mainnet, local). This simplifies configuration and matches real-world usage.
+
+**Security:** The `PRIVATE_KEY` is only required for:
+- Real deployments to testnet/mainnet
+- Running deployment scripts
+- Tests automatically use safe, auto-generated test accounts (no configuration needed)
 
 ### 3. Install dependencies
 
@@ -659,6 +693,8 @@ MIT
 
 ## Links
 
+- [Quick Start Guide](./QUICKSTART.md) - Get started in 30 seconds
+- [Fork System Guide](./FORK_GUIDE.md) - Complete fork system documentation
 - [GitHub Repository](https://github.com/gilbertsahumada/movehat)
 - [NPM Package](https://www.npmjs.com/package/movehat)
 - [Movement Documentation](https://docs.movementlabs.xyz/)
@@ -667,3 +703,7 @@ MIT
 ## Author
 
 **Gilberts Ahumada**
+
+[![Twitter](https://img.shields.io/badge/Twitter-@gilbertsahumada-1DA1F2?logo=x&logoColor=white)](https://x.com/@gilbertsahumada)
+[![YouTube](https://img.shields.io/badge/YouTube-@gilbertsahumada-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@gilbertsahumada)
+[![Website](https://img.shields.io/badge/Website-gilbertsahumada.com-blue)](https://gilbertsahumada.com)

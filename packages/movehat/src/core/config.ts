@@ -96,7 +96,7 @@ export async function resolveNetworkConfig(
       url: "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
     };
-    console.log(`Testnet not found in config - using default Movement testnet configuration`);
+    console.log(`testnet not found in config - using default Movement testnet configuration`);
   }
 
   // Special case: Auto-generate config for local fork server
@@ -144,19 +144,30 @@ export async function resolveNetworkConfig(
     // testnet = public Movement test network (recommended)
     // local = local fork server
     if (selectedNetwork === "testnet" || selectedNetwork === "local") {
-      // Generate a deterministic test account (like Hardhat's default accounts)
-      // Using a known test private key (DO NOT use in production)
+      // Security: Using a deterministic test account (like Hardhat's default accounts)
+      // This is SAFE because:
+      // 1. Only used for testnet/local (never mainnet - that throws error below)
+      // 2. Perfect for transaction simulation (no real funds)
+      // 3. Deterministic = consistent test results
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
       accounts = [testPrivateKey];
-      console.log(`Using ${selectedNetwork} with auto-generated test account`);
+      console.log(`\n[TESTNET] Using auto-generated test account (safe for testing only)`);
+      console.log(`[TESTNET] For mainnet, set PRIVATE_KEY in .env\n`);
     } else {
+      // For any other network (especially mainnet), REQUIRE explicit configuration
+      // This prevents accidentally using the test key on production networks
       throw new Error(
         `Network '${selectedNetwork}' has no accounts configured.\n` +
+        `\n` +
+        `SECURITY: This network requires explicit account configuration.\n` +
+        `\n` +
         `Options:\n` +
-        `  1. Set PRIVATE_KEY in your .env file (recommended)\n` +
+        `  1. Set PRIVATE_KEY in your .env file (recommended for ${selectedNetwork})\n` +
         `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
         `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config\n` +
-        `  4. Run without --network to use testnet (auto-generates test accounts)`
+        `\n` +
+        `For testing without configuration, use:\n` +
+        `  movehat <command> --network testnet (auto-generates safe test accounts)`
       );
     }
   }
