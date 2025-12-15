@@ -6,18 +6,18 @@ export default async function testCommand() {
   const testDir = join(process.cwd(), "tests");
 
   if (!existsSync(testDir)) {
-    console.error("❌ No tests directory found.");
+    console.error("No tests directory found.");
     console.error("   Create a 'tests' directory with your TypeScript test files.");
     process.exit(1);
   }
 
-  console.log("🧪 Running TypeScript tests with Mocha...\n");
+  console.log("Running TypeScript tests with Mocha...\n");
 
   // Find mocha from project's node_modules
   const mochaPath = join(process.cwd(), "node_modules", ".bin", "mocha");
 
   if (!existsSync(mochaPath)) {
-    console.error("❌ Mocha not found in project dependencies.");
+    console.error("Mocha not found in project dependencies.");
     console.error("   Install it with: npm install --save-dev mocha");
     process.exit(1);
   }
@@ -36,7 +36,7 @@ export default async function testCommand() {
   });
 
   child.on("error", (error) => {
-    console.error(`❌ Failed to run tests: ${error.message}`);
+    console.error(`Failed to run tests: ${error.message}`);
     process.exit(1);
   });
 }

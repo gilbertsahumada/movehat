@@ -8,7 +8,7 @@
     "deploy": "movehat run scripts/deploy-counter.ts"
   },
   "dependencies": {
-    "movehat": "workspace:*",
+    "movehat": "latest",
     "@aptos-labs/ts-sdk": "^5.1.5",
     "dotenv": "^17.2.3"
   },

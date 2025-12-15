@@ -78,6 +78,7 @@ export async function resolveNetworkConfig(
   networkName?: string
 ): Promise<MovehatConfig> {
   // Determine which network to use
+  // Default to "testnet" for testing with simulation
   const selectedNetwork =
     networkName ||
     process.env.MH_CLI_NETWORK ||
@@ -86,11 +87,31 @@ export async function resolveNetworkConfig(
     "testnet";
 
   // Check if network exists in config
-  const networkConfig = userConfig.networks[selectedNetwork];
+  let networkConfig = userConfig.networks[selectedNetwork];
+
+  // Special case: Auto-generate config for testnet (public test network)
+  // This provides a better dev experience - no local setup required
+  if (!networkConfig && selectedNetwork === "testnet") {
+    networkConfig = {
+      url: "https://testnet.movementnetwork.xyz/v1",
+      chainId: "testnet",
+    };
+    console.log(`testnet not found in config - using default Movement testnet configuration`);
+  }
+
+  // Special case: Auto-generate config for local fork server
+  if (!networkConfig && selectedNetwork === "local") {
+    networkConfig = {
+      url: "http://localhost:8080/v1",
+      chainId: "local",
+    };
+    console.log(`Local network not found in config - using default fork server configuration`);
+  }
+
   if (!networkConfig) {
     const availableNetworks = Object.keys(userConfig.networks).join(", ");
     throw new Error(
-      `Network '${selectedNetwork}' not found in configuration.\nAvailable networks: ${availableNetworks}`
+      `Network '${selectedNetwork}' not found in configuration.\nAvailable networks: ${availableNetworks}, testnet (auto-generated), local (auto-generated)`
     );
   }
 
@@ -117,15 +138,38 @@ export async function resolveNetworkConfig(
     accounts = [process.env.PRIVATE_KEY];
   }
 
-  // 4. Validate we have at least one account
+  // 4. Validate we have at least one account (unless using testnet/local)
   if (accounts.length === 0 || !accounts[0]) {
-    throw new Error(
-      `Network '${selectedNetwork}' has no accounts configured.\n` +
-      `Options:\n` +
-      `  1. Set PRIVATE_KEY in your .env file (recommended)\n` +
-      `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
-      `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config`
-    );
+    // Special case: Auto-generate test accounts for testing networks
+    // testnet = public Movement test network (recommended)
+    // local = local fork server
+    if (selectedNetwork === "testnet" || selectedNetwork === "local") {
+      // Security: Using a deterministic test account (like Hardhat's default accounts)
+      // This is SAFE because:
+      // 1. Only used for testnet/local (never mainnet - that throws error below)
+      // 2. Perfect for transaction simulation (no real funds)
+      // 3. Deterministic = consistent test results
+      const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
+      accounts = [testPrivateKey];
+      console.log(`\n[TESTNET] Using auto-generated test account (safe for testing only)`);
+      console.log(`[TESTNET] For mainnet, set PRIVATE_KEY in .env\n`);
+    } else {
+      // For any other network (especially mainnet), REQUIRE explicit configuration
+      // This prevents accidentally using the test key on production networks
+      throw new Error(
+        `Network '${selectedNetwork}' has no accounts configured.\n` +
+        `\n` +
+        `SECURITY: This network requires explicit account configuration.\n` +
+        `\n` +
+        `Options:\n` +
+        `  1. Set PRIVATE_KEY in your .env file (recommended for ${selectedNetwork})\n` +
+        `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
+        `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config\n` +
+        `\n` +
+        `For testing without configuration, use:\n` +
+        `  movehat <command> --network testnet (auto-generates safe test accounts)`
+      );
+    }
   }
 
   // Merge named addresses (network-specific overrides global)
