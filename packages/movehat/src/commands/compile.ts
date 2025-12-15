@@ -6,15 +6,29 @@ import { validateAndEscapePath, escapeShellArg } from "../core/shell.js";
 
 /**
  * Recursively find all .move files in a directory
+ * @param dir - Directory to search
+ * @param maxDepth - Maximum recursion depth (default: 10)
+ * @param currentDepth - Current recursion depth (internal use)
  */
-function findMoveFiles(dir: string): string[] {
+function findMoveFiles(dir: string, maxDepth: number = 10, currentDepth: number = 0): string[] {
   const files: string[] = [];
+
+  // Prevent infinite loops from excessive recursion
+  if (currentDepth > maxDepth) {
+    return files;
+  }
+
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
+
     if (entry.isDirectory()) {
-      files.push(...findMoveFiles(fullPath));
+      // Skip symlinks to prevent directory traversal and infinite loops
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      files.push(...findMoveFiles(fullPath, maxDepth, currentDepth + 1));
     } else if (entry.name.endsWith('.move')) {
       files.push(fullPath);
     }
@@ -32,7 +46,14 @@ function extractNamedAddresses(moveDir: string): Set<string> {
   const moveFiles = findMoveFiles(moveDir);
 
   for (const file of moveFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
+    let content = fs.readFileSync(file, 'utf-8');
+
+    // Strip comments to avoid false positives
+    // Remove block comments /* ... */ (non-greedy, handles newlines)
+    content = content.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    // Remove line comments // ... to end of line
+    content = content.replace(/\/\/.*$/gm, ' ');
+
     // Match: module <address>::<module_name>
     const moduleRegex = /module\s+([a-zA-Z_][a-zA-Z0-9_]*)::/g;
     let match;
@@ -85,11 +106,13 @@ export default async function compileCommand() {
 
     // Merge user-configured addresses with auto-detected ones
     const namedAddresses = { ...(userConfig.namedAddresses ?? {}) };
+    const autoAssignedAddresses: string[] = [];
 
     // For any detected address not in config, use a dev address
     for (const addr of detectedAddresses) {
       if (!namedAddresses[addr]) {
         namedAddresses[addr] = "0xcafe"; // Dev address for compilation
+        autoAssignedAddresses.push(addr);
       }
     }
 
@@ -131,6 +154,9 @@ export default async function compileCommand() {
     }
     if (Object.keys(userConfig.namedAddresses ?? {}).length > 0) {
       console.log(`   Configured addresses: ${Object.keys(userConfig.namedAddresses!).join(", ")}`);
+    }
+    if (autoAssignedAddresses.length > 0) {
+      console.log(`   Auto-assigned dev address (0xcafe): ${autoAssignedAddresses.join(", ")}`);
     }
     console.log();
 
