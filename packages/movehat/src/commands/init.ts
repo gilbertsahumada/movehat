@@ -82,7 +82,8 @@ export default async function initCommand(projectName?: string) {
     console.log("📦 Setting up Move project...");
     await copyDir(
       path.join(templatesDir, "move"),
-      path.join(projectPath, "move")
+      path.join(projectPath, "move"),
+      { projectName: projectName! }
     );
 
     // 4. Copiar scripts/
@@ -128,7 +129,7 @@ async function copyFile(
   await fs.writeFile(dest, content);
 }
 
-async function copyDir(src: string, dest: string) {
+async function copyDir(src: string, dest: string, replacements?: Record<string, string>) {
   await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
 
@@ -142,9 +143,14 @@ async function copyDir(src: string, dest: string) {
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      await copyDir(srcPath, destPath);
+      await copyDir(srcPath, destPath, replacements);
     } else {
-      await fs.copyFile(srcPath, destPath);
+      // Apply replacements to text files
+      if (replacements && (entry.name.endsWith('.toml') || entry.name.endsWith('.move'))) {
+        await copyFile(srcPath, destPath, replacements);
+      } else {
+        await fs.copyFile(srcPath, destPath);
+      }
     }
   }
 }
