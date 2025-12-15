@@ -1,3 +1,4 @@
+// @ts-nocheck - This is a template file, dependencies are installed in user projects
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { getMovehat, type MovehatRuntime } from "movehat";
@@ -10,7 +11,7 @@ describe("Counter Contract", () => {
     this.timeout(30000);
 
     // Initialize Movehat Runtime Environment
-    // Uses devnet by default - no local setup required
+    // Uses testnet by default - no local setup required
     mh = await getMovehat();
 
     contractAddress = mh.account.accountAddress.toString();
