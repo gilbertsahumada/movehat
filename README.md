@@ -20,6 +20,7 @@
 
 ## Features
 
+- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code (like Hardhat)
 - **Native Fork System** - Create local snapshots of Movement L1 with actual network state (JSON-based, no BCS issues)
 - **TypeScript-first** - Write tests and deployment scripts in TypeScript
 - **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
@@ -34,8 +35,8 @@
 
 Before installing Movehat, make sure you have:
 
-- **Node.js** (v18 or later)
-- **Movement CLI** - Required for compiling and deploying Move contracts
+- **Node.js** (v18 or later) - [Download](https://nodejs.org/)
+- **Movement CLI** - **REQUIRED** for compiling and deploying Move contracts
 
   Install Movement CLI by following the official guide:
   [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementcli)
@@ -43,6 +44,12 @@ Before installing Movehat, make sure you have:
   Verify installation:
   ```bash
   movement --version
+  ```
+
+  **⚠️ Important:** Without Movement CLI installed, compilation will fail with:
+  ```
+  ❌ Compilation failed: Command failed: movement move build
+  /bin/sh: movement: command not found
   ```
 
 ## Installation
@@ -114,6 +121,12 @@ pnpm install
 ```bash
 movehat compile
 ```
+
+**How it works:**
+- Movehat **automatically detects** named addresses from your Move files (e.g., `module counter::counter` → detects `counter`)
+- No manual address configuration needed for development
+- Uses temporary dev addresses (`0xcafe`) for compilation
+- Just like Hardhat - add any new contract and it compiles automatically
 
 ### 5. Run deployment scripts
 
@@ -252,9 +265,11 @@ export default {
   // Move source directory
   moveDir: "./move",
 
-  // Named addresses (optional)
+  // Named addresses (optional - auto-detected from Move files)
+  // Only specify if you need specific addresses for production deployment
   namedAddresses: {
     // Example: counter: "0x1234...",
+    // If not specified, Movehat auto-detects from your .move files
   },
 };
 ```
@@ -554,7 +569,25 @@ main().catch(console.error);
 | "Network 'X' not found" | Add the network to `networks` in config |
 | "No accounts configured" | Set `PRIVATE_KEY` in `.env` |
 | "Module not found" | Run `movehat compile` first |
-| "Movement CLI not found" | Install [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli) |
+| "movement: command not found" | Install [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli) - **REQUIRED** |
+| "Compilation failed: ENOENT: no such file or directory, uv_cwd" | Your current directory was deleted. Run `cd ~` then navigate to your project |
+| "Cannot find package 'dotenv'" | Run `npm install` or `pnpm install` in your project directory |
+
+### System Requirements
+
+**Required:**
+- Node.js v18+
+- Movement CLI (install from [Movement docs](https://docs.movementnetwork.xyz/devs/movementcli))
+- npm or pnpm
+
+**What happens if Movement CLI is not installed:**
+- `movehat compile` will fail with "command not found" error
+- You won't be able to build or deploy contracts
+- Solution: Install Movement CLI before using Movehat
+
+**Recommended:**
+- Git (for version control)
+- VS Code with Move syntax highlighting extension
 
 ## Contributing
 

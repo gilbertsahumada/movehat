@@ -22,7 +22,7 @@ export default async function initCommand(projectName?: string) {
 
     // If the user cancels (Ctrl+C), exit
     if (!response.projectName) {
-      console.log('\n❌ Project initialization cancelled.');
+      console.log('\nProject initialization cancelled.');
       process.exit(0);
     }
 
@@ -39,7 +39,7 @@ export default async function initCommand(projectName?: string) {
 
     const templatesDir = path.join(__dirname, "..", "templates");
 
-    console.log("📁 Creating project structure...");
+    console.log("Creating project structure...");
 
     await copyFile(
       path.join(templatesDir, "package.json"),
@@ -79,7 +79,7 @@ export default async function initCommand(projectName?: string) {
     );
 
     // 3. Copiar carpeta move/
-    console.log("📦 Setting up Move project...");
+    console.log("Setting up Move project...");
     await copyDir(
       path.join(templatesDir, "move"),
       path.join(projectPath, "move"),
@@ -87,21 +87,21 @@ export default async function initCommand(projectName?: string) {
     );
 
     // 4. Copiar scripts/
-    console.log("📜 Adding deployment scripts...");
+    console.log("Adding deployment scripts...");
     await copyDir(
       path.join(templatesDir, "scripts"),
       path.join(projectPath, "scripts")
     );
 
     // 5. Copiar tests/
-    console.log("🧪 Adding test files...");
+    console.log("Adding test files...");
     await copyDir(
       path.join(templatesDir, "tests"),
       path.join(projectPath, "tests")
     );
 
-    console.log("\n✅ Project created successfully!\n");
-    console.log("📝 Next steps:\n");
+    console.log("\nProject created successfully!\n");
+    console.log("Next steps:\n");
     console.log(`   cd ${projectName}`);
     console.log(`   cp .env.example .env`);
     console.log(`   # Edit .env with your credentials`);

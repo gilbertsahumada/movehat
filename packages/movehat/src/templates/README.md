@@ -1,11 +1,18 @@
-# {{PROJECT_NAME}}
+# {{projectName}}
 
 A Move smart contract project built with Movehat.
 
 ## Prerequisites
 
-- Node.js v18+
-- [Movement CLI](https://docs.movementnetwork.xyz/devs/movementCLI)
+**Required:**
+- **Node.js v18+** - [Download](https://nodejs.org/)
+- **Movement CLI** - **REQUIRED** for compiling contracts
+
+  Install: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
+
+  Verify: `movement --version`
+
+**⚠️ Important:** Without Movement CLI, compilation will fail!
 
 ## Getting Started
 
@@ -25,41 +32,30 @@ cp .env.example .env
 
 Edit `.env`:
 ```
-MH_PRIVATE_KEY=your_private_key_here
-MH_ACCOUNT=your_account_address_here
-MH_NETWORK=testnet
+PRIVATE_KEY=your_private_key_here
 ```
 
-### 3. Update Move.toml
-
-Edit `move/Move.toml` and set the `counter` address to your account address:
-
-```toml
-[addresses]
-counter = "0xYOUR_ACCOUNT_ADDRESS"
-```
-
-### 4. Compile contracts
+### 3. Compile contracts
 
 ```bash
 npm run compile
 ```
 
-### 5. Deploy
+**How it works:**
+- Movehat automatically detects named addresses from your Move files
+- No need to manually configure addresses in `Move.toml`
+- Just add any new `.move` file and it will compile automatically (like Hardhat!)
 
-```bash
-npx tsx scripts/deploy-counter.ts
-```
-
-Or use the Movement CLI directly:
-```bash
-movement move publish --package-dir ./move --profile default --assume-yes
-```
-
-### 6. Run tests
+### 4. Run tests
 
 ```bash
 npm test
+```
+
+### 5. Deploy (optional)
+
+```bash
+npx movehat run scripts/deploy-counter.ts
 ```
 
 ## Project Structure
@@ -80,10 +76,37 @@ npm test
 
 ## Available Commands
 
-- `npm run compile` - Compile Move contracts
+- `npm run compile` - Compile Move contracts (auto-detects addresses)
 - `npm test` - Run integration tests
 - `npm run test:watch` - Run tests in watch mode
-- `npx tsx scripts/deploy-counter.ts` - Deploy and initialize counter
+- `npx movehat run scripts/deploy-counter.ts` - Deploy and initialize counter
+
+## How Named Addresses Work
+
+Movehat automatically detects named addresses from your Move code:
+
+```move
+module counter::counter {  // ← "counter" is auto-detected
+  // ...
+}
+```
+
+- **For development:** Movehat uses temp addresses (`0xcafe`) automatically
+- **For production:** Specify real addresses in `movehat.config.ts`
+
+**Adding new contracts:**
+1. Create `move/sources/MyContract.move`
+2. Write: `module mycontract::mycontract { ... }`
+3. Run `npm run compile`
+4. It just works! (like Hardhat)
+
+## Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| `movement: command not found` | Install Movement CLI (see Prerequisites) |
+| `Cannot find package 'dotenv'` | Run `npm install` |
+| Compilation failed | Ensure Movement CLI is installed: `movement --version` |
 
 ## Learn More
 

@@ -7,11 +7,25 @@
 
 ## Features
 
+- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from Move code (like Hardhat)
 - **Quick Start** - Scaffold new Move projects in seconds
 - **TypeScript Testing** - Write integration tests with familiar tools (Mocha, Chai)
 - **Built-in Helpers** - Interact with contracts easily
 - **Movement CLI Integration** - Seamless compilation and deployment
 - **Hot Reload** - Test changes instantly with watch mode
+
+## Prerequisites
+
+Before installing Movehat, ensure you have:
+
+- **Node.js v18+** - [Download](https://nodejs.org/)
+- **Movement CLI** - **REQUIRED** for compiling Move contracts
+
+  Install from: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
+
+  Verify: `movement --version`
+
+**⚠️ Without Movement CLI:** Compilation will fail with "movement: command not found"
 
 ## Installation
 
@@ -33,15 +47,14 @@ cd my-move-project
 # Install dependencies
 npm install
 
-# Compile contracts
+# Compile contracts (auto-detects named addresses)
 npx movehat compile
-
-# Deploy contracts
-npx movehat deploy
 
 # Run tests
 npm test
 ```
+
+**Note:** Movehat automatically detects named addresses from your Move files, so no manual configuration is needed for compilation!
 
 ## Project Structure
 
@@ -70,8 +83,11 @@ export default {
   account: process.env.MH_ACCOUNT || "",
   privateKey: process.env.MH_PRIVATE_KEY || "",
   moveDir: "./move",
+
+  // Named addresses are auto-detected from your Move files
+  // Only specify if you need specific production addresses
   namedAddresses: {
-    counter: process.env.MH_ACCOUNT ?? "0x0",
+    // Optional: counter: "0xYourProductionAddress",
   },
 };
 ```
@@ -213,10 +229,20 @@ npx movehat deploy          # Deploy contracts
 npx movehat test            # Run tests
 ```
 
-## Prerequisites
+## System Requirements
 
+**Required:**
 - Node.js v18+
-- [Movement CLI](https://docs.movementnetwork.xyz/devs/movementCLI) installed and configured
+- Movement CLI - **REQUIRED** ([Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI))
+- npm or pnpm
+
+**What fails without Movement CLI:**
+- `movehat compile` → "movement: command not found"
+- Contract building and deployment will not work
+
+**Recommended:**
+- Git
+- VS Code with Move syntax extension
 
 ## Documentation
 
