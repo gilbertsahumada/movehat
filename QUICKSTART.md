@@ -65,7 +65,31 @@ my-project/
 
 ## Testing Workflow
 
-Your tests use **Transaction Simulation**:
+Movehat provides **two types of tests** for comprehensive coverage:
+
+### Move Unit Tests (Fast)
+
+Tests written directly in your Move files:
+
+```move
+#[test(account = @0x1)]
+public fun test_increment(account: &signer) acquires Counter {
+    let addr = signer::address_of(account);
+    aptos_framework::account::create_account_for_test(addr);
+
+    init(account);
+    assert!(get(addr) == 0, 0);
+
+    increment(account);
+    assert!(get(addr) == 1, 1);
+}
+```
+
+Run with: `npm run test:move` (ultra-fast, milliseconds)
+
+### TypeScript Integration Tests (Simulation)
+
+Tests written in TypeScript using **Transaction Simulation**:
 
 ```typescript
 // Build transaction
@@ -87,11 +111,18 @@ const [simulation] = await mh.aptos.transaction.simulate.simple({
 expect(simulation.success).to.be.true;
 ```
 
-Benefits:
-- No blockchain setup
-- No gas costs
-- Instant results
-- Perfect for TDD
+Run with: `npm run test:ts` (simulation, no gas)
+
+### Run All Tests
+
+```bash
+npm test  # Runs Move tests first, then TypeScript tests
+```
+
+**Benefits:**
+- **Move tests**: Ultra-fast (ms), test internal logic
+- **TypeScript tests**: Integration testing, no gas costs
+- **Both together**: Comprehensive coverage from unit to integration
 
 ## Ready to Deploy?
 

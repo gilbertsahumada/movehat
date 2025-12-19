@@ -571,17 +571,80 @@ describe("Counter Contract", () => {
 });
 ```
 
-**Why Transaction Simulation?**
-- **No blockchain required** - Tests run without executing real transactions
-- **Instant feedback** - No network delays or gas costs
-- **Zero setup** - Uses Movement testnet with auto-generated test accounts
-- **CI/CD friendly** - Perfect for continuous integration pipelines
-- **Gas estimation** - See how much gas your transactions would use
+**When to use TypeScript tests:**
+- Testing SDK integration and client interactions
+- Validating transaction flows end-to-end
+- Testing gas estimation
+- CI/CD pipelines
+- Simulating user interactions
 
-**When to use real transactions:**
-- For end-to-end integration testing, use the fork system (see above)
-- For production deployment verification
-- Transaction simulation is perfect for unit testing contract logic
+**Run TypeScript tests:**
+```bash
+npm run test:ts
+# or
+movehat test:ts
+
+# Watch mode for development
+npm run test:watch
+```
+
+---
+
+### 3. Run All Tests
+
+Run both Move and TypeScript tests together:
+
+```bash
+npm test
+# or
+movehat test
+```
+
+**Output:**
+```
+Running all tests...
+
+============================================================
+
+1. Move Unit Tests
+------------------------------------------------------------
+
+Running Move unit tests for package Counter
+[ PASS    ] 0xcafe::counter::test_increment
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+
+✓ Move tests passed
+
+============================================================
+
+2. TypeScript Integration Tests
+------------------------------------------------------------
+
+  Counter Contract
+    Counter functionality
+[TESTNET] Using auto-generated test account (safe for testing only)
+[TESTNET] For mainnet, set PRIVATE_KEY in .env
+
+Testing on testnet
+Account: 0x1234...
+
+      ✓ should initialize counter using simulation
+      ✓ should increment counter using simulation
+
+  2 passing (3s)
+
+✓ TypeScript tests passed
+
+============================================================
+
+✓ All tests passed!
+```
+
+**Benefits of dual testing:**
+- **Move tests** catch logic errors early (milliseconds)
+- **TypeScript tests** verify integration works (seconds)
+- **Comprehensive coverage** from both perspectives
+- **Fast feedback loop** for development
 
 ## CLI Commands
 
@@ -606,7 +669,32 @@ movehat run scripts/deploy-counter.ts --network testnet --redeploy  # Force rede
 ```
 
 ### `movehat test`
-Run your Mocha test suite in the `tests/` directory.
+Run all tests (Move + TypeScript). Runs Move tests first for fast failure, then TypeScript integration tests.
+
+```bash
+movehat test                    # Run all tests
+movehat test --move-only        # Run only Move tests
+movehat test --ts-only          # Run only TypeScript tests
+movehat test --watch            # Run TypeScript tests in watch mode
+movehat test --filter pattern   # Filter Move tests by pattern
+```
+
+### `movehat test:move`
+Run only Move unit tests.
+
+```bash
+movehat test:move                    # Run all Move tests
+movehat test:move --filter test_inc  # Run only tests matching pattern
+movehat test:move --ignore-warnings  # Ignore compilation warnings
+```
+
+### `movehat test:ts`
+Run only TypeScript integration tests.
+
+```bash
+movehat test:ts           # Run TypeScript tests
+movehat test:ts --watch   # Run in watch mode
+```
 
 ### `movehat fork <command>`
 
