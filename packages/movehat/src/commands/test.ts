@@ -1,8 +1,7 @@
 import { spawn } from "child_process";
-import { join } from "path";
+import { join, resolve } from "path";
 import { existsSync } from "fs";
-import { loadUserConfig } from "../core/config.js";
-import path from "path";
+import { runMoveTests } from "../helpers/move-tests.js";
 
 interface TestOptions {
   moveOnly?: boolean;
@@ -14,15 +13,20 @@ interface TestOptions {
 export default async function testCommand(options: TestOptions = {}) {
   // Handle move-only flag
   if (options.moveOnly) {
+    if (options.watch) {
+      console.error("ERROR: --watch flag is not supported with --move-only");
+      console.error("       Watch mode only works with TypeScript tests");
+      process.exit(1);
+    }
     return runMoveTestsSync(options.filter);
   }
 
-  // Handle ts-only flag (current behavior)
-  if (options.tsOnly) {
+  // Handle ts-only flag or watch flag (watch implies ts-only)
+  if (options.tsOnly || options.watch) {
     return runTypeScriptTests(options.watch);
   }
 
-  // Default: Run both Move and TypeScript tests
+  // Default: Run both Move and TypeScript tests (no watch mode)
   console.log("Running all tests...\n");
   console.log("=" + "=".repeat(60) + "\n");
 
@@ -36,57 +40,26 @@ export default async function testCommand(options: TestOptions = {}) {
     process.exit(1);
   }
 
-  // Then run TypeScript tests
-  return runTypeScriptTests(false);
+  // Then run TypeScript tests (never in watch mode for "all tests")
+  try {
+    await runTypeScriptTests(false);
+    console.log("\n" + "=" + "=".repeat(60));
+    console.log("\n✓ All tests passed!\n");
+  } catch (error) {
+    console.error("\n" + "=" + "=".repeat(60));
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\n${message}\n`);
+    process.exit(1);
+  }
 }
 
-function runMoveTestsSync(filter?: string): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    console.log("1. Move Unit Tests");
-    console.log("-" + "-".repeat(60) + "\n");
+async function runMoveTestsSync(filter?: string): Promise<void> {
+  console.log("1. Move Unit Tests");
+  console.log("-" + "-".repeat(60) + "\n");
 
-    try {
-      const userConfig = await loadUserConfig();
-      const moveDir = path.resolve(process.cwd(), userConfig.moveDir || "./move");
-
-      if (!existsSync(moveDir)) {
-        console.log("⊘ No Move directory found (./move not found)");
-        console.log("   Skipping Move tests...\n");
-        resolve();
-        return;
-      }
-
-      const args = ["move", "test", "--package-dir", moveDir];
-
-      // Add dev flag for auto-detected addresses
-      args.push("--dev");
-
-      if (filter) {
-        args.push("--filter", filter);
-      }
-
-      const child = spawn("movement", args, {
-        stdio: "inherit",
-        cwd: process.cwd(),
-      });
-
-      child.on("exit", (code) => {
-        if (code === 0) {
-          console.log("\n✓ Move tests passed");
-          resolve();
-        } else {
-          reject(new Error("Move tests failed"));
-        }
-      });
-
-      child.on("error", (error) => {
-        console.error(`Failed to run Move tests: ${error.message}`);
-        console.error("   Make sure Movement CLI is installed");
-        reject(error);
-      });
-    } catch (error) {
-      reject(error);
-    }
+  return runMoveTests({
+    filter,
+    skipIfMissing: true, // Gracefully skip if no Move directory (orchestrated test mode)
   });
 }
 
@@ -122,16 +95,21 @@ function runTypeScriptTests(watch: boolean = false): Promise<void> {
       },
     });
 
+    // In watch mode, Mocha never exits, so resolve immediately
+    if (watch) {
+      console.log("Watch mode active. Press Ctrl+C to exit.\n");
+      resolve();
+      return;
+    }
+
+    // Non-watch mode: wait for exit
     child.on("exit", (code) => {
       if (code === 0) {
         console.log("\n✓ TypeScript tests passed");
-        console.log("\n" + "=" + "=".repeat(60));
-        console.log("\n✓ All tests passed!\n");
         resolve();
       } else {
-        console.error("\n✗ TypeScript tests failed");
-        console.log("\n" + "=" + "=".repeat(60));
-        process.exit(code || 1);
+        const exitCode = typeof code === "number" ? code : 1;
+        reject(new Error(`TypeScript tests failed with exit code ${exitCode}`));
       }
     });
 

@@ -71,8 +71,8 @@ program
     .description('Run all tests (Move + TypeScript)')
     .option('--move-only', 'Run only Move unit tests')
     .option('--ts-only', 'Run only TypeScript integration tests')
-    .option('--watch', 'Run TypeScript tests in watch mode')
-    .option('--filter <pattern>', 'Filter Move tests by name pattern')
+    .option('--watch', 'Run TypeScript tests in watch mode (implies --ts-only)')
+    .option('--filter <pattern>', 'Filter Move tests by name pattern (Move tests only)')
     .action((options) => testCommand(options));
 
 program
