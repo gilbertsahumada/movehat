@@ -455,7 +455,49 @@ const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
 
 ## Writing Tests
 
-Movehat uses **Transaction Simulation** for testing, allowing you to test contract logic without executing real transactions:
+Movehat supports **two types of tests** for comprehensive coverage:
+
+### 1. Move Unit Tests (Fast & Internal)
+
+Write tests directly in your Move files using `#[test]` annotations. Perfect for testing internal logic and business rules.
+
+**Example from `move/sources/Counter.move`:**
+
+```move
+#[test(account = @0x1)]
+public fun test_increment(account: &signer) acquires Counter {
+    let addr = signer::address_of(account);
+    aptos_framework::account::create_account_for_test(addr);
+
+    init(account);
+    assert!(get(addr) == 0, 0);
+
+    increment(account);
+    assert!(get(addr) == 1, 1);
+
+    increment(account);
+    assert!(get(addr) == 2, 2);
+}
+```
+
+**When to use Move tests:**
+- Testing internal logic and calculations
+- Validating business rules and invariants
+- Testing edge cases in pure functions
+- TDD during Move development (ultra-fast feedback)
+
+**Run Move tests:**
+```bash
+npm run test:move
+# or
+movehat test:move
+```
+
+---
+
+### 2. TypeScript Integration Tests (Simulation-Based)
+
+Write tests in TypeScript using **Transaction Simulation**. Perfect for end-to-end testing without real blockchain:
 
 ```typescript
 // tests/Counter.test.ts

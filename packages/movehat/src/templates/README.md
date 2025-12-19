@@ -52,11 +52,25 @@ npm run compile
 npm test
 ```
 
-**How it works:**
-- Tests use **Transaction Simulation** - no real blockchain required
-- Runs instantly without gas costs
-- Uses Movement testnet by default with auto-generated test accounts
-- Perfect for TDD and CI/CD workflows
+**Two types of tests available:**
+
+1. **Move Unit Tests** (`tests/Counter.move` lines 50-63)
+   - Written in Move with `#[test]` annotations
+   - Test internal logic and business rules
+   - Ultra-fast execution (milliseconds)
+   - Run with: `npm run test:move`
+
+2. **TypeScript Integration Tests** (`tests/Counter.test.ts`)
+   - Written in TypeScript using Transaction Simulation
+   - Test end-to-end flows and SDK integration
+   - No blockchain or gas costs required
+   - Run with: `npm run test:ts`
+
+**Commands:**
+- `npm test` - Runs both Move + TypeScript tests
+- `npm run test:move` - Only Move unit tests (fast)
+- `npm run test:ts` - Only TypeScript integration tests
+- `npm run test:watch` - TypeScript tests in watch mode
 
 ### 5. Deploy (optional)
 
