@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import testCommand from './commands/test.js';
+import testMoveCommand from './commands/test-move.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
@@ -67,8 +68,25 @@ program
 
 program
     .command('test')
-    .description('Run TypeScript tests with Mocha')
-    .action(testCommand);
+    .description('Run all tests (Move + TypeScript)')
+    .option('--move-only', 'Run only Move unit tests')
+    .option('--ts-only', 'Run only TypeScript integration tests')
+    .option('--watch', 'Run TypeScript tests in watch mode')
+    .option('--filter <pattern>', 'Filter Move tests by name pattern')
+    .action((options) => testCommand(options));
+
+program
+    .command('test:move')
+    .description('Run Move unit tests')
+    .option('--filter <pattern>', 'Filter tests by name pattern')
+    .option('--ignore-warnings', 'Ignore compilation warnings')
+    .action((options) => testMoveCommand(options));
+
+program
+    .command('test:ts')
+    .description('Run TypeScript integration tests')
+    .option('--watch', 'Run tests in watch mode')
+    .action((options) => testCommand({ tsOnly: true, watch: options.watch }));
 
 // Fork commands
 const fork = program
