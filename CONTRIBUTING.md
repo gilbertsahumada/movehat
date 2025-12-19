@@ -340,10 +340,10 @@ throw new Error("Network not found");
 Use consistent logging format:
 
 ```typescript
-console.log("✅ Success message");
-console.log("📦 Action being performed...");
+console.log("SUCCESS: Success message");
+console.log("Action being performed...");
 console.log("   Detail info");
-console.error("❌ Error message");
+console.error("ERROR: Error message");
 ```
 
 ## Testing Checklist
