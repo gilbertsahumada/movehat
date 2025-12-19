@@ -155,11 +155,20 @@ For real deployment to Movement testnet/mainnet:
 # Compile contracts
 npx movehat compile
 
-# Run tests
+# Run all tests (Move + TypeScript)
 npm test
 
-# Run tests in watch mode
+# Run only Move tests (ultra-fast)
+npm run test:move
+
+# Run only TypeScript tests
+npm run test:ts
+
+# Run TypeScript tests in watch mode
 npm run test:watch
+
+# Filter Move tests
+npx movehat test:move --filter test_increment
 
 # Deploy to testnet
 npx movehat run scripts/deploy-counter.ts
@@ -170,10 +179,43 @@ npx movehat run scripts/deploy-counter.ts --network mainnet
 
 ## Next Steps
 
-1. **Edit `move/sources/Counter.move`** - Modify your Move contract
-2. **Edit `tests/Counter.test.ts`** - Add more test cases
-3. **Run `npm test`** - See instant feedback with simulation
-4. **Deploy when ready** - Use deployment scripts for real networks
+1. **Edit `move/sources/Counter.move`** - Modify your Move contract and add `#[test]` functions
+2. **Run `npm run test:move`** - Ultra-fast feedback on Move logic (TDD workflow)
+3. **Edit `tests/Counter.test.ts`** - Add TypeScript integration tests
+4. **Run `npm test`** - Full test suite (Move + TypeScript)
+5. **Deploy when ready** - Use deployment scripts for real networks
+
+## Testing Best Practices
+
+**During development (TDD):**
+```bash
+# Write Move function
+vim move/sources/Counter.move
+
+# Add Move test
+# Run Move tests (instant feedback)
+npm run test:move
+
+# Iterate until logic is correct
+```
+
+**Before committing:**
+```bash
+# Run full test suite
+npm test
+
+# Both Move and TypeScript tests must pass
+```
+
+**In CI/CD:**
+```bash
+# Run all tests
+npm test
+
+# Move tests fail fast (seconds)
+# TypeScript tests verify integration
+# Comprehensive coverage
+```
 
 ## Need Help?
 
@@ -184,13 +226,18 @@ npx movehat run scripts/deploy-counter.ts --network mainnet
 
 ## Key Differences from Other Tools
 
-| Feature | Movehat | Traditional |
-|---------|---------|-------------|
-| **Testing** | Transaction Simulation (instant) | Requires blockchain/fork |
-| **Setup** | Zero config for testing | Need accounts, RPC, etc. |
-| **Named Addresses** | Auto-detected from code | Manual configuration |
-| **Account Config** | Single `PRIVATE_KEY` for all networks | Different per network |
-| **Fork System** | Built-in, JSON-based | External tools |
+| Feature | Movehat | Hardhat | Foundry |
+|---------|---------|---------|---------|
+| **Move Unit Tests** | ✅ `test:move` (ms) | ❌ N/A | ✅ `forge test` |
+| **Integration Tests** | ✅ `test:ts` (simulation) | ✅ `test` | ✅ `test --fork` |
+| **Dual Testing** | ✅ Both in one command | ❌ Only integration | ✅ Both |
+| **Setup for Testing** | Zero config | Need local node | Zero config |
+| **Named Addresses** | Auto-detected | N/A | Manual |
+| **Account Config** | Single `PRIVATE_KEY` | Single account | Multiple |
+| **Fork System** | Built-in JSON | External | Built-in |
+| **Language** | Move + TypeScript | Solidity + JS/TS | Solidity |
+
+**Movehat = Hardhat UX + Foundry Testing** for Move development
 
 ---
 
