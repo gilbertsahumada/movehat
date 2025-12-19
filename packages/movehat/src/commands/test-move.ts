@@ -23,6 +23,10 @@ export default async function testMoveCommand(options: TestMoveOptions = {}) {
 
     const args = ["move", "test", "--package-dir", moveDir];
 
+    // Add dev flag for auto-detected addresses (like compile does)
+    // This allows tests to run with dev addresses without manual Move.toml config
+    args.push("--dev");
+
     // Add filter if provided
     if (options.filter) {
       args.push("--filter", options.filter);

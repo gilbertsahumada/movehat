@@ -58,6 +58,9 @@ function runMoveTestsSync(filter?: string): Promise<void> {
 
       const args = ["move", "test", "--package-dir", moveDir];
 
+      // Add dev flag for auto-detected addresses
+      args.push("--dev");
+
       if (filter) {
         args.push("--filter", filter);
       }

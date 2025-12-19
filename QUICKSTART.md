@@ -228,9 +228,9 @@ npm test
 
 | Feature | Movehat | Hardhat | Foundry |
 |---------|---------|---------|---------|
-| **Move Unit Tests** | ✅ `test:move` (ms) | ❌ N/A | ✅ `forge test` |
-| **Integration Tests** | ✅ `test:ts` (simulation) | ✅ `test` | ✅ `test --fork` |
-| **Dual Testing** | ✅ Both in one command | ❌ Only integration | ✅ Both |
+| **Move Unit Tests** | Yes - `test:move` (ms) | N/A | Yes - `forge test` |
+| **Integration Tests** | Yes - `test:ts` (simulation) | Yes - `test` | Yes - `test --fork` |
+| **Dual Testing** | Yes - Both in one command | No - Only integration | Yes - Both |
 | **Setup for Testing** | Zero config | Need local node | Zero config |
 | **Named Addresses** | Auto-detected | N/A | Manual |
 | **Account Config** | Single `PRIVATE_KEY` | Single account | Multiple |
@@ -241,6 +241,6 @@ npm test
 
 ---
 
-**That's it!** You now have a fully functional Move development environment with instant testing feedback.
+That's it! You now have a fully functional Move development environment with instant testing feedback.
 
-Happy coding! 🚀
+Happy coding!

@@ -42,7 +42,7 @@ Before installing Movehat, make sure you have:
   movement --version
   ```
 
-  ** Important:** Without Movement CLI installed, compilation will fail with:
+  **IMPORTANT:** Without Movement CLI installed, compilation will fail with:
   ```
   Compilation failed: Command failed: movement move build
   /bin/sh: movement: command not found

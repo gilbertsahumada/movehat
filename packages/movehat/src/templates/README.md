@@ -12,7 +12,7 @@ A Move smart contract project built with Movehat.
 
   Verify: `movement --version`
 
-**⚠️ Important:** Without Movement CLI, compilation will fail!
+**IMPORTANT:** Without Movement CLI, compilation will fail!
 
 ## Getting Started
 
