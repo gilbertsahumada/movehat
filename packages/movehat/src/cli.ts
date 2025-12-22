@@ -8,16 +8,19 @@ import testMoveCommand from './commands/test-move.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
+import updateCommand from './commands/update.js';
 import forkCreateCommand from './commands/fork/create.js';
 import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
 import forkServeCommand from './commands/fork/serve.js';
+import { checkForUpdates } from './helpers/version-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 const version = packageJson.version;
+const packageName = packageJson.name;
 
 /**
  * Parse and validate port number
@@ -28,6 +31,15 @@ function parsePort(value: string): number {
     throw new InvalidOptionArgumentError('Port must be an integer between 1 and 65535');
   }
   return port;
+}
+
+// Check for updates at startup (skip if running update command or help)
+const args = process.argv.slice(2);
+const isUpdateCommand = args.includes('update');
+const isHelpOnly = args.length === 0 || args.every(arg => arg === '-h' || arg === '--help');
+
+if (!isUpdateCommand && !isHelpOnly) {
+  checkForUpdates(version, packageName);
 }
 
 const program = new Command();
@@ -71,8 +83,8 @@ program
     .description('Run all tests (Move + TypeScript)')
     .option('--move-only', 'Run only Move unit tests')
     .option('--ts-only', 'Run only TypeScript integration tests')
-    .option('--watch', 'Run TypeScript tests in watch mode')
-    .option('--filter <pattern>', 'Filter Move tests by name pattern')
+    .option('--watch', 'Run TypeScript tests in watch mode (implies --ts-only)')
+    .option('--filter <pattern>', 'Filter Move tests by name pattern (Move tests only)')
     .action((options) => testCommand(options));
 
 program
@@ -87,6 +99,11 @@ program
     .description('Run TypeScript integration tests')
     .option('--watch', 'Run tests in watch mode')
     .action((options) => testCommand({ tsOnly: true, watch: options.watch }));
+
+program
+    .command('update')
+    .description('Check for updates and upgrade to the latest version')
+    .action(() => updateCommand());
 
 // Fork commands
 const fork = program

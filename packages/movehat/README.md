@@ -25,7 +25,7 @@ Before installing Movehat, ensure you have:
 
   Verify: `movement --version`
 
-**⚠️ Without Movement CLI:** Compilation will fail with "movement: command not found"
+**IMPORTANT: Without Movement CLI:** Compilation will fail with "movement: command not found"
 
 ## Installation
 

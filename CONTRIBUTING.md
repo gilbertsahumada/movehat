@@ -340,10 +340,10 @@ throw new Error("Network not found");
 Use consistent logging format:
 
 ```typescript
-console.log("✅ Success message");
-console.log("📦 Action being performed...");
+console.log("SUCCESS: Success message");
+console.log("Action being performed...");
 console.log("   Detail info");
-console.error("❌ Error message");
+console.error("ERROR: Error message");
 ```
 
 ## Testing Checklist
@@ -468,12 +468,12 @@ cd examples/counter-example
 
 # Scenario 1: First deployment
 movehat run scripts/deploy-counter.ts --network testnet
-# Expected: ✅ Deploys successfully
+# Expected: Deploys successfully
 # Expected: Creates deployments/testnet/counter.json
 
 # Scenario 2: Already deployed (should fail)
 movehat run scripts/deploy-counter.ts --network testnet
-# Expected: ❌ Error message showing:
+# Expected: Error message showing:
 #   - Module "counter" is already deployed on testnet
 #   - Deployment address
 #   - Deployment timestamp
@@ -483,13 +483,13 @@ movehat run scripts/deploy-counter.ts --network testnet
 
 # Scenario 3: Force redeploy
 movehat run scripts/deploy-counter.ts --network testnet --redeploy
-# Expected: 🔄 Shows "Redeploying module..." message
-# Expected: ✅ Deploys successfully
+# Expected: Shows "Redeploying module..." message
+# Expected: Deploys successfully
 # Expected: Updates deployments/testnet/counter.json
 
 # Scenario 4: Different network (should work)
 movehat run scripts/deploy-counter.ts --network local
-# Expected: ✅ Deploys successfully (different network)
+# Expected: Deploys successfully (different network)
 # Expected: Creates deployments/local/counter.json
 
 # Verify deployment files

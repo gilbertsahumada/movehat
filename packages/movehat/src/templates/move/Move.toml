@@ -7,8 +7,9 @@ authors = []
 counter = "_"
 
 [dev-addresses]
-# Dev addresses are auto-detected by movehat during compilation
-# You can also add them manually here if needed
+# Dev addresses for testing (used with movement move test --dev)
+# These addresses are temporary and used for local development/testing only
+counter = "0xcafe"
 
 [dependencies.AptosFramework]
 git = "https://github.com/movementlabsxyz/aptos-core.git"

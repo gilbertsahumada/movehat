@@ -42,7 +42,7 @@ Before installing Movehat, make sure you have:
   movement --version
   ```
 
-  ** Important:** Without Movement CLI installed, compilation will fail with:
+  **IMPORTANT:** Without Movement CLI installed, compilation will fail with:
   ```
   Compilation failed: Command failed: movement move build
   /bin/sh: movement: command not found
@@ -695,6 +695,26 @@ Run only TypeScript integration tests.
 movehat test:ts           # Run TypeScript tests
 movehat test:ts --watch   # Run in watch mode
 ```
+
+### `movehat update`
+Check for updates and upgrade to the latest version.
+
+```bash
+movehat update
+```
+
+This command will:
+- Check npm registry for the latest published version
+- Compare with your current version
+- Automatically upgrade if a new version is available
+- Uses yarn by default (respects your package manager preference)
+
+**Automatic update notifications:**
+- Movehat automatically checks for updates when you run any command
+- Notifications are cached for 24 hours to avoid excessive network requests
+- The first time you run movehat, it checks npm in the background
+- Subsequent runs show notifications immediately using the cache
+- Update checks are skipped when running `--help` or `update` command
 
 ### `movehat fork <command>`
 
