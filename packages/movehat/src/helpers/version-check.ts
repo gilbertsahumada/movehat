@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { isNewerVersion } from "./semver-utils.js";
 
 interface VersionCache {
   lastChecked: number;
@@ -16,38 +17,6 @@ interface NpmRegistryResponse {
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const CACHE_DIR = join(homedir(), ".movehat");
 const CACHE_FILE = join(CACHE_DIR, "version-cache.json");
-
-/**
- * Compare two semver versions
- * Returns true if newVersion > currentVersion
- */
-function isNewerVersion(currentVersion: string, newVersion: string): boolean {
-  // Remove any pre-release tags (e.g., -alpha.0, -beta.1)
-  const cleanCurrent = currentVersion.split("-")[0];
-  const cleanNew = newVersion.split("-")[0];
-
-  const current = cleanCurrent.split(".").map(Number);
-  const newer = cleanNew.split(".").map(Number);
-
-  for (let i = 0; i < 3; i++) {
-    if (newer[i] > current[i]) return true;
-    if (newer[i] < current[i]) return false;
-  }
-
-  // If base versions are equal, check pre-release tags
-  const currentHasPrerelease = currentVersion.includes("-");
-  const newHasPrerelease = newVersion.includes("-");
-
-  if (!currentHasPrerelease && newHasPrerelease) {
-    return false; // Current stable is newer than new pre-release
-  }
-
-  if (currentHasPrerelease && !newHasPrerelease) {
-    return true; // New stable is newer than current pre-release
-  }
-
-  return false;
-}
 
 /**
  * Fetch latest version from npm registry
