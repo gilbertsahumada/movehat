@@ -696,6 +696,19 @@ movehat test:ts           # Run TypeScript tests
 movehat test:ts --watch   # Run in watch mode
 ```
 
+### `movehat update`
+Check for updates and upgrade to the latest version.
+
+```bash
+movehat update
+```
+
+This command will:
+- Check npm registry for the latest published version
+- Compare with your current version
+- Automatically upgrade if a new version is available
+- Uses yarn by default (respects your package manager preference)
+
 ### `movehat fork <command>`
 
 Manage local forks of Movement/Aptos networks. See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete documentation.

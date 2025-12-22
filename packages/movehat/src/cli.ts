@@ -8,6 +8,7 @@ import testMoveCommand from './commands/test-move.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
+import updateCommand from './commands/update.js';
 import forkCreateCommand from './commands/fork/create.js';
 import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
@@ -87,6 +88,11 @@ program
     .description('Run TypeScript integration tests')
     .option('--watch', 'Run tests in watch mode')
     .action((options) => testCommand({ tsOnly: true, watch: options.watch }));
+
+program
+    .command('update')
+    .description('Check for updates and upgrade to the latest version')
+    .action(() => updateCommand());
 
 // Fork commands
 const fork = program
