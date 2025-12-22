@@ -14,11 +14,13 @@ import forkViewResourceCommand from './commands/fork/view-resource.js';
 import forkFundCommand from './commands/fork/fund.js';
 import forkListCommand from './commands/fork/list.js';
 import forkServeCommand from './commands/fork/serve.js';
+import { checkForUpdates } from './helpers/version-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 const version = packageJson.version;
+const packageName = packageJson.name;
 
 /**
  * Parse and validate port number
@@ -29,6 +31,15 @@ function parsePort(value: string): number {
     throw new InvalidOptionArgumentError('Port must be an integer between 1 and 65535');
   }
   return port;
+}
+
+// Check for updates at startup (skip if running update command or help)
+const args = process.argv.slice(2);
+const isUpdateCommand = args.includes('update');
+const isHelpOnly = args.length === 0 || args.every(arg => arg === '-h' || arg === '--help');
+
+if (!isUpdateCommand && !isHelpOnly) {
+  checkForUpdates(version, packageName);
 }
 
 const program = new Command();

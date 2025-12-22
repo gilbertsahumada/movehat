@@ -709,6 +709,13 @@ This command will:
 - Automatically upgrade if a new version is available
 - Uses yarn by default (respects your package manager preference)
 
+**Automatic update notifications:**
+- Movehat automatically checks for updates when you run any command
+- Notifications are cached for 24 hours to avoid excessive network requests
+- The first time you run movehat, it checks npm in the background
+- Subsequent runs show notifications immediately using the cache
+- Update checks are skipped when running `--help` or `update` command
+
 ### `movehat fork <command>`
 
 Manage local forks of Movement/Aptos networks. See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete documentation.
