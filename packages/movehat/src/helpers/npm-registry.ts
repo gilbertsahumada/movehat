@@ -42,6 +42,22 @@ export async function fetchLatestVersion(
     }
 
     const data = (await response.json()) as NpmRegistryResponse;
+
+    // Defensive validation of registry response structure
+    if (
+      !data ||
+      typeof data !== "object" ||
+      !data["dist-tags"] ||
+      typeof data["dist-tags"] !== "object" ||
+      typeof data["dist-tags"].latest !== "string"
+    ) {
+      const error = new Error(
+        `Invalid npm registry response: missing or malformed "dist-tags.latest" field`
+      );
+      if (throwOnError) throw error;
+      return null;
+    }
+
     return data["dist-tags"].latest;
   } catch (error) {
     if (throwOnError) {
