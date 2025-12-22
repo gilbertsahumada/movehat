@@ -1,7 +1,10 @@
 import { spawn } from "child_process";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
+import { readFileSync, existsSync } from "fs";
+import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { homedir } from "os";
+import { isNewerVersion } from "../helpers/semver-utils.js";
+import { fetchLatestVersion } from "../helpers/npm-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,72 +14,50 @@ interface PackageJson {
   version: string;
 }
 
-interface NpmRegistryResponse {
-  "dist-tags": {
-    latest: string;
-  };
-}
-
 /**
- * Compare two semver versions
- * Returns true if newVersion > currentVersion
- */
-function isNewerVersion(currentVersion: string, newVersion: string): boolean {
-  // Remove any pre-release tags (e.g., -alpha.0, -beta.1)
-  const cleanCurrent = currentVersion.split("-")[0];
-  const cleanNew = newVersion.split("-")[0];
-
-  const current = cleanCurrent.split(".").map(Number);
-  const newer = cleanNew.split(".").map(Number);
-
-  for (let i = 0; i < 3; i++) {
-    if (newer[i] > current[i]) return true;
-    if (newer[i] < current[i]) return false;
-  }
-
-  // If base versions are equal, check pre-release tags
-  // A version with no pre-release tag is considered newer than one with a tag
-  const currentHasPrerelease = currentVersion.includes("-");
-  const newHasPrerelease = newVersion.includes("-");
-
-  if (!currentHasPrerelease && newHasPrerelease) {
-    return false; // Current stable is newer than new pre-release
-  }
-
-  if (currentHasPrerelease && !newHasPrerelease) {
-    return true; // New stable is newer than current pre-release
-  }
-
-  return false;
-}
-
-/**
- * Fetch latest version from npm registry
- */
-async function fetchLatestVersion(packageName: string): Promise<string> {
-  try {
-    const response = await fetch(`https://registry.npmjs.org/${packageName}`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch package info: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as NpmRegistryResponse;
-    return data["dist-tags"].latest;
-  } catch (error) {
-    throw new Error(
-      `Failed to check for updates: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-}
-
-/**
- * Detect which package manager was used to install movehat
+ * Detect which package manager to use for update
+ * Searches for lockfiles upward from cwd, checks user agent, or falls back to defaults
  */
 function detectPackageManager(): "yarn" | "npm" | "pnpm" {
-  // Check for yarn.lock, package-lock.json, or pnpm-lock.yaml in parent directories
-  // For global installs, default to yarn as per user preference
-  return "yarn";
+  // First, try to detect from lockfiles by searching upward
+  let currentDir = process.cwd();
+  const root = resolve("/");
+
+  while (currentDir !== root) {
+    if (existsSync(join(currentDir, "pnpm-lock.yaml"))) {
+      return "pnpm";
+    }
+    if (existsSync(join(currentDir, "yarn.lock"))) {
+      return "yarn";
+    }
+    if (
+      existsSync(join(currentDir, "package-lock.json")) ||
+      existsSync(join(currentDir, "npm-shrinkwrap.json"))
+    ) {
+      return "npm";
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break; // Reached root
+    currentDir = parentDir;
+  }
+
+  // No lockfile found, check user agent environment variables
+  const userAgent =
+    process.env.npm_config_user_agent || process.env.npm_execpath || "";
+
+  if (userAgent.includes("pnpm")) {
+    return "pnpm";
+  }
+  if (userAgent.includes("yarn")) {
+    return "yarn";
+  }
+  if (userAgent.includes("npm")) {
+    return "npm";
+  }
+
+  // Default fallback to npm for global installs
+  return "npm";
 }
 
 /**
@@ -98,7 +79,15 @@ export default async function updateCommand() {
     console.log(`Current version: ${currentVersion}`);
 
     // Fetch latest version from npm
-    const latestVersion = await fetchLatestVersion(packageName);
+    const latestVersion = await fetchLatestVersion(packageName, {
+      throwOnError: true,
+    });
+
+    if (!latestVersion) {
+      console.error("Failed to fetch latest version from npm registry");
+      process.exit(1);
+    }
+
     console.log(`Latest version:  ${latestVersion}\n`);
 
     // Compare versions
@@ -132,8 +121,7 @@ export default async function updateCommand() {
     // Use home directory as cwd to avoid packageManager conflicts from local package.json
     const child = spawn(packageManager, updateArgs, {
       stdio: "inherit",
-      shell: true,
-      cwd: process.env.HOME || process.cwd(),
+      cwd: homedir() || process.cwd(),
     });
 
     child.on("exit", (code) => {

@@ -1,79 +1,17 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { isNewerVersion } from "./semver-utils.js";
+import { fetchLatestVersion } from "./npm-registry.js";
 
 interface VersionCache {
   lastChecked: number;
   latestVersion: string;
 }
 
-interface NpmRegistryResponse {
-  "dist-tags": {
-    latest: string;
-  };
-}
-
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const CACHE_DIR = join(homedir(), ".movehat");
 const CACHE_FILE = join(CACHE_DIR, "version-cache.json");
-
-/**
- * Compare two semver versions
- * Returns true if newVersion > currentVersion
- */
-function isNewerVersion(currentVersion: string, newVersion: string): boolean {
-  // Remove any pre-release tags (e.g., -alpha.0, -beta.1)
-  const cleanCurrent = currentVersion.split("-")[0];
-  const cleanNew = newVersion.split("-")[0];
-
-  const current = cleanCurrent.split(".").map(Number);
-  const newer = cleanNew.split(".").map(Number);
-
-  for (let i = 0; i < 3; i++) {
-    if (newer[i] > current[i]) return true;
-    if (newer[i] < current[i]) return false;
-  }
-
-  // If base versions are equal, check pre-release tags
-  const currentHasPrerelease = currentVersion.includes("-");
-  const newHasPrerelease = newVersion.includes("-");
-
-  if (!currentHasPrerelease && newHasPrerelease) {
-    return false; // Current stable is newer than new pre-release
-  }
-
-  if (currentHasPrerelease && !newHasPrerelease) {
-    return true; // New stable is newer than current pre-release
-  }
-
-  return false;
-}
-
-/**
- * Fetch latest version from npm registry
- */
-async function fetchLatestVersion(packageName: string): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
-
-    const response = await fetch(`https://registry.npmjs.org/${packageName}`, {
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = (await response.json()) as NpmRegistryResponse;
-    return data["dist-tags"].latest;
-  } catch (error) {
-    // Silently fail - don't interrupt user's workflow
-    return null;
-  }
-}
 
 /**
  * Read version from cache
@@ -141,7 +79,10 @@ export function checkForUpdates(currentVersion: string, packageName: string): vo
     if (!cache || Date.now() - cache.lastChecked > CACHE_DURATION) {
       setImmediate(async () => {
         try {
-          const latestVersion = await fetchLatestVersion(packageName);
+          const latestVersion = await fetchLatestVersion(packageName, {
+            timeout: 2000,
+            throwOnError: false,
+          });
           if (latestVersion) {
             writeCache(latestVersion);
           }

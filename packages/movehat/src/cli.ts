@@ -36,7 +36,7 @@ function parsePort(value: string): number {
 // Check for updates at startup (skip if running update command or help)
 const args = process.argv.slice(2);
 const isUpdateCommand = args.includes('update');
-const isHelpOnly = args.length === 0 || args.every(arg => arg === '-h' || arg === '--help');
+const isHelpOnly = args.length === 0 || args.includes('-h') || args.includes('--help');
 
 if (!isUpdateCommand && !isHelpOnly) {
   checkForUpdates(version, packageName);
