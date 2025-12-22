@@ -4,6 +4,7 @@ import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
 import { isNewerVersion } from "../helpers/semver-utils.js";
+import { fetchLatestVersion } from "../helpers/npm-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,32 +12,6 @@ const __dirname = dirname(__filename);
 interface PackageJson {
   name: string;
   version: string;
-}
-
-interface NpmRegistryResponse {
-  "dist-tags": {
-    latest: string;
-  };
-}
-
-/**
- * Fetch latest version from npm registry
- */
-async function fetchLatestVersion(packageName: string): Promise<string> {
-  try {
-    const response = await fetch(`https://registry.npmjs.org/${packageName}`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch package info: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as NpmRegistryResponse;
-    return data["dist-tags"].latest;
-  } catch (error) {
-    throw new Error(
-      `Failed to check for updates: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
 }
 
 /**
@@ -104,7 +79,15 @@ export default async function updateCommand() {
     console.log(`Current version: ${currentVersion}`);
 
     // Fetch latest version from npm
-    const latestVersion = await fetchLatestVersion(packageName);
+    const latestVersion = await fetchLatestVersion(packageName, {
+      throwOnError: true,
+    });
+
+    if (!latestVersion) {
+      console.error("Failed to fetch latest version from npm registry");
+      process.exit(1);
+    }
+
     console.log(`Latest version:  ${latestVersion}\n`);
 
     // Compare versions
