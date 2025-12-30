@@ -1,0 +1,40 @@
+# Dockerfile para testing de MoveHat
+# Simula instalación limpia en diferentes ambientes
+
+ARG NODE_VERSION=20
+FROM node:${NODE_VERSION}-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Movement CLI (simulated - adjust URL when available)
+# RUN curl -sSL https://install.movementnetwork.xyz | bash
+# For now, we'll add a placeholder script
+RUN echo '#!/bin/bash\necho "movement CLI v0.1.0"' > /usr/local/bin/movement \
+    && chmod +x /usr/local/bin/movement
+
+# Set working directory
+WORKDIR /test
+
+# Test user (non-root)
+RUN useradd -m -s /bin/bash testuser && \
+    chown -R testuser:testuser /test
+
+USER testuser
+
+# Copy package files
+COPY --chown=testuser:testuser package.json package-lock.json* pnpm-lock.yaml* ./
+COPY --chown=testuser:testuser packages ./packages
+
+# Set environment
+ENV NODE_ENV=test
+ENV CI=true
+
+# Install dependencies
+RUN npm install -g pnpm
+
+CMD ["bash"]
