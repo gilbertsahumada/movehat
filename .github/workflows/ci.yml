@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # Build and type check
+  build:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: TypeScript type check
+        run: cd packages/movehat && pnpm tsc --noEmit
+
+      - name: Build
+        run: pnpm build:movehat
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/movehat/dist/
+          retention-days: 1
+
+  # Test matrix across Node versions
+  test-matrix:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    needs: build
+
+    strategy:
+      matrix:
+        node: ['18', '20', '22']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/movehat/dist/
+
+      - name: Build
+        run: pnpm build:movehat
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-test.sh
+
+  # Integration tests (only on main PRs)
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: packages/movehat/dist/
+
+      # TODO: Install Movement CLI when official install script is available
+      # - name: Install Movement CLI
+      #   run: curl -sSL https://install.movementnetwork.xyz | bash
+
+      - name: Create mock Movement CLI
+        run: |
+          echo '#!/bin/bash' > /usr/local/bin/movement
+          echo 'echo "movement CLI v0.1.0"' >> /usr/local/bin/movement
+          chmod +x /usr/local/bin/movement
+
+      - name: Run E2E tests
+        run: bash scripts/test-e2e.sh
+        env:
+          MOVEMENT_RPC_URL: https://aptos.testnet.suzuka.movementlabs.xyz/v1
+
+  # Code quality checks
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Check package.json
+        run: |
+          cd packages/movehat
+          node -e "
+            const pkg = require('./package.json');
+            const required = ['name', 'version', 'description', 'author', 'license', 'repository', 'bin'];
+            const missing = required.filter(f => !pkg[f]);
+            if (missing.length) {
+              console.error('Missing required fields:', missing);
+              process.exit(1);
+            }
+          "
+
+      - name: Check for TODO/FIXME comments
+        run: |
+          if grep -r "TODO\|FIXME" packages/movehat/src --exclude-dir=node_modules --exclude-dir=dist; then
+            echo "Warning: TODO/FIXME comments found (this won't fail the build)"
+          fi
+        continue-on-error: true
+
+  # Security audit
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Audit dependencies
+        run: pnpm audit --prod
+        continue-on-error: true

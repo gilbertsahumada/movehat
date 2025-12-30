@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Test en Node 18 (LTS)
+  test-node18:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        NODE_VERSION: 18
+    volumes:
+      - .:/test
+      - /test/node_modules
+      - /test/packages/movehat/node_modules
+    environment:
+      - NODE_VERSION=18
+    command: npm run test:e2e
+
+  # Test en Node 20 (LTS)
+  test-node20:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        NODE_VERSION: 20
+    volumes:
+      - .:/test
+      - /test/node_modules
+      - /test/packages/movehat/node_modules
+    environment:
+      - NODE_VERSION=20
+    command: npm run test:e2e
+
+  # Test en Node 22 (Latest)
+  test-node22:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        NODE_VERSION: 22
+    volumes:
+      - .:/test
+      - /test/node_modules
+      - /test/packages/movehat/node_modules
+    environment:
+      - NODE_VERSION=22
+    command: npm run test:e2e
+
+  # Test de instalación global limpia
+  test-global-install:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        NODE_VERSION: 20
+    volumes:
+      - ./packages/movehat:/package
+    working_dir: /package
+    command: >
+      bash -c "
+        pnpm build &&
+        npm pack &&
+        npm install -g movehat-*.tgz &&
+        movehat --version &&
+        movehat init test-project &&
+        cd test-project &&
+        npm install &&
+        movehat compile &&
+        npm test
+      "
+
+  # Test de integración completa
+  test-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        NODE_VERSION: 20
+    volumes:
+      - .:/test
+    environment:
+      - MOVEMENT_RPC_URL=${MOVEMENT_RPC_URL:-https://aptos.testnet.suzuka.movementlabs.xyz/v1}
+    command: npm run test:integration
