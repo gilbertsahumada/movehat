@@ -13,7 +13,6 @@ module counter::counter {
         new_value: u64,
     }
 
-    /// Initialize counter for an account
     public entry fun init(account: &signer) {
         let account_addr = signer::address_of(account);
         
@@ -25,7 +24,6 @@ module counter::counter {
         }
     }
 
-    /// Increment the counter
     public entry fun increment(account: &signer) acquires Counter {
         let account_addr = signer::address_of(account);
         assert!(exists<Counter>(account_addr), 1);
@@ -40,7 +38,6 @@ module counter::counter {
         });
     }
 
-    /// Get counter value
     #[view]
     public fun get(addr: address): u64 acquires Counter {
         assert!(exists<Counter>(addr), 1);
