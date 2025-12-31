@@ -5,7 +5,7 @@
 
 ---
 
-## 🎬 Introducción (30 segundos)
+##  Introducción (30 segundos)
 
 **[Mostrar pantalla en blanco o terminal limpio]**
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 📦 Parte 1: Instalación (1 minuto)
+##  Parte 1: Instalación (1 minuto)
 
 **[Terminal limpio]**
 
@@ -40,7 +40,7 @@ movehat --version
 
 ---
 
-## 🚀 Parte 2: Crear Proyecto (1 minuto)
+##  Parte 2: Crear Proyecto (1 minuto)
 
 **[Terminal limpio]**
 
@@ -74,7 +74,7 @@ npm install
 
 ---
 
-## 📝 Parte 3: Preparar el Contrato (2 minutos)
+##  Parte 3: Preparar el Contrato (2 minutos)
 
 **[Abrir editor de código - VS Code o similar]**
 
@@ -202,7 +202,7 @@ hello_blockchain = "0xcafe"
 
 ---
 
-## 🔨 Parte 4: Compilar el Contrato (30 segundos)
+##  Parte 4: Compilar el Contrato (30 segundos)
 
 **[Volver al terminal]**
 
@@ -221,7 +221,7 @@ movehat compile
 
 ---
 
-## 🧪 Parte 5: Tests en Move (1 minuto)
+##  Parte 5: Tests en Move (1 minuto)
 
 **NARRACIÓN:**
 > "Uno de los superpoderes de MoveHat es que soporta tests tanto en Move como en TypeScript. Empecemos con los tests de Move que ya incluimos en el contrato."
@@ -238,7 +238,7 @@ movehat test:move
 
 ---
 
-## 🧪 Parte 6: Tests en TypeScript (3 minutos)
+##  Parte 6: Tests en TypeScript (3 minutos)
 
 **[Volver al editor]**
 
@@ -253,7 +253,7 @@ movehat test:move
 > "Vamos a reemplazar el test de Counter con tests para nuestro contrato de mensajes."
 
 **[Renombrar archivo:]**
-- `tests/Counter.test.ts` → `tests/Message.test.ts`
+- `tests/Counter.test.ts`  `tests/Message.test.ts`
 
 **[Copiar y pegar el siguiente código:]**
 
@@ -348,7 +348,7 @@ movehat test:ts
 
 ---
 
-## 🎯 Parte 7: Ejecutar Todos los Tests (30 segundos)
+##  Parte 7: Ejecutar Todos los Tests (30 segundos)
 
 **NARRACIÓN:**
 > "MoveHat también puede ejecutar ambos tipos de tests juntos. Primero ejecuta los tests de Move (súper rápidos) y luego los de TypeScript."
@@ -365,7 +365,7 @@ npm test
 
 ---
 
-## 🌟 Parte 8: Funcionalidades Extras (1 minuto)
+##  Parte 8: Funcionalidades Extras (1 minuto)
 
 **NARRACIÓN:**
 > "MoveHat incluye muchas otras funcionalidades útiles."
@@ -396,7 +396,7 @@ movehat fork --help
 
 ---
 
-## 🎬 Conclusión (30 segundos)
+##  Conclusión (30 segundos)
 
 **[Terminal limpio o pantalla del proyecto]**
 
@@ -414,7 +414,7 @@ movehat fork --help
 
 ---
 
-## 📋 Checklist de Grabación
+##  Checklist de Grabación
 
 Antes de grabar, asegúrate de:
 
@@ -435,7 +435,7 @@ Antes de grabar, asegúrate de:
 4. **Errores**: Si algo falla, está bien! Muestra cómo debuggear
 5. **Energía**: Mantén un tono entusiasta pero profesional
 
-## ⏱️ Tiempo Total Estimado
+##  Tiempo Total Estimado
 
 - Introducción: 30s
 - Instalación: 1min
@@ -452,7 +452,7 @@ Antes de grabar, asegúrate de:
 
 ---
 
-## 🔗 Links Útiles
+##  Links Útiles
 
 - **Repositorio**: https://github.com/gilbertsahumada/movehat
 - **Movement Docs**: https://docs.movementnetwork.xyz
@@ -460,4 +460,4 @@ Antes de grabar, asegúrate de:
 
 ---
 
-**¡Buena suerte con tu demo! 🚀**
+**¡Buena suerte con tu demo! **

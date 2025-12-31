@@ -4,8 +4,32 @@ dist/
 node_modules/
 .env
 
-# Ignore all markdown files except README and QUICKSTART
+# Test artifacts
+*.tgz
+/tmp/
+.movehat/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Markdown files - ignore all except specific ones
 *.md
 !README.md
+!CONTRIBUTING.md
+!FORK_GUIDE.md
 !QUICKSTART.md
-
