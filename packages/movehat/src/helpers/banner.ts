@@ -33,13 +33,18 @@ const applyGradient = (line: string, offset: number) => {
   return painted;
 };
 
+const dividerLine = "━".repeat(68);
+const tagline = "  A powerful testing framework for Move smart contracts";
+
 export const renderMovehatBanner = () => {
   if (!shouldColorize()) {
-    return bannerLines.join("\n");
+    return `${bannerLines.join("\n")}\n${dividerLine}\n${tagline}`;
   }
 
   const coloredLines = bannerLines.map((line, idx) => applyGradient(line, idx * 2));
-  return `${coloredLines.join("\n")}${reset}`;
+  const coloredDivider = applyGradient(dividerLine, 0);
+  const coloredTagline = `\x1b[2m${tagline}${reset}`;
+  return `${coloredLines.join("\n")}${reset}\n${coloredDivider}${reset}\n${coloredTagline}`;
 };
 
 export const printMovehatBanner = () => {
