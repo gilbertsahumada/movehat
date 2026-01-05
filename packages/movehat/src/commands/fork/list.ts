@@ -40,7 +40,7 @@ export default async function forkListCommand() {
     // Create table for forks
     const table = createTable({
       head: ['Name', 'Network', 'Chain ID', 'Accounts', 'Created'],
-      preset: 'compact',
+      preset: 'default',
       colWidths: [20, 15, 12, 12, 25]
     });
 
