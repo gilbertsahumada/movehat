@@ -1,0 +1,171 @@
+import ora, { type Ora, type Options as OraOptions } from 'ora';
+import { shouldUseColor } from './colors.js';
+
+/**
+ * Spinner color options
+ */
+export type SpinnerColor = 'yellow' | 'green' | 'cyan' | 'red' | 'blue' | 'magenta' | 'white' | 'gray';
+
+/**
+ * Spinner configuration options
+ */
+export interface SpinnerOptions {
+  /** Text to display next to the spinner */
+  text: string;
+  /** Spinner color (default: 'yellow' for Movehat brand) */
+  color?: SpinnerColor;
+  /** Spinner animation type (default: 'dots') */
+  spinner?: OraOptions['spinner'];
+  /** Number of spaces to indent (default: 0) */
+  indent?: number;
+}
+
+/**
+ * Create and start a spinner
+ * Automatically disabled in non-TTY environments (CI, pipes)
+ *
+ * @param options - Spinner configuration
+ * @returns Ora spinner instance
+ *
+ * @example
+ * const spin = spinner({ text: 'Compiling contracts...' });
+ * await longRunningTask();
+ * spin.succeed('Compilation complete!');
+ *
+ * @example
+ * const spin = spinner({ text: 'Fetching data...', color: 'cyan' });
+ * try {
+ *   await fetchData();
+ *   spin.succeed('Data fetched!');
+ * } catch (error) {
+ *   spin.fail('Failed to fetch data');
+ * }
+ */
+export const spinner = (options: SpinnerOptions): Ora => {
+  const { text, color = 'yellow', spinner = 'dots', indent = 0 } = options;
+
+  const prefixSpaces = ' '.repeat(indent);
+
+  const oraOptions: OraOptions = {
+    text: prefixSpaces + text,
+    color,
+    spinner,
+    // Disable spinner if not TTY (CI environments, piped output)
+    isEnabled: shouldUseColor() && Boolean(process.stdout.isTTY),
+  };
+
+  return ora(oraOptions).start();
+};
+
+/**
+ * Execute async task with spinner
+ * Handles success/error automatically and always cleans up
+ *
+ * @param startText - Initial spinner text
+ * @param task - Async function to execute
+ * @param successText - Text to show on success (optional, defaults to startText without '...')
+ * @param errorText - Text to show on error (optional, defaults to error message)
+ * @param indent - Number of spaces to indent (default: 0)
+ * @returns Promise resolving to task result
+ *
+ * @example
+ * const data = await withSpinner(
+ *   'Fetching network data...',
+ *   async () => await fetchData(),
+ *   'Data fetched successfully'
+ * );
+ *
+ * @example
+ * await withSpinner(
+ *   'Creating fork...',
+ *   async () => await createFork(),
+ *   'Fork created!',
+ *   'Failed to create fork'
+ * );
+ */
+export const withSpinner = async <T>(
+  startText: string,
+  task: () => Promise<T>,
+  successText?: string,
+  errorText?: string,
+  indent: number = 0
+): Promise<T> => {
+  const spin = spinner({ text: startText, indent });
+
+  try {
+    const result = await task();
+    spin.succeed(successText || startText.replace(/\.\.\.?$/, ''));
+    return result;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    spin.fail(errorText || `Failed: ${errMsg}`);
+    throw error;
+  }
+};
+
+/**
+ * Spinner chain for sequential operations
+ * Manages multiple spinners in sequence
+ */
+export interface SpinnerChain {
+  /**
+   * Add and execute a step in the chain
+   */
+  add<T>(text: string, task: () => Promise<T>, indent?: number): Promise<T>;
+
+  /**
+   * Complete the chain (cleanup)
+   */
+  complete(): void;
+}
+
+/**
+ * Create a sequential spinner chain
+ * Useful for multi-step processes like initialization
+ *
+ * @returns SpinnerChain interface
+ *
+ * @example
+ * const steps = createSpinnerChain();
+ *
+ * await steps.add('Creating directories...', async () => {
+ *   await mkdir(projectPath);
+ * });
+ *
+ * await steps.add('Copying templates...', async () => {
+ *   await copyFiles();
+ * });
+ *
+ * await steps.add('Installing dependencies...', async () => {
+ *   await npmInstall();
+ * });
+ *
+ * steps.complete();
+ */
+export const createSpinnerChain = (): SpinnerChain => {
+  let currentSpinner: Ora | null = null;
+
+  return {
+    async add<T>(
+      text: string,
+      task: () => Promise<T>,
+      indent: number = 0
+    ): Promise<T> {
+      currentSpinner = spinner({ text, indent });
+      try {
+        const result = await task();
+        currentSpinner.succeed();
+        return result;
+      } catch (error) {
+        currentSpinner.fail();
+        throw error;
+      }
+    },
+
+    complete() {
+      if (currentSpinner) {
+        currentSpinner.stop();
+      }
+    },
+  };
+};
