@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { ForkStorage } from '../../fork/storage.js';
+import { logger, createTable, formatCommand } from '../../ui/index.js';
 
 /**
  * Fork list command: List all available forks
@@ -10,9 +11,12 @@ export default async function forkListCommand() {
     const forksDir = join(process.cwd(), '.movehat', 'forks');
 
     if (!existsSync(forksDir)) {
-      console.log('\n📂 No forks found\n');
-      console.log('Create a fork with:');
-      console.log('  movehat fork create --network testnet\n');
+      logger.newline();
+      logger.info('No forks found');
+      logger.newline();
+      logger.plain('Create a fork with:');
+      logger.item(formatCommand('movehat fork create --network testnet'), 2);
+      logger.newline();
       return;
     }
 
@@ -23,11 +27,22 @@ export default async function forkListCommand() {
     });
 
     if (forkDirs.length === 0) {
-      console.log('\n📂 No forks found\n');
+      logger.newline();
+      logger.info('No forks found');
+      logger.newline();
       return;
     }
 
-    console.log(`\n📂 Found ${forkDirs.length} fork(s):\n`);
+    logger.newline();
+    logger.info(`Found ${forkDirs.length} fork(s)`);
+    logger.newline();
+
+    // Create table for forks
+    const table = createTable({
+      head: ['Name', 'Network', 'Chain ID', 'Accounts', 'Created'],
+      preset: 'compact',
+      colWidths: [20, 15, 12, 12, 25]
+    });
 
     for (const forkDir of forkDirs) {
       const forkPath = join(forksDir, forkDir);
@@ -38,30 +53,34 @@ export default async function forkListCommand() {
           const metadata = storage.loadMetadata();
           const accounts = storage.listAccounts();
 
-          console.log(`  ${forkDir}`);
-          console.log(`    Path: ${forkPath}`);
-          console.log(`    Network: ${metadata.network}`);
-          console.log(`    Chain ID: ${metadata.chainId}`);
-          console.log(`    Ledger Version: ${metadata.ledgerVersion}`);
-          console.log(`    Cached Accounts: ${accounts.length}`);
-          console.log(`    Created: ${new Date(metadata.createdAt).toLocaleString()}`);
-          console.log('');
+          table.push([
+            forkDir,
+            metadata.network,
+            metadata.chainId.toString(),
+            accounts.length.toString(),
+            new Date(metadata.createdAt).toLocaleString()
+          ]);
         } else {
-          console.log(`  ${forkDir} (invalid - missing metadata)`);
-          console.log('');
+          table.push([forkDir, 'invalid', '-', '-', 'missing metadata']);
         }
       } catch (error) {
-        console.log(`  ${forkDir} (error reading metadata)`);
-        console.log('');
+        table.push([forkDir, 'error', '-', '-', 'error reading']);
       }
     }
 
-    console.log('Usage:');
-    console.log('  movehat fork view-resource --fork <PATH> --account <ADDR> --resource <TYPE>');
-    console.log('  movehat fork fund --fork <PATH> --account <ADDR> --amount <AMOUNT>\n');
+    console.log(table.toString());
+    logger.newline();
+
+    // Usage examples
+    logger.section('Usage');
+    logger.item(formatCommand('movehat fork view-resource --fork <PATH> --account <ADDR> --resource <TYPE>'), 2);
+    logger.item(formatCommand('movehat fork fund --fork <PATH> --account <ADDR> --amount <AMOUNT>'), 2);
+    logger.newline();
 
   } catch (error: any) {
-    console.error(`\n❌ Error: ${error.message}\n`);
+    logger.newline();
+    logger.error(`Error: ${error.message}`);
+    logger.newline();
     process.exit(1);
   }
 }

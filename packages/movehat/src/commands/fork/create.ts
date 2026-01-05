@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import prompts from 'prompts';
 import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
 import { ForkManager } from '../../fork/manager.js';
+import { logger, withSpinner, createKVTable, formatCommand } from '../../ui/index.js';
 
 interface ForkCreateOptions {
   network?: string;
@@ -24,9 +25,11 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     const forkName = options.name || `${networkName}-fork`;
     const forkPath = options.path || join(process.cwd(), '.movehat', 'forks', forkName);
 
-    console.log(`\n📦 Creating fork of ${networkName}`);
-    console.log(`   Network: ${networkConfig.rpc}`);
-    console.log(`   Fork path: ${forkPath}`);
+    logger.newline();
+    logger.info(`Creating fork of ${networkName}`);
+    logger.kv('Network', networkConfig.rpc, 2);
+    logger.kv('Fork path', forkPath, 2);
+    logger.newline();
 
     // Check if fork already exists
     if (existsSync(forkPath)) {
@@ -38,7 +41,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
       });
 
       if (!overwrite) {
-        console.log('❌ Fork creation cancelled');
+        logger.warning('Fork creation cancelled');
         return;
       }
     }
@@ -46,25 +49,42 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     // Create fork manager
     const forkManager = new ForkManager(forkPath);
 
-    // Initialize fork
-    console.log(`\n⚙️  Initializing fork...`);
-    await forkManager.initialize(networkConfig.rpc, networkName);
+    // Initialize fork with spinner
+    const metadata = await withSpinner(
+      'Initializing fork...',
+      async () => {
+        await forkManager.initialize(networkConfig.rpc, networkName);
+        return forkManager.getMetadata();
+      },
+      'Fork initialized successfully!'
+    );
 
-    const metadata = forkManager.getMetadata();
+    // Show fork details
+    logger.newline();
+    logger.success('Fork created successfully!');
+    logger.newline();
 
-    console.log(`\n✅ Fork created successfully!\n`);
-    console.log(`Fork Details:`);
-    console.log(`  Chain ID: ${metadata.chainId}`);
-    console.log(`  Ledger Version: ${metadata.ledgerVersion}`);
-    console.log(`  Block Height: ${metadata.blockHeight}`);
-    console.log(`  Epoch: ${metadata.epoch}`);
-    console.log(`\nUsage:`);
-    console.log(`  movehat fork view-resource --fork ${forkPath} --account <ADDRESS> --resource <TYPE>`);
-    console.log(`  movehat fork fund --fork ${forkPath} --account <ADDRESS> --amount <AMOUNT>`);
-    console.log(`  movehat fork list\n`);
+    logger.section('Fork Details');
+    const detailsTable = createKVTable({
+      'Chain ID': metadata.chainId.toString(),
+      'Ledger Version': metadata.ledgerVersion,
+      'Block Height': metadata.blockHeight,
+      'Epoch': metadata.epoch
+    });
+    console.log(detailsTable.toString());
+    logger.newline();
+
+    // Usage examples
+    logger.section('Usage');
+    logger.item(formatCommand(`movehat fork view-resource --fork ${forkPath} --account <ADDRESS> --resource <TYPE>`), 2);
+    logger.item(formatCommand(`movehat fork fund --fork ${forkPath} --account <ADDRESS> --amount <AMOUNT>`), 2);
+    logger.item(formatCommand('movehat fork list'), 2);
+    logger.newline();
 
   } catch (error: any) {
-    console.error(`\n❌ Error: ${error.message}\n`);
+    logger.newline();
+    logger.error(`Error: ${error.message}`);
+    logger.newline();
     process.exit(1);
   }
 }
