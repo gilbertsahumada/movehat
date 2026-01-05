@@ -3,6 +3,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { isNewerVersion } from "./semver-utils.js";
 import { fetchLatestVersion } from "./npm-registry.js";
+import { box, colors, formatCommand } from "../ui/index.js";
 
 interface VersionCache {
   lastChecked: number;
@@ -65,14 +66,14 @@ export function checkForUpdates(currentVersion: string, packageName: string): vo
 
     // Display notification immediately if cache says there's an update
     if (shouldNotify && cache) {
-      const updateMessage =
-        "\n" +
-        "┌" + "─".repeat(60) + "┐\n" +
-        `│  Update available: ${currentVersion} → ${cache.latestVersion}`.padEnd(61) + "│\n" +
-        `│  Run: movehat update`.padEnd(61) + "│\n" +
-        "└" + "─".repeat(60) + "┘\n";
+      const updateMessage = box(
+        `${colors.brandBright('Update Available!')}\n\n` +
+        `${currentVersion} ${colors.dim('→')} ${colors.success(cache.latestVersion)}\n\n` +
+        `${formatCommand('movehat update')}`,
+        { borderColor: 'warning', padding: 1 }
+      );
 
-      console.error(updateMessage);
+      console.error('\n' + updateMessage + '\n');
     }
 
     // Update cache in background if needed (doesn't block)

@@ -3,6 +3,7 @@ import path from "path";
 import { exec } from "child_process";
 import { loadUserConfig } from "../core/config.js";
 import { validateAndEscapePath, escapeShellArg } from "../core/shell.js";
+import { logger } from "../ui/index.js";
 
 /**
  * Recursively find all .move files in a directory
@@ -89,13 +90,15 @@ export default async function compileCommand() {
     // Compile is network-independent - only uses global config
     const userConfig = await loadUserConfig();
 
-    console.log("Compiling Move contracts...");
+    logger.newline();
+    logger.info('Compiling Move contracts...');
 
     const moveDir = path.resolve(process.cwd(), userConfig.moveDir || "./move");
     if (!fs.existsSync(moveDir)) {
-      console.error(`Move directory not found: ${moveDir}`);
-      console.error(`   Update movehat.config.ts -> moveDir`);
-      return;
+      logger.error(`Move directory not found: ${moveDir}`);
+      logger.plain(`   Update movehat.config.ts -> moveDir`);
+      logger.newline();
+      process.exit(1);
     }
 
     // Validate and escape to prevent command injection
@@ -148,22 +151,27 @@ export default async function compileCommand() {
 
     const command = `movement move build --package-dir ${safeMoveDir} ${namedAddressesArg}`.trim();
 
-    console.log(`   Move directory: ${moveDir}`);
+    logger.kv('Move directory', moveDir, 2);
     if (detectedAddresses.size > 0) {
-      console.log(`   Detected addresses: ${Array.from(detectedAddresses).join(", ")}`);
+      logger.kv('Detected addresses', Array.from(detectedAddresses).join(", "), 2);
     }
     if (Object.keys(userConfig.namedAddresses ?? {}).length > 0) {
-      console.log(`   Configured addresses: ${Object.keys(userConfig.namedAddresses!).join(", ")}`);
+      logger.kv('Configured addresses', Object.keys(userConfig.namedAddresses!).join(", "), 2);
     }
     if (autoAssignedAddresses.length > 0) {
-      console.log(`   Auto-assigned dev address (0xcafe): ${autoAssignedAddresses.join(", ")}`);
+      logger.kv('Auto-assigned (0xcafe)', autoAssignedAddresses.join(", "), 2);
     }
-    console.log();
+    logger.newline();
 
     await run(command, moveDir);
-    console.log("Compilation finished successfully.");
+
+    logger.newline();
+    logger.success('Compilation finished successfully');
+    logger.newline();
   } catch (err: any) {
-    console.error("Compilation failed:", err.message ?? err);
+    logger.newline();
+    logger.error(`Compilation failed: ${err.message ?? err}`);
+    logger.newline();
     process.exit(1);
   }
 }

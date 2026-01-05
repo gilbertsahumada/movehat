@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { homedir } from "os";
 import { isNewerVersion } from "../helpers/semver-utils.js";
 import { fetchLatestVersion } from "../helpers/npm-registry.js";
+import { logger, withSpinner, box, colors } from "../ui/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -65,8 +66,6 @@ function detectPackageManager(): "yarn" | "npm" | "pnpm" {
  */
 export default async function updateCommand() {
   try {
-    console.log("Checking for updates...\n");
-
     // Read current version from package.json
     const packageJsonPath = join(__dirname, "../../package.json");
     const packageJson: PackageJson = JSON.parse(
@@ -76,28 +75,44 @@ export default async function updateCommand() {
     const currentVersion = packageJson.version;
     const packageName = packageJson.name;
 
-    console.log(`Current version: ${currentVersion}`);
+    logger.newline();
+    logger.info(`Current version: ${currentVersion}`);
 
-    // Fetch latest version from npm
-    const latestVersion = await fetchLatestVersion(packageName, {
-      throwOnError: true,
-    });
+    // Fetch latest version from npm with spinner
+    const latestVersion = await withSpinner(
+      'Checking for updates...',
+      async () => await fetchLatestVersion(packageName, { throwOnError: true }),
+      'Update check complete'
+    );
 
     if (!latestVersion) {
-      console.error("Failed to fetch latest version from npm registry");
+      logger.error("Failed to fetch latest version from npm registry");
+      logger.newline();
       process.exit(1);
     }
 
-    console.log(`Latest version:  ${latestVersion}\n`);
+    logger.info(`Latest version: ${latestVersion}`);
+    logger.newline();
 
     // Compare versions
     if (!isNewerVersion(currentVersion, latestVersion)) {
-      console.log("✓ You are already using the latest version!");
+      logger.success('You are already using the latest version!');
+      logger.newline();
       return;
     }
 
-    console.log(`New version available: ${currentVersion} -> ${latestVersion}`);
-    console.log("\nUpdating movehat...\n");
+    // Show update available box
+    const updateBox = box(
+      `${colors.brandBright('Update Available!')}\n\n` +
+      `Current: ${currentVersion}\n` +
+      `Latest:  ${colors.success(latestVersion)}`,
+      { borderColor: 'warning', padding: 1 }
+    );
+    console.log(updateBox);
+    logger.newline();
+
+    logger.info('Updating movehat...');
+    logger.newline();
 
     // Detect package manager
     const packageManager = detectPackageManager();
@@ -126,23 +141,31 @@ export default async function updateCommand() {
 
     child.on("exit", (code) => {
       if (code === 0) {
-        console.log(`\n✓ Successfully updated to version ${latestVersion}!`);
+        logger.newline();
+        logger.success(`Successfully updated to version ${latestVersion}!`);
+        logger.newline();
         process.exit(0);
       } else {
-        console.error("\n✗ Update failed");
-        console.error(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
+        logger.newline();
+        logger.error('Update failed');
+        logger.plain(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
+        logger.newline();
         process.exit(1);
       }
     });
 
     child.on("error", (error) => {
-      console.error(`Failed to update: ${error.message}`);
-      console.error(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
+      logger.newline();
+      logger.error(`Failed to update: ${error.message}`);
+      logger.plain(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
+      logger.newline();
       process.exit(1);
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`Error: ${message}`);
+    logger.newline();
+    logger.error(`Error: ${message}`);
+    logger.newline();
     process.exit(1);
   }
 }
