@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 
+// Suppress experimental JSON module warning
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name === 'ExperimentalWarning' &&
+      warning.message.includes('Importing JSON modules')) {
+    return;
+  }
+  console.warn(warning);
+});
+
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
