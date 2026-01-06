@@ -12,6 +12,10 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Detect project root BEFORE changing directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 TEST_DIR="/tmp/movehat-smoke-test-$$"
 mkdir -p "$TEST_DIR"
 
@@ -20,11 +24,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cd "$TEST_DIR"
-
 # Build
 echo "→ Building package..."
-cd /test/packages/movehat
+cd "$PROJECT_ROOT/packages/movehat"
 pnpm build > /dev/null 2>&1
 echo -e "${GREEN}✓${NC} Build successful"
 
@@ -33,6 +35,10 @@ echo "→ Packing package..."
 npm pack > /dev/null 2>&1
 PACKAGE=$(ls movehat-*.tgz | head -1)
 echo -e "${GREEN}✓${NC} Package created: $PACKAGE"
+
+# Move package to test directory
+mv "$PACKAGE" "$TEST_DIR/"
+cd "$TEST_DIR"
 
 # Extract and check contents
 echo "→ Checking package contents..."
