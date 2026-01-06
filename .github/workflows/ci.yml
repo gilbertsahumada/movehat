@@ -112,16 +112,15 @@ jobs:
           name: build-artifacts
           path: packages/movehat/dist/
 
-      # TODO: Install Movement CLI when official install script is available
-      # - name: Install Movement CLI
-      #   run: curl -sSL https://install.movementnetwork.xyz | bash
-
-      - name: Create mock Movement CLI
+      - name: Install Movement CLI (testnet - Move 2 support)
         run: |
-          sudo mkdir -p /usr/local/bin
-          echo '#!/bin/bash' | sudo tee /usr/local/bin/movement
-          echo 'echo "movement CLI v0.1.0"' | sudo tee -a /usr/local/bin/movement
-          sudo chmod +x /usr/local/bin/movement
+          curl -LO https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/movement-move2-testnet-linux-x86_64.tar.gz
+          mkdir -p temp_extract
+          tar -xzf movement-move2-testnet-linux-x86_64.tar.gz -C temp_extract
+          chmod +x temp_extract/movement
+          sudo mv temp_extract/movement /usr/local/bin/movement
+          rm -rf temp_extract movement-move2-testnet-linux-x86_64.tar.gz
+          movement --version
 
       - name: Run E2E tests
         run: bash scripts/test-e2e.sh
