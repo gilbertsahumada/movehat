@@ -9,6 +9,10 @@ echo "MoveHat E2E Test Suite"
 echo "=========================================="
 echo ""
 
+# Detect project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -72,10 +76,10 @@ log_info "Test 2: Checking Node.js version..."
 NODE_VERSION=$(node --version)
 NODE_MAJOR=$(echo $NODE_VERSION | cut -d'v' -f2 | cut -d'.' -f1)
 
-if [ "$NODE_MAJOR" -ge 18 ]; then
+if [ "$NODE_MAJOR" -ge 20 ]; then
     log_success "Node.js version is compatible: $NODE_VERSION"
 else
-    log_error "Node.js version is too old: $NODE_VERSION (requires v18+)"
+    log_error "Node.js version is too old: $NODE_VERSION (requires v20+)"
     exit 1
 fi
 
@@ -83,7 +87,7 @@ fi
 # Test 3: Build MoveHat from source
 # ==========================================
 log_info "Test 3: Building MoveHat from source..."
-cd /test
+cd "$PROJECT_ROOT"
 
 if pnpm build:movehat; then
     log_success "MoveHat built successfully"
@@ -96,7 +100,7 @@ fi
 # Test 4: Pack and install globally
 # ==========================================
 log_info "Test 4: Packing and installing globally..."
-cd /test/packages/movehat
+cd "$PROJECT_ROOT/packages/movehat"
 
 # Pack the package
 if npm pack; then
