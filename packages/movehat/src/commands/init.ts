@@ -8,6 +8,25 @@ import { logger, createSpinnerChain, formatCommand } from "../ui/index.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Initialize a new Movehat project with template files
+ *
+ * Creates a complete project structure including:
+ * - Configuration files (movehat.config.ts, .env, .gitignore, package.json)
+ * - Move smart contract templates
+ * - Deployment scripts
+ * - Test files
+ *
+ * @param projectName - Optional project name. If not provided, user will be prompted
+ *
+ * @example
+ * // With project name
+ * await initCommand('my-project');
+ *
+ * @example
+ * // Interactive prompt
+ * await initCommand();
+ */
 export default async function initCommand(projectName?: string) {
   // Show banner only on init command
   printMovehatBanner();
