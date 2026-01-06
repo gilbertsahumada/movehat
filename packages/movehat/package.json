@@ -49,6 +49,9 @@
   ],
   "author": "Gilberts Ahumada",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.5",
     "cli-table3": "^0.6.5",
