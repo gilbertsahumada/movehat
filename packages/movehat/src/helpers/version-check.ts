@@ -52,7 +52,18 @@ function writeCache(latestVersion: string): void {
 
 /**
  * Check if a newer version is available and notify the user
- * This runs synchronously using cache, and updates cache in background
+ *
+ * This function:
+ * - Runs synchronously using cached version data
+ * - Displays update notification immediately if cache indicates newer version
+ * - Asynchronously updates cache in background (non-blocking)
+ * - Respects 24-hour cache duration to avoid excessive network requests
+ *
+ * @param currentVersion - Currently installed version (e.g., '1.0.0')
+ * @param packageName - npm package name to check (e.g., 'movehat')
+ *
+ * @example
+ * checkForUpdates('1.0.0', 'movehat');
  */
 export function checkForUpdates(currentVersion: string, packageName: string): void {
   try {

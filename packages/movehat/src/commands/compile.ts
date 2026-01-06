@@ -85,6 +85,19 @@ function run(command: string, cwd: string) {
   });
 }
 
+/**
+ * Compile Move smart contracts using the Movement CLI
+ *
+ * This command:
+ * - Detects named addresses used in Move modules
+ * - Merges auto-detected addresses with user-configured addresses
+ * - Auto-assigns development addresses (0xcafe) for missing addresses
+ * - Executes `movement move build` with proper named address mappings
+ *
+ * @example
+ * // Compile contracts in default ./move directory
+ * await compileCommand();
+ */
 export default async function compileCommand() {
   try {
     // Compile is network-independent - only uses global config

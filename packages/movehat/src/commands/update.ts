@@ -62,7 +62,17 @@ function detectPackageManager(): "yarn" | "npm" | "pnpm" {
 }
 
 /**
- * Update command - checks for updates and installs the latest version
+ * Update Movehat CLI to the latest version from npm
+ *
+ * This command:
+ * - Fetches the latest version from npm registry
+ * - Compares with currently installed version
+ * - Auto-detects package manager (npm/yarn/pnpm)
+ * - Installs the update if a newer version is available
+ *
+ * @example
+ * // Update to latest version
+ * await updateCommand();
  */
 export default async function updateCommand() {
   try {

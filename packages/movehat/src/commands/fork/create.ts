@@ -12,7 +12,26 @@ interface ForkCreateOptions {
 }
 
 /**
- * Fork create command: Create a local fork of a Movement/Aptos network
+ * Create a local fork of a Movement/Aptos network
+ *
+ * This command:
+ * - Connects to the specified network RPC endpoint
+ * - Downloads blockchain state (accounts, modules, resources)
+ * - Creates a local fork database for testing
+ * - Displays fork metadata (chain ID, ledger version, block height, epoch)
+ *
+ * @param options - Fork creation options
+ * @param options.network - Network to fork from (e.g., 'testnet', 'mainnet')
+ * @param options.path - Custom path to store fork data
+ * @param options.name - Custom name for the fork
+ *
+ * @example
+ * // Fork testnet
+ * await forkCreateCommand({ network: 'testnet' });
+ *
+ * @example
+ * // Fork with custom name
+ * await forkCreateCommand({ network: 'testnet', name: 'my-fork' });
  */
 export default async function forkCreateCommand(options: ForkCreateOptions = {}) {
   try {

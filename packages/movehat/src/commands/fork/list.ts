@@ -4,7 +4,18 @@ import { ForkStorage } from '../../fork/storage.js';
 import { logger, createTable, formatCommand } from '../../ui/index.js';
 
 /**
- * Fork list command: List all available forks
+ * List all available local forks
+ *
+ * Displays forks in a formatted table showing:
+ * - Fork name
+ * - Network (testnet, mainnet, etc.)
+ * - Chain ID
+ * - Number of accounts
+ * - Creation timestamp
+ *
+ * @example
+ * // List all forks
+ * await forkListCommand();
  */
 export default async function forkListCommand() {
   try {
