@@ -2,7 +2,11 @@
 set -e
 
 # Pre-Publish Checklist Script
-# Run this before publishing to npm
+# We Run this before publishing to npm
+
+# Detect project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "=========================================="
 echo "MoveHat Pre-Publish Checklist"
@@ -22,11 +26,11 @@ CHECKS_FAILED=0
 check() {
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓${NC} $1"
-        ((CHECKS_PASSED++))
+        CHECKS_PASSED=$((CHECKS_PASSED + 1))
         return 0
     else
         echo -e "${RED}✗${NC} $1"
-        ((CHECKS_FAILED++))
+        CHECKS_FAILED=$((CHECKS_FAILED + 1))
         return 1
     fi
 }
@@ -89,7 +93,7 @@ echo ""
 echo -e "${BLUE}4. Building Package${NC}"
 echo "----------------------------------------"
 
-cd /test
+cd "$PROJECT_ROOT"
 pnpm build:movehat
 check "Build successful"
 
@@ -127,10 +131,10 @@ for field in "${REQUIRED_FIELDS[@]}"; do
     VALUE=$(node -p "require('./package.json').$field || 'MISSING'")
     if [[ "$VALUE" == "MISSING" ]] || [[ "$VALUE" == "undefined" ]]; then
         echo -e "${RED}✗${NC} Missing required field: $field"
-        ((CHECKS_FAILED++))
+        CHECKS_FAILED=$((CHECKS_FAILED + 1))
     else
         echo -e "${GREEN}✓${NC} $field: $VALUE"
-        ((CHECKS_PASSED++))
+        CHECKS_PASSED=$((CHECKS_PASSED + 1))
     fi
 done
 
@@ -168,7 +172,7 @@ if [ -f "README.md" ]; then
     fi
 else
     echo -e "${RED}✗${NC} README.md is missing"
-    ((CHECKS_FAILED++))
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
 fi
 
 echo ""
@@ -181,7 +185,7 @@ if npm whoami > /dev/null 2>&1; then
 else
     echo -e "${RED}✗${NC} Not logged into npm"
     echo "   Run: npm login"
-    ((CHECKS_FAILED++))
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
 fi
 
 echo ""
