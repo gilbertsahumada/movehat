@@ -67,6 +67,11 @@ function writeCache(latestVersion: string): void {
  */
 export function checkForUpdates(currentVersion: string, packageName: string): void {
   try {
+    // Skip update check for development versions (0.0.0)
+    if (currentVersion === '0.0.0') {
+      return;
+    }
+
     const cache = readCache();
     let shouldNotify = false;
 
