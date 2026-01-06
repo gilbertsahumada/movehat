@@ -1,14 +1,8 @@
-type Rgb = [number, number, number];
+import { applyGradient, gradients, shouldUseColor, colors } from '../ui/index.js';
 
-// Warm yellow-to-amber palette for a subtle gradient.
-const gradientPalette: Rgb[] = [
-  [255, 239, 150],
-  [255, 223, 88],
-  [255, 207, 64],
-  [255, 181, 45],
-  [255, 160, 30],
-];
-
+/**
+ * MOVEHAT ASCII art banner lines
+ */
 const bannerLines = [
   " ███╗   ███╗ ██████╗ ██╗   ██╗███████╗██╗  ██╗ █████╗ ████████╗",
   " ████╗ ████║██╔═══██╗██║   ██║██╔════╝██║  ██║██╔══██╗╚══██╔══╝",
@@ -18,30 +12,52 @@ const bannerLines = [
   " ╚═╝     ╚═╝ ╚═════╝   ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ",
 ];
 
-const reset = "\x1b[0m";
+/**
+ * Divider line below the banner
+ */
+const dividerLine = "━".repeat(68);
 
-const shouldColorize = () => process.env.NO_COLOR === undefined && Boolean(process.stdout.isTTY);
+/**
+ * Tagline describing Movehat
+ */
+const tagline = "  A powerful testing framework for Move smart contracts";
 
-const toAnsi = ([r, g, b]: Rgb) => `\x1b[38;2;${r};${g};${b}m`;
-
-const applyGradient = (line: string, offset: number) => {
-  let painted = "";
-  for (let i = 0; i < line.length; i++) {
-    const color = gradientPalette[(i + offset) % gradientPalette.length];
-    painted += `${toAnsi(color)}${line[i]}`;
+/**
+ * Render the Movehat banner with gradient colors
+ * Uses the UI module's gradient system for consistency
+ *
+ * @returns Formatted banner string ready for console output
+ *
+ * @example
+ * const banner = renderMovehatBanner();
+ * console.log(banner);
+ */
+export const renderMovehatBanner = (): string => {
+  if (!shouldUseColor()) {
+    return `${bannerLines.join("\n")}\n${dividerLine}\n${tagline}`;
   }
-  return painted;
+
+  // Apply Movehat brand gradient to each line with varying offsets
+  const coloredLines = bannerLines.map((line, idx) =>
+    applyGradient(line, gradients.movehat, idx * 2)
+  );
+
+  // Apply gradient to divider line
+  const coloredDivider = applyGradient(dividerLine, gradients.movehat, 0);
+
+  // Dim the tagline for subtle appearance
+  const coloredTagline = colors.dim(tagline);
+
+  return `${coloredLines.join("\n")}\n${coloredDivider}\n${coloredTagline}`;
 };
 
-export const renderMovehatBanner = () => {
-  if (!shouldColorize()) {
-    return bannerLines.join("\n");
-  }
-
-  const coloredLines = bannerLines.map((line, idx) => applyGradient(line, idx * 2));
-  return `${coloredLines.join("\n")}${reset}`;
-};
-
-export const printMovehatBanner = () => {
+/**
+ * Print the Movehat banner to console
+ * Convenience function that renders and logs the banner
+ *
+ * @example
+ * printMovehatBanner();
+ */
+export const printMovehatBanner = (): void => {
   console.log(renderMovehatBanner());
 };

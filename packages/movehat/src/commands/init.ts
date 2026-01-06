@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import prompts from "prompts";
 import { printMovehatBanner } from "../helpers/banner.js";
+import { logger, createSpinnerChain, formatCommand } from "../ui/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ export default async function initCommand(projectName?: string) {
 
     // If the user cancels (Ctrl+C), exit
     if (!response.projectName) {
-      console.log('\nProject initialization cancelled.');
+      logger.warning('Project initialization cancelled.');
       process.exit(0);
     }
 
@@ -32,84 +33,101 @@ export default async function initCommand(projectName?: string) {
   const targetDir = projectName!;
   const projectPath = path.resolve(process.cwd(), targetDir);
 
-  console.log(`\nInitializing new Movehat project in ${projectPath}...`);
+  logger.newline();
+  logger.info(`Initializing new Movehat project in ${projectPath}...`);
+  logger.newline();
 
   try {
-    await fs.mkdir(projectPath, { recursive: true });
-
     const templatesDir = path.join(__dirname, "..", "templates");
+    const steps = createSpinnerChain();
 
-    console.log("Creating project structure...");
+    // Step 1: Create project structure
+    await steps.add('Creating project structure', async () => {
+      await fs.mkdir(projectPath, { recursive: true });
 
-    await copyFile(
-      path.join(templatesDir, "package.json"),
-      path.join(projectPath, "package.json"),
-      { projectName: projectName! }
-    );
+      await copyFile(
+        path.join(templatesDir, "package.json"),
+        path.join(projectPath, "package.json"),
+        { projectName: projectName! }
+      );
 
-    await copyFile(
-      path.join(templatesDir, "tsconfig.json"),
-      path.join(projectPath, "tsconfig.json")
-    );
+      await copyFile(
+        path.join(templatesDir, "tsconfig.json"),
+        path.join(projectPath, "tsconfig.json")
+      );
 
-    await copyFile(
-      path.join(templatesDir, ".mocharc.json"),
-      path.join(projectPath, ".mocharc.json")
-    );
+      await copyFile(
+        path.join(templatesDir, ".mocharc.json"),
+        path.join(projectPath, ".mocharc.json")
+      );
 
-    await copyFile(
-      path.join(templatesDir, "movehat.config.ts"),
-      path.join(projectPath, "movehat.config.ts")
-    );
+      await copyFile(
+        path.join(templatesDir, "movehat.config.ts"),
+        path.join(projectPath, "movehat.config.ts")
+      );
 
-    await copyFile(
-      path.join(templatesDir, ".env.example"),
-      path.join(projectPath, ".env.example")
-    );
+      await copyFile(
+        path.join(templatesDir, ".env.example"),
+        path.join(projectPath, ".env.example")
+      );
 
-    await copyFile(
-      path.join(templatesDir, "gitignore"),
-      path.join(projectPath, ".gitignore")
-    );
+      await copyFile(
+        path.join(templatesDir, "gitignore"),
+        path.join(projectPath, ".gitignore")
+      );
 
-    await copyFile(
-      path.join(templatesDir, "README.md"),
-      path.join(projectPath, "README.md"),
-      { projectName: projectName! }
-    );
+      await copyFile(
+        path.join(templatesDir, "README.md"),
+        path.join(projectPath, "README.md"),
+        { projectName: projectName! }
+      );
+    });
 
-    // 3. Copiar carpeta move/
-    console.log("Setting up Move project...");
-    await copyDir(
-      path.join(templatesDir, "move"),
-      path.join(projectPath, "move"),
-      { projectName: projectName! }
-    );
+    // Step 2: Setup Move project
+    await steps.add('Setting up Move project', async () => {
+      await copyDir(
+        path.join(templatesDir, "move"),
+        path.join(projectPath, "move"),
+        { projectName: projectName! }
+      );
+    });
 
-    // 4. Copiar scripts/
-    console.log("Adding deployment scripts...");
-    await copyDir(
-      path.join(templatesDir, "scripts"),
-      path.join(projectPath, "scripts")
-    );
+    // Step 3: Add deployment scripts
+    await steps.add('Adding deployment scripts', async () => {
+      await copyDir(
+        path.join(templatesDir, "scripts"),
+        path.join(projectPath, "scripts")
+      );
+    });
 
-    // 5. Copiar tests/
-    console.log("Adding test files...");
-    await copyDir(
-      path.join(templatesDir, "tests"),
-      path.join(projectPath, "tests")
-    );
+    // Step 4: Add test files
+    await steps.add('Adding test files', async () => {
+      await copyDir(
+        path.join(templatesDir, "tests"),
+        path.join(projectPath, "tests")
+      );
+    });
 
-    console.log("\nProject created successfully!\n");
-    console.log("Next steps:\n");
-    console.log(`   cd ${projectName}`);
-    console.log(`   cp .env.example .env`);
-    console.log(`   # Edit .env with your credentials`);
-    console.log(`   npm install`);
-    console.log(`   npx movehat compile`);
-    console.log(`   npm test\n`);
+    steps.complete();
+
+    // Success message
+    logger.newline();
+    logger.success('Project created successfully!');
+    logger.newline();
+
+    // Next steps
+    logger.section('Next steps');
+    logger.item(formatCommand(`cd ${projectName}`), 2);
+    logger.item(formatCommand('cp .env.example .env'), 2);
+    logger.plain('     # Edit .env with your credentials');
+    logger.item(formatCommand('npm install'), 2);
+    logger.item(formatCommand('npx movehat compile'), 2);
+    logger.item(formatCommand('npm test'), 2);
+    logger.newline();
+
   } catch (error) {
-    console.error(`Failed to initialize project: ${error}`);
+    logger.error(`Failed to initialize project: ${error}`);
+    process.exit(1);
   }
 }
 

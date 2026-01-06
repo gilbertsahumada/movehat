@@ -51,9 +51,13 @@
   "license": "MIT",
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.1.5",
+    "cli-table3": "^0.6.5",
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
+    "figures": "^6.1.0",
     "js-yaml": "^4.1.1",
+    "ora": "^9.0.0",
+    "picocolors": "^1.1.1",
     "prompts": "^2.4.2",
     "tsx": "^4.7.0"
   },
