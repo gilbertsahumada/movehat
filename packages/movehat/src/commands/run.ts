@@ -34,10 +34,27 @@ export default async function runCommand(scriptPath: string) {
   }
   console.log();
 
-  // Find tsx from movehat's node_modules
+  // Find tsx binary - try multiple locations for compatibility
+  // 1. User's project node_modules (npm install scenario)
+  // 2. Movehat's node_modules (development/workspace scenario)
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
-  const tsxPath = join(__dirname, "..", "..", "node_modules", ".bin", "tsx");
+
+  const possibleTsxPaths = [
+    // User's project node_modules (when movehat is installed as dependency)
+    join(process.cwd(), "node_modules", ".bin", "tsx"),
+    // Movehat's own node_modules (development mode)
+    join(__dirname, "..", "..", "node_modules", ".bin", "tsx"),
+  ];
+
+  const tsxPath = possibleTsxPaths.find(existsSync);
+
+  if (!tsxPath) {
+    console.error("❌ Error: tsx binary not found");
+    console.error("   Make sure 'tsx' is installed in your project:");
+    console.error("   npm install --save-dev tsx");
+    process.exit(1);
+  }
 
   // Execute script with tsx (handles both .ts and .js files)
   const child = spawn(tsxPath, [fullPath], {
