@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 
@@ -220,5 +220,37 @@ export class ForkStorage {
 
     const accounts = JSON.parse(readFileSync(accountsPath, 'utf-8'));
     return Object.keys(accounts);
+  }
+
+  /**
+   * Clear all cached accounts
+   * Resets accounts.json to empty object
+   */
+  clearAccounts(): void {
+    const accountsPath = join(this.forkPath, 'accounts.json');
+    writeFileSync(accountsPath, JSON.stringify({}, null, 2));
+  }
+
+  /**
+   * Clear all cached resources
+   * Deletes all resource files from the resources directory
+   */
+  clearResources(): void {
+    const resourcesDir = join(this.forkPath, 'resources');
+
+    if (!existsSync(resourcesDir)) {
+      return;
+    }
+
+    // Read all files in resources directory
+    const files = readdirSync(resourcesDir);
+
+    // Delete each resource file
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const filePath = join(resourcesDir, file);
+        unlinkSync(filePath);
+      }
+    }
   }
 }

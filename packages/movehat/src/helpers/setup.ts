@@ -7,6 +7,7 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { loadUserConfig, resolveNetworkConfig } from "../core/config.js";
 import { MovehatConfig } from "../types/config.js";
+import { AccountManager } from "../core/AccountManager.js";
 
 export interface TestEnvironment {
   aptos: Aptos;
@@ -27,8 +28,8 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
 
   const aptos = new Aptos(aptosConfig);
 
-  const privateKey = new Ed25519PrivateKey(config.privateKey);
-  const account = Account.fromPrivateKey({ privateKey });
+  // Load account using AccountManager
+  const account = AccountManager.loadAccountFromPrivateKey(config.privateKey);
 
   console.log(`✅ Test environment ready`);
   console.log(`   Account: ${account.accountAddress.toString()}`);
@@ -43,7 +44,7 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
 }
 
 export function createTestAccount(): Account {
-    return Account.generate();
+    return AccountManager.createAccount();
 }
 
 

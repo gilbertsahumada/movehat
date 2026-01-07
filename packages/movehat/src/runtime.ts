@@ -18,6 +18,7 @@ import {
   validateSafeName,
 } from "./core/deployments.js";
 import { ModuleAlreadyDeployedError } from "./errors.js";
+import { AccountManager } from "./core/AccountManager.js";
 
 let cachedRuntime: MovehatRuntime | null = null;
 
@@ -52,12 +53,9 @@ export async function initRuntime(
   });
   const aptos = new Aptos(aptosConfig);
 
-  // Setup accounts
+  // Setup accounts using AccountManager
   const accountIndex = options.accountIndex || 0;
-  const accounts: Account[] = config.allAccounts.map((pk) => {
-    const privateKey = new Ed25519PrivateKey(pk);
-    return Account.fromPrivateKey({ privateKey });
-  });
+  const accounts: Account[] = AccountManager.loadAccountsFromConfig(config);
 
   // Primary account (accounts[0] or selected index)
   const account = accounts[accountIndex];
@@ -247,12 +245,11 @@ export async function initRuntime(
   };
 
   const createAccount = (): Account => {
-    return Account.generate();
+    return AccountManager.createAccount();
   };
 
   const getAccountHelper = (privateKeyHex: string): Account => {
-    const pk = new Ed25519PrivateKey(privateKeyHex);
-    return Account.fromPrivateKey({ privateKey: pk });
+    return AccountManager.loadAccountFromPrivateKey(privateKeyHex);
   };
 
   const getAccountByIndex = (index: number): Account => {
