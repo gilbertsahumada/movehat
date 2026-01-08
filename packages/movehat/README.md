@@ -7,12 +7,14 @@
 
 ## Features
 
-- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from Move code (like Hardhat)
+- **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
+- **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
+- **Auto-Deploy in Tests** - Contracts deploy automatically when tests run - zero manual setup
+- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts
+- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from Move code
 - **Quick Start** - Scaffold new Move projects in seconds
 - **TypeScript Testing** - Write integration tests with familiar tools (Mocha, Chai)
-- **Built-in Helpers** - Interact with contracts easily
 - **Movement CLI Integration** - Seamless compilation and deployment
-- **Hot Reload** - Test changes instantly with watch mode
 
 ## Prerequisites
 
@@ -102,140 +104,217 @@ MH_NETWORK=testnet
 
 ## Writing Tests
 
-Movehat uses **Transaction Simulation** for testing - no real blockchain or gas costs required:
+Movehat runs tests on a **real local Movement blockchain** (just like Hardhat!):
 
 ```typescript
-import { describe, it, before } from "mocha";
+import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { getMovehat, type MovehatRuntime } from "movehat";
+import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Counter Contract", () => {
-  let mh: MovehatRuntime;
-  let contractAddress: string;
+  let fixture: TestFixture<'counter'>;
 
   before(async function () {
-    this.timeout(30000);
+    this.timeout(60000); // Allow time for local node startup + deployment
 
-    // Initialize Movehat Runtime Environment
-    // Uses Movement testnet by default with auto-generated test accounts
-    mh = await getMovehat();
-    contractAddress = mh.account.accountAddress.toString();
+    // Setup local testing environment with auto-deployment
+    // This will:
+    // 1. Start a local Movement blockchain node
+    // 2. Generate and fund test accounts from local faucet
+    // 3. Auto-deploy the counter module
+    // 4. Return everything ready to use
+    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+
+    console.log(`\n✅ Testing on local blockchain`);
+    console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
   });
 
-  it("should initialize counter using simulation", async function () {
-    this.timeout(30000);
+  it("should initialize with value 0", async () => {
+    const counter = fixture.contracts.counter; // Type-safe, no `!` needed
+    const deployer = fixture.accounts.deployer;
 
-    // Build transaction
-    const transaction = await mh.aptos.transaction.build.simple({
-      sender: mh.account.accountAddress,
-      data: {
-        function: `${contractAddress}::counter::init`,
-        functionArguments: []
-      }
-    });
+    // Read counter value (returns string from view function)
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
 
-    // Simulate transaction (no gas cost, instant)
-    const [simulation] = await mh.aptos.transaction.simulate.simple({
-      signerPublicKey: mh.account.publicKey,
-      transaction
-    });
+    expect(parseInt(value)).to.equal(0);
+  });
 
-    // Verify simulation succeeded
-    expect(simulation.success).to.be.true;
-    console.log(`Gas used: ${simulation.gas_used}`);
+  it("should increment counter", async () => {
+    const counter = fixture.contracts.counter;
+    const deployer = fixture.accounts.deployer;
+
+    // Increment the counter (real transaction on local blockchain!)
+    const tx = await counter.call(deployer, "increment", []);
+    console.log(`   Transaction: ${tx.hash}`);
+
+    // Read new value
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
+
+    expect(parseInt(value)).to.equal(1);
+  });
+
+  after(async () => {
+    // Cleanup: Stop local node and clear account pool
+    await teardownTestFixture();
   });
 });
 ```
 
-**Benefits of Transaction Simulation:**
-- No blockchain or fork server required
-- Instant test execution
-- No gas costs
-- Perfect for TDD and CI/CD
-- Uses Movement testnet with auto-generated accounts by default
+**Benefits of Local Node Testing:**
+- Real blockchain with actual state changes
+- Test real transactions (not just simulations)
+- Auto-deploy contracts for each test run
+- Type-safe contract access (no `!` operator needed)
+- Automatic cleanup after tests
+- Just like Hardhat - zero manual setup
 
 ## Writing Deployment Scripts
 
 ```typescript
-import { setupTestEnvironment, getContract } from "movehat/helpers";
+import { getMovehat } from "movehat";
 
 async function main() {
-  console.log("Deploying Counter contract...\n");
+  const mh = await getMovehat();
 
-  const env = await setupTestEnvironment();
-  
-  const counter = getContract(
-    env.aptos,
-    env.account.accountAddress.toString(),
-    "counter"
-  );
+  console.log("Deploying from:", mh.account.accountAddress.toString());
+  console.log("Network:", mh.config.network);
 
-  console.log(`Contract address: ${env.account.accountAddress.toString()}::counter`);
-  
+  // Deploy (publish) the module
+  // Movehat automatically checks if already deployed
+  const deployment = await mh.deployContract("counter");
+
+  console.log("Module deployed at:", deployment.address);
+  console.log("Transaction:", deployment.txHash);
+
+  // Get contract instance
+  const contract = mh.getContract(deployment.address, "counter");
+
   // Initialize the counter
-  console.log("\nInitializing counter...");
-  const txResult = await counter.call(env.account, "init", []);
-  
-  console.log(`Transaction hash: ${txResult.hash}`);
-  console.log(`Counter initialized successfully!`);
-  
+  await contract.call(mh.account, "init", []);
+
+  console.log("Counter initialized!");
+
   // Verify
-  const value = await counter.view<number>("get", [
-    env.account.accountAddress.toString()
+  const value = await contract.view<string>("get", [
+    mh.account.accountAddress.toString()
   ]);
-  
+
   console.log(`Initial counter value: ${value}`);
 }
 
 main().catch((error) => {
-  console.error("Deployment failed:", error);
+  console.error(error);
   process.exit(1);
 });
 ```
 
 ## API Reference
 
-### Helpers
+### Testing Helpers
 
-#### `setupTestEnvironment()`
+#### `setupTestFixture(modules, accountLabels, options?)`
 
-Sets up the test environment with Aptos client and account.
+High-level API for setting up local testing with auto-deployment. Returns type-safe fixture with contracts and accounts.
 
 ```typescript
-const env = await setupTestEnvironment();
-// Returns: { aptos: Aptos, account: Account, config: MovehatConfig }
+// Setup with type inference
+const fixture = await setupTestFixture(
+  ['counter'] as const,  // Modules to deploy
+  ['alice', 'bob']       // Additional account labels
+);
+
+// Access type-safe contracts (no `!` needed)
+const counter = fixture.contracts.counter;
+
+// Access accounts
+const deployer = fixture.accounts.deployer;
+const alice = fixture.accounts.alice;
+
+// Options (all optional)
+const fixture = await setupTestFixture(['counter'] as const, ['alice'], {
+  mode: 'fork',                    // 'local-node' (default) or 'fork'
+  defaultBalance: 100_000_000,     // Balance per account in octas
+  nodeForceRestart: true,          // Restart node on each run
+  // ... see LocalTestOptions for more
+});
 ```
 
-#### `getContract(aptos, moduleAddress, moduleName)`
+#### `setupLocalTesting(options?)`
+
+Lower-level API for setting up local testing environment. Returns MovehatRuntime.
+
+```typescript
+import { setupLocalTesting } from "movehat/helpers";
+
+// Local node mode (default) - Full blockchain
+const mh = await setupLocalTesting({
+  mode: 'local-node',
+  accountLabels: ['deployer', 'alice', 'bob'],
+  autoDeploy: ['counter'],  // Auto-deploy modules
+  autoFund: true,
+  defaultBalance: 100_000_000
+});
+
+// Fork mode - Read-only snapshot
+const mh = await setupLocalTesting({
+  mode: 'fork',
+  forkNetwork: 'testnet',
+  forkName: 'my-fork',
+  accountLabels: ['alice', 'bob'],
+  // Note: autoDeploy doesn't work in fork mode
+});
+```
+
+#### `teardownTestFixture()`
+
+Cleanup function to stop local node and clear accounts.
+
+```typescript
+after(async () => {
+  await teardownTestFixture();
+});
+```
+
+#### `stopLocalTesting()`
+
+Stops the local testing environment (for lower-level API).
+
+```typescript
+await stopLocalTesting();
+```
+
+### Contract Interaction
+
+#### `mh.getContract(moduleAddress, moduleName)`
 
 Creates a contract wrapper for easy interaction.
 
 ```typescript
-const counter = getContract(aptos, accountAddress, "counter");
+const mh = await getMovehat();
+const counter = mh.getContract(deployment.address, "counter");
 ```
 
-#### `contract.call(signer, functionName, args, typeArgs)`
+#### `contract.call(signer, functionName, args, typeArgs?)`
 
 Executes an entry function (transaction).
 
 ```typescript
 const tx = await counter.call(account, "increment", []);
+console.log(`Transaction: ${tx.hash}`);
 ```
 
-#### `contract.view(functionName, args, typeArgs)`
+#### `contract.view<T>(functionName, args, typeArgs?)`
 
 Reads data from a view function (no transaction).
 
 ```typescript
-const value = await counter.view<number>("get", [address]);
-```
-
-#### `assertTransactionSuccess(result)`
-
-Asserts that a transaction was successful.
-
-```typescript
-assertTransactionSuccess(txResult);
+// Note: View functions return strings
+const value = await counter.view<string>("get", [address]);
+console.log(`Value: ${parseInt(value)}`);
 ```
 
 ## Available Commands

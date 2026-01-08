@@ -22,5 +22,22 @@ export {
   listSnapshots,
 } from "../fork/test.js";
 export type { SnapshotOptions, ForkInfo } from "../fork/test.js";
+export { AccountManager } from "../core/AccountManager.js";
+export type { StoredAccount } from "../core/AccountManager.js";
+export { LocalNodeManager } from "../node/LocalNodeManager.js";
+export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.js";
+export {
+  setupLocalTesting,
+  stopLocalTesting,
+  getCurrentForkManager,
+  getCurrentLocalNode,
+  resetForkState,
+} from "./setupLocalTesting.js";
+export {
+  setupTestFixture,
+  teardownTestFixture,
+  setupMinimalFixture,
+} from "./testFixtures.js";
+export type { TestFixture } from "./testFixtures.js";
 
-export type { MovehatConfig } from "../types/config.js";
+export type { MovehatConfig, LocalTestOptions } from "../types/config.js";

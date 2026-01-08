@@ -18,6 +18,7 @@ import {
   validateSafeName,
 } from "./core/deployments.js";
 import { ModuleAlreadyDeployedError } from "./errors.js";
+import { AccountManager } from "./core/AccountManager.js";
 
 let cachedRuntime: MovehatRuntime | null = null;
 
@@ -52,12 +53,9 @@ export async function initRuntime(
   });
   const aptos = new Aptos(aptosConfig);
 
-  // Setup accounts
+  // Setup accounts using AccountManager
   const accountIndex = options.accountIndex || 0;
-  const accounts: Account[] = config.allAccounts.map((pk) => {
-    const privateKey = new Ed25519PrivateKey(pk);
-    return Account.fromPrivateKey({ privateKey });
-  });
+  const accounts: Account[] = AccountManager.loadAccountsFromConfig(config);
 
   // Primary account (accounts[0] or selected index)
   const account = accounts[accountIndex];
@@ -150,52 +148,116 @@ export async function initRuntime(
     console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
 
     try {
-      // Ensure Movement CLI config exists
-      const aptosConfigDir = join(homedir(), ".aptos");
-      const aptosConfigPath = join(aptosConfigDir, "config.yaml");
-
-      if (!existsSync(aptosConfigPath)) {
-        console.log("⚙️  Creating Movement CLI configuration...");
-        if (!existsSync(aptosConfigDir)) {
-          mkdirSync(aptosConfigDir, { recursive: true });
-        }
-
-        // Create minimal config.yaml using js-yaml to prevent YAML injection
-        const configData = {
-          profiles: {
-            [profile]: {
-              private_key: config.privateKey,
-              public_key: account.publicKey.toString(),
-              account: account.accountAddress.toString(),
-              rest_url: config.rpc,
-            },
-          },
-        };
-        const configContent = yaml.dump(configData);
-        writeFileSync(aptosConfigPath, configContent, "utf-8");
-
-        // Restrict file permissions to owner only (600) for security
-        // This prevents other users from reading the private key
-        try {
-          chmodSync(aptosConfigPath, 0o600);
-        } catch (error) {
-          // chmod may fail on Windows, but that's okay
-          // Windows has different permission model (ACLs)
-          console.warn("⚠️  Could not set file permissions (this is normal on Windows)");
-        }
-      }
-
       // Build first
       console.log("🔨 Building package...");
       const buildCmd = `movement move build --package-dir ${safeDir}`;
       const { stdout: buildOut } = await execAsync(buildCmd);
       if (buildOut) console.log(buildOut.trim());
 
-      // Publish
+      // Publish using direct parameters (avoid config file issues)
       console.log("📤 Publishing to blockchain...");
-      const publishCmd = `movement move publish --profile ${safeProfile} --package-dir ${safeDir} --assume-yes`;
-      const { stdout: publishOut } = await execAsync(publishCmd);
-      if (publishOut) console.log(publishOut.trim());
+
+      // Use parameters directly instead of relying on config file
+      // Strip any ed25519-priv- prefix if present
+      let cleanPrivateKey = config.privateKey;
+      if (cleanPrivateKey.startsWith('ed25519-priv-')) {
+        cleanPrivateKey = cleanPrivateKey.replace('ed25519-priv-', '');
+      }
+
+      // Get the deployer address
+      const deployerAddress = account.accountAddress.toString();
+
+      // Read Move.toml to update named addresses with deployer address
+      const moveTomlPath = join(dir, 'Move.toml');
+      let originalMoveToml = '';
+
+      if (existsSync(moveTomlPath)) {
+        const { readFile, writeFile } = await import('fs').then(fs => fs.promises);
+        originalMoveToml = await readFile(moveTomlPath, 'utf-8');
+
+        // Replace addresses in [addresses] section with deployer address
+        const updatedMoveToml = originalMoveToml.replace(
+          /\[addresses\]([\s\S]*?)(?=\n\[|$)/,
+          (match, addressesSection) => {
+            const updatedSection = addressesSection.replace(
+              /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"0x[a-fA-F0-9]+"/gm,
+              `$1 = "${deployerAddress}"`
+            );
+            return `[addresses]${updatedSection}`;
+          }
+        );
+
+        // Write updated Move.toml temporarily
+        await writeFile(moveTomlPath, updatedMoveToml, 'utf-8');
+      }
+
+      let publishOut = '';
+      let publishErr = '';
+
+      // Setup Movement CLI config with private key securely
+      const movementConfigDir = join(homedir(), '.movement');
+      const movementConfigPath = join(movementConfigDir, 'config.yaml');
+      let originalMovementConfig = '';
+
+      try {
+        // Ensure .movement directory exists
+        if (!existsSync(movementConfigDir)) {
+          mkdirSync(movementConfigDir, { recursive: true, mode: 0o700 });
+        }
+
+        // Backup original config if it exists
+        if (existsSync(movementConfigPath)) {
+          const { readFile } = await import('fs').then(fs => fs.promises);
+          originalMovementConfig = await readFile(movementConfigPath, 'utf-8');
+        }
+
+        // Create Movement config with private key
+        // Movement CLI reads from ~/.movement/config.yaml
+        const movementConfig: any = originalMovementConfig ? yaml.load(originalMovementConfig) : {};
+
+        // Set profile with private key
+        if (!movementConfig.profiles) {
+          movementConfig.profiles = {};
+        }
+        if (!movementConfig.profiles[safeProfile]) {
+          movementConfig.profiles[safeProfile] = {};
+        }
+
+        movementConfig.profiles[safeProfile].private_key = cleanPrivateKey;
+        movementConfig.profiles[safeProfile].public_key = account.publicKey.toString();
+        movementConfig.profiles[safeProfile].account = deployerAddress;
+        movementConfig.profiles[safeProfile].rest_url = config.rpc;
+
+        // Write config file with restrictive permissions
+        const configYaml = yaml.dump(movementConfig);
+        writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
+
+        // Execute publish command without exposing private key in CLI
+        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --assume-yes`;
+        const result = await execAsync(publishCmd);
+        publishOut = result.stdout || '';
+        publishErr = result.stderr || '';
+        if (publishOut) console.log(publishOut.trim());
+        if (publishErr) console.error(publishErr.trim());
+      } finally {
+        // Restore original Movement config
+        if (existsSync(movementConfigPath)) {
+          if (originalMovementConfig) {
+            // Restore original config
+            writeFileSync(movementConfigPath, originalMovementConfig, { mode: 0o600 });
+          } else {
+            // Remove config file if it didn't exist before
+            const { unlink } = await import('fs').then(fs => fs.promises);
+            await unlink(movementConfigPath).catch(() => {});
+          }
+        }
+
+        // Restore original Move.toml
+        if (originalMoveToml && existsSync(moveTomlPath)) {
+          const { writeFile } = await import('fs').then(fs => fs.promises);
+          await writeFile(moveTomlPath, originalMoveToml, 'utf-8');
+        }
+      }
 
       // Extract transaction hash from output
       // Look for patterns like "Transaction hash: 0x..." or "Txn: 0x..." or just a 64-char hex
@@ -247,12 +309,11 @@ export async function initRuntime(
   };
 
   const createAccount = (): Account => {
-    return Account.generate();
+    return AccountManager.createAccount();
   };
 
   const getAccountHelper = (privateKeyHex: string): Account => {
-    const pk = new Ed25519PrivateKey(privateKeyHex);
-    return Account.fromPrivateKey({ privateKey: pk });
+    return AccountManager.loadAccountFromPrivateKey(privateKeyHex);
   };
 
   const getAccountByIndex = (index: number): Account => {

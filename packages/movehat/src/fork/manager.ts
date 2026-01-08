@@ -261,4 +261,78 @@ export class ForkManager {
   listAccounts(): string[] {
     return this.storage.listAccounts();
   }
+
+  /**
+   * Fund multiple accounts at once (batch operation)
+   *
+   * @param addresses Array of addresses to fund
+   * @param amount Amount of coins per account
+   * @param coinType Coin type (defaults to AptosCoin)
+   *
+   * @example
+   * await forkManager.fundMultipleAccounts(
+   *   ["0x123...", "0x456..."],
+   *   100_000_000 // 100 APT
+   * );
+   */
+  async fundMultipleAccounts(
+    addresses: string[],
+    amount: number,
+    coinType: string = '0x1::aptos_coin::AptosCoin'
+  ): Promise<void> {
+    console.log(`\n💰 Funding ${addresses.length} accounts with ${amount} coins each...`);
+
+    for (const address of addresses) {
+      await this.fundAccount(address, amount, coinType);
+    }
+
+    console.log(`✓ All accounts funded successfully\n`);
+  }
+
+  /**
+   * Reset fork state to initial snapshot
+   * Clears all cached accounts and resources, keeping only metadata
+   *
+   * @example
+   * await forkManager.resetState();
+   */
+  async resetState(): Promise<void> {
+    console.log(`\n🔄 Resetting fork state...`);
+
+    // Clear all accounts and resources from storage
+    this.storage.clearAccounts();
+    this.storage.clearResources();
+
+    console.log(`✓ Fork state reset to initial snapshot\n`);
+  }
+
+  /**
+   * Get or create an account, ensuring it exists in the fork
+   * If the account doesn't exist on-chain, creates a minimal account structure
+   *
+   * @param address The address to get or create
+   * @returns AccountState for the address
+   *
+   * @example
+   * const account = await forkManager.getOrCreateAccount("0x123...");
+   */
+  async getOrCreateAccount(address: string): Promise<AccountState> {
+    const normalizedAddress = this.normalizeAddress(address);
+
+    // Try to get existing account
+    try {
+      return await this.getAccount(normalizedAddress);
+    } catch (error) {
+      // If account doesn't exist, create a minimal one
+      const newAccount: AccountState = {
+        sequenceNumber: '0',
+        authenticationKey: normalizedAddress.padEnd(66, '0'),
+      };
+
+      this.storage.saveAccount(normalizedAddress, newAccount);
+      console.log(`  ✓ Created new account ${normalizedAddress}`);
+
+      return newAccount;
+    }
+  }
 }

@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { resolve, extname, dirname, join } from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 export default async function runCommand(scriptPath: string) {
   if (!scriptPath) {
@@ -34,13 +35,52 @@ export default async function runCommand(scriptPath: string) {
   }
   console.log();
 
-  // Find tsx from movehat's node_modules
+  // Find tsx binary - try multiple locations for compatibility
+  // Uses require.resolve for cross-platform compatibility (works on Windows, macOS, Linux)
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
-  const tsxPath = join(__dirname, "..", "..", "node_modules", ".bin", "tsx");
+
+  // Create require function for ESM (needed to use require.resolve in ESM modules)
+  const require = createRequire(import.meta.url);
+
+  let tsxPath: string;
+  try {
+    // Try to resolve tsx package from user's project first
+    const tsxPackagePath = require.resolve("tsx", { paths: [process.cwd()] });
+    // require.resolve("tsx") returns .../tsx/dist/loader.mjs
+    // We need to go up to the tsx package root, then into dist/cli.mjs
+    const tsxPackageRoot = dirname(dirname(tsxPackagePath));
+    tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
+
+    // Verify the file exists
+    if (!existsSync(tsxPath)) {
+      throw new Error("cli.mjs not found");
+    }
+  } catch {
+    try {
+      // Fallback to movehat's own tsx
+      const tsxPackagePath = require.resolve("tsx", { paths: [__dirname] });
+      const tsxPackageRoot = dirname(dirname(tsxPackagePath));
+      tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
+
+      if (!existsSync(tsxPath)) {
+        throw new Error("cli.mjs not found");
+      }
+    } catch {
+      tsxPath = "";
+    }
+  }
+
+  if (!tsxPath) {
+    console.error("❌ Error: tsx binary not found");
+    console.error("   Make sure 'tsx' is installed in your project:");
+    console.error("   npm install --save-dev tsx");
+    process.exit(1);
+  }
 
   // Execute script with tsx (handles both .ts and .js files)
-  const child = spawn(tsxPath, [fullPath], {
+  // Using 'node' to execute tsx for cross-platform compatibility
+  const child = spawn("node", [tsxPath, fullPath], {
     stdio: "inherit",
     env: {
       ...process.env,
