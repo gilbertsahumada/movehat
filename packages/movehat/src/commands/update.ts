@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
+import prompts from "prompts";
 import { isNewerVersion } from "../helpers/semver-utils.js";
 import { fetchLatestVersion } from "../helpers/npm-registry.js";
 import { logger, withSpinner, box, colors } from "../ui/index.js";
@@ -121,6 +122,21 @@ export default async function updateCommand() {
     console.log(updateBox);
     logger.newline();
 
+    // Ask for confirmation
+    const response = await prompts({
+      type: 'confirm',
+      name: 'confirm',
+      message: `Do you want to update to version ${latestVersion}?`,
+      initial: true
+    });
+
+    if (!response.confirm) {
+      logger.info('Update cancelled');
+      logger.newline();
+      return;
+    }
+
+    logger.newline();
     logger.info('Updating movehat...');
     logger.newline();
 
