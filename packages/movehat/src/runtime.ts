@@ -194,14 +194,64 @@ export async function initRuntime(
       let publishOut = '';
       let publishErr = '';
 
+      // Setup Movement CLI config with private key securely
+      const movementConfigDir = join(homedir(), '.movement');
+      const movementConfigPath = join(movementConfigDir, 'config.yaml');
+      let originalMovementConfig = '';
+
       try {
-        const publishCmd = `movement move publish --package-dir ${safeDir} --private-key ${cleanPrivateKey} --url ${config.rpc} --assume-yes`;
+        // Ensure .movement directory exists
+        if (!existsSync(movementConfigDir)) {
+          mkdirSync(movementConfigDir, { recursive: true, mode: 0o700 });
+        }
+
+        // Backup original config if it exists
+        if (existsSync(movementConfigPath)) {
+          const { readFile } = await import('fs').then(fs => fs.promises);
+          originalMovementConfig = await readFile(movementConfigPath, 'utf-8');
+        }
+
+        // Create Movement config with private key
+        // Movement CLI reads from ~/.movement/config.yaml
+        const movementConfig: any = originalMovementConfig ? yaml.load(originalMovementConfig) : {};
+
+        // Set profile with private key
+        if (!movementConfig.profiles) {
+          movementConfig.profiles = {};
+        }
+        if (!movementConfig.profiles[safeProfile]) {
+          movementConfig.profiles[safeProfile] = {};
+        }
+
+        movementConfig.profiles[safeProfile].private_key = cleanPrivateKey;
+        movementConfig.profiles[safeProfile].public_key = account.publicKey.toString();
+        movementConfig.profiles[safeProfile].account = deployerAddress;
+        movementConfig.profiles[safeProfile].rest_url = config.rpc;
+
+        // Write config file with restrictive permissions
+        const configYaml = yaml.dump(movementConfig);
+        writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
+
+        // Execute publish command without exposing private key in CLI
+        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --assume-yes`;
         const result = await execAsync(publishCmd);
         publishOut = result.stdout || '';
         publishErr = result.stderr || '';
         if (publishOut) console.log(publishOut.trim());
         if (publishErr) console.error(publishErr.trim());
       } finally {
+        // Restore original Movement config
+        if (existsSync(movementConfigPath)) {
+          if (originalMovementConfig) {
+            // Restore original config
+            writeFileSync(movementConfigPath, originalMovementConfig, { mode: 0o600 });
+          } else {
+            // Remove config file if it didn't exist before
+            const { unlink } = await import('fs').then(fs => fs.promises);
+            await unlink(movementConfigPath).catch(() => {});
+          }
+        }
+
         // Restore original Move.toml
         if (originalMoveToml && existsSync(moveTomlPath)) {
           const { writeFile } = await import('fs').then(fs => fs.promises);

@@ -3,6 +3,13 @@ module counter::counter {
     use aptos_framework::event;
     use aptos_framework::account;
 
+    /// Error code for counter overflow
+    const E_OVERFLOW: u64 = 1;
+    /// Error code for counter not initialized
+    const E_NOT_INITIALIZED: u64 = 2;
+    /// Maximum value for u64
+    const U64_MAX: u64 = 18446744073709551615;
+
     struct Counter has key {
         value: u64,
         increment_events: event::EventHandle<IncrementEvent>,
@@ -26,12 +33,13 @@ module counter::counter {
 
     public entry fun increment(account: &signer) acquires Counter {
         let account_addr = signer::address_of(account);
-        assert!(exists<Counter>(account_addr), 1);
-        
+        assert!(exists<Counter>(account_addr), E_NOT_INITIALIZED);
+
         let counter = borrow_global_mut<Counter>(account_addr);
         let old_value = counter.value;
+        assert!(old_value < U64_MAX, E_OVERFLOW);
         counter.value = old_value + 1;
-        
+
         event::emit_event(&mut counter.increment_events, IncrementEvent {
             old_value,
             new_value: counter.value,
@@ -40,7 +48,7 @@ module counter::counter {
 
     #[view]
     public fun get(addr: address): u64 acquires Counter {
-        assert!(exists<Counter>(addr), 1);
+        assert!(exists<Counter>(addr), E_NOT_INITIALIZED);
         borrow_global<Counter>(addr).value
     }
 

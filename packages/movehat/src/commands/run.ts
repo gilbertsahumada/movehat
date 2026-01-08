@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { resolve, extname, dirname, join } from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 export default async function runCommand(scriptPath: string) {
   if (!scriptPath) {
@@ -35,19 +36,40 @@ export default async function runCommand(scriptPath: string) {
   console.log();
 
   // Find tsx binary - try multiple locations for compatibility
-  // 1. User's project node_modules (npm install scenario)
-  // 2. Movehat's node_modules (development/workspace scenario)
+  // Uses require.resolve for cross-platform compatibility (works on Windows, macOS, Linux)
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
 
-  const possibleTsxPaths = [
-    // User's project node_modules (when movehat is installed as dependency)
-    join(process.cwd(), "node_modules", ".bin", "tsx"),
-    // Movehat's own node_modules (development mode)
-    join(__dirname, "..", "..", "node_modules", ".bin", "tsx"),
-  ];
+  // Create require function for ESM (needed to use require.resolve in ESM modules)
+  const require = createRequire(import.meta.url);
 
-  const tsxPath = possibleTsxPaths.find(existsSync);
+  let tsxPath: string;
+  try {
+    // Try to resolve tsx package from user's project first
+    const tsxPackagePath = require.resolve("tsx", { paths: [process.cwd()] });
+    // require.resolve("tsx") returns .../tsx/dist/loader.mjs
+    // We need to go up to the tsx package root, then into dist/cli.mjs
+    const tsxPackageRoot = dirname(dirname(tsxPackagePath));
+    tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
+
+    // Verify the file exists
+    if (!existsSync(tsxPath)) {
+      throw new Error("cli.mjs not found");
+    }
+  } catch {
+    try {
+      // Fallback to movehat's own tsx
+      const tsxPackagePath = require.resolve("tsx", { paths: [__dirname] });
+      const tsxPackageRoot = dirname(dirname(tsxPackagePath));
+      tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
+
+      if (!existsSync(tsxPath)) {
+        throw new Error("cli.mjs not found");
+      }
+    } catch {
+      tsxPath = "";
+    }
+  }
 
   if (!tsxPath) {
     console.error("❌ Error: tsx binary not found");
@@ -57,7 +79,8 @@ export default async function runCommand(scriptPath: string) {
   }
 
   // Execute script with tsx (handles both .ts and .js files)
-  const child = spawn(tsxPath, [fullPath], {
+  // Using 'node' to execute tsx for cross-platform compatibility
+  const child = spawn("node", [tsxPath, fullPath], {
     stdio: "inherit",
     env: {
       ...process.env,

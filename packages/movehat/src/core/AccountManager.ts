@@ -80,7 +80,7 @@ export class AccountManager {
     this.pool.set(address, account);
 
     // Store private key
-    this.privateKeys.set(address, (account as any).privateKey.toString());
+    this.privateKeys.set(address, account.privateKey.toString());
 
     // If label provided, add to label map
     if (label) {
