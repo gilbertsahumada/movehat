@@ -24,10 +24,13 @@ export {
 export type { SnapshotOptions, ForkInfo } from "../fork/test.js";
 export { AccountManager } from "../core/AccountManager.js";
 export type { StoredAccount } from "../core/AccountManager.js";
+export { LocalNodeManager } from "../node/LocalNodeManager.js";
+export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.js";
 export {
   setupLocalTesting,
   stopLocalTesting,
   getCurrentForkManager,
+  getCurrentLocalNode,
   resetForkState,
 } from "./setupLocalTesting.js";
 export {

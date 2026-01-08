@@ -54,17 +54,30 @@ npm test
 
 **Two types of tests available:**
 
-1. **Move Unit Tests** (`tests/Counter.move` lines 50-63)
+1. **Move Unit Tests** (`move/sources/Counter.move` in `#[test]` blocks)
    - Written in Move with `#[test]` annotations
    - Test internal logic and business rules
    - Ultra-fast execution (milliseconds)
    - Run with: `npm run test:move`
 
 2. **TypeScript Integration Tests** (`tests/Counter.test.ts`)
-   - Written in TypeScript using Transaction Simulation
-   - Test end-to-end flows and SDK integration
-   - No blockchain or gas costs required
+   - Written in TypeScript on a **local Movement blockchain**
+   - Automatically starts a local node, funds accounts, and deploys contracts
+   - Runs real transactions (not simulation!)
+   - Just like Hardhat - zero manual setup
    - Run with: `npm run test:ts`
+
+**How it works:**
+Tests run on a real local blockchain (similar to Hardhat):
+- 🚀 Automatically starts a Movement node locally
+- 💰 Funds test accounts from local faucet
+- 📦 Auto-deploys your contracts
+- ✅ Runs real transactions
+- 🧹 Cleans up when done
+
+**Two modes available:**
+- `local-node` (default): Full blockchain with real transactions
+- `fork`: Read-only snapshot of testnet (faster but limited)
 
 **Commands:**
 - `npm test` - Runs both Move + TypeScript tests
