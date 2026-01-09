@@ -82,9 +82,24 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stash the version changes before switching branches
+          git add packages/movehat/package.json packages/movehat/src/templates/package.json
+          git stash push -m "Version bump to ${{ steps.get_version.outputs.version }}"
+
+          # Fetch and checkout main branch (exit detached HEAD state)
+          git fetch origin main
+          git checkout main
+
+          # Apply the stashed version changes
+          git stash pop
+
+          # Commit the version bump
           git add packages/movehat/package.json packages/movehat/src/templates/package.json
           git commit -m "chore: bump version to ${{ steps.get_version.outputs.version }} [skip ci]"
-          git push origin HEAD:main
+
+          # Push to main branch
+          git push origin main
 
       - name: Create Git tag (if manual trigger)
         if: github.event_name == 'workflow_dispatch'
