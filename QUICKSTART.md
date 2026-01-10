@@ -85,44 +85,61 @@ public fun test_increment(account: &signer) acquires Counter {
 }
 ```
 
-Run with: `npm run test:move` (ultra-fast, milliseconds)
+Run with: `movehat test --move` (ultra-fast, milliseconds)
 
-### TypeScript Integration Tests (Simulation)
+### TypeScript Integration Tests (Local Node)
 
-Tests written in TypeScript using **Transaction Simulation**:
+Tests written in TypeScript that run on a **local Movement blockchain**:
 
 ```typescript
-// Build transaction
-const transaction = await mh.aptos.transaction.build.simple({
-  sender: mh.account.accountAddress,
-  data: {
-    function: `${contractAddress}::counter::init`,
-    functionArguments: []
-  }
-});
+import { setupTestFixture, teardownTestFixture } from "movehat/helpers";
 
-// Simulate (no gas, instant)
-const [simulation] = await mh.aptos.transaction.simulate.simple({
-  signerPublicKey: mh.account.publicKey,
-  transaction
-});
+describe("Counter Contract", () => {
+  let fixture;
 
-// Verify
-expect(simulation.success).to.be.true;
+  before(async function () {
+    this.timeout(60000);
+    // Starts local node, funds accounts, deploys contracts
+    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+  });
+
+  it("should increment counter", async () => {
+    const counter = fixture.contracts.counter;
+    const deployer = fixture.accounts.deployer;
+
+    // Real transaction on local blockchain
+    await counter.call(deployer, "increment", []);
+
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
+
+    expect(parseInt(value)).to.equal(1);
+  });
+
+  after(async () => {
+    await teardownTestFixture();
+  });
+});
 ```
 
-Run with: `npm run test:ts` (simulation, no gas)
+Run with: `movehat test --ts` (starts local node)
 
-### Run All Tests
+### Interactive Test Menu
 
-```bash
-npm test  # Runs Move tests first, then TypeScript tests
+When you run `npm test` (or `movehat test`), you'll see an interactive menu:
+
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
 ```
 
 **Benefits:**
 - **Move tests**: Ultra-fast (ms), test internal logic
-- **TypeScript tests**: Integration testing, no gas costs
-- **Both together**: Comprehensive coverage from unit to integration
+- **TypeScript tests**: Real transactions on local blockchain
+- **Interactive menu**: Choose what you need, or use flags for CI/CD
 
 ## Ready to Deploy?
 
@@ -155,20 +172,23 @@ For real deployment to Movement testnet/mainnet:
 # Compile contracts
 npx movehat compile
 
-# Run all tests (Move + TypeScript)
+# Run tests (interactive menu)
 npm test
 
-# Run only Move tests (ultra-fast)
-npm run test:move
+# Run only Move tests (ultra-fast, no node required)
+movehat test --move
 
-# Run only TypeScript tests
-npm run test:ts
+# Run only TypeScript tests (starts local node)
+movehat test --ts
+
+# Run all tests (Move + TypeScript)
+movehat test --all
 
 # Run TypeScript tests in watch mode
-npm run test:watch
+movehat test --watch
 
 # Filter Move tests
-npx movehat test:move --filter test_increment
+movehat test --move --filter test_increment
 
 # Deploy to testnet
 npx movehat run scripts/deploy-counter.ts
@@ -194,7 +214,7 @@ vim move/sources/Counter.move
 
 # Add Move test
 # Run Move tests (instant feedback)
-npm run test:move
+movehat test --move
 
 # Iterate until logic is correct
 ```
@@ -202,19 +222,18 @@ npm run test:move
 **Before committing:**
 ```bash
 # Run full test suite
-npm test
+movehat test --all
 
 # Both Move and TypeScript tests must pass
 ```
 
 **In CI/CD:**
 ```bash
-# Run all tests
-npm test
+# Fast tests only (no node required)
+movehat test --move
 
-# Move tests fail fast (seconds)
-# TypeScript tests verify integration
-# Comprehensive coverage
+# Or full tests if you need TypeScript integration tests
+movehat test --all
 ```
 
 ## Need Help?

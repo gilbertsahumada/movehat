@@ -228,7 +228,7 @@ movehat compile
 
 ### Comando 7: Ejecutar tests de Move
 ```bash
-movehat test:move
+movehat test --move
 ```
 
 **[Mostrar output de los tests pasando]**
@@ -334,7 +334,7 @@ describe("Message Contract", () => {
 
 ### Comando 8: Ejecutar tests de TypeScript
 ```bash
-movehat test:ts
+movehat test --ts
 ```
 
 **[Mostrar output de los tests pasando con detalles]**
@@ -351,11 +351,14 @@ movehat test:ts
 ##  Parte 7: Ejecutar Todos los Tests (30 segundos)
 
 **NARRACIÓN:**
-> "MoveHat también puede ejecutar ambos tipos de tests juntos. Primero ejecuta los tests de Move (súper rápidos) y luego los de TypeScript."
+> "MoveHat también puede ejecutar ambos tipos de tests juntos. Con el menú interactivo puedes elegir qué tests ejecutar."
 
 ### Comando 9: Ejecutar todos los tests
 ```bash
-npm test
+movehat test --all
+# or use the interactive menu:
+movehat test
+# Then select "All tests (Move + TypeScript)"
 ```
 
 **[Mostrar output mostrando ambos tipos de tests ejecutándose]**

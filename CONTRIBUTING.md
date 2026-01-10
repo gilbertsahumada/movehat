@@ -297,10 +297,13 @@ pnpm test:example       # Run example project tests
 ### Movehat CLI Commands
 
 ```bash
-movehat init [name]                    # Initialize new project
-movehat compile                        # Compile Move contracts
-movehat run <script> [--network <name>] # Run TypeScript script
-movehat test                           # Run TypeScript tests
+movehat init [name]                          # Initialize new project
+movehat compile                              # Compile Move contracts
+movehat run <script> [--network <name>]      # Run TypeScript script
+movehat test                                 # Interactive test menu
+movehat test --move                          # Run only Move tests (fast)
+movehat test --ts                            # Run only TypeScript tests (starts local node)
+movehat test --all                           # Run all tests (Move + TypeScript)
 ```
 
 ## Code Guidelines
