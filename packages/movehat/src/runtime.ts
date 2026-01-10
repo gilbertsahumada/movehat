@@ -151,7 +151,10 @@ export async function initRuntime(
       // Build first
       console.log("🔨 Building package...");
       const buildCmd = `movement move build --package-dir ${safeDir}`;
-      const { stdout: buildOut } = await execAsync(buildCmd);
+      const { stdout: buildOut } = await execAsync(buildCmd, {
+        timeout: 120000, // 2 minutes for git dependency downloads
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+      });
       if (buildOut) console.log(buildOut.trim());
 
       // Publish using direct parameters (avoid config file issues)
@@ -195,12 +198,13 @@ export async function initRuntime(
       let publishErr = '';
 
       // Setup Movement CLI config with private key securely
-      const movementConfigDir = join(homedir(), '.movement');
+      // Movement CLI uses .aptos config directory (not .movement)
+      const movementConfigDir = join(homedir(), '.aptos');
       const movementConfigPath = join(movementConfigDir, 'config.yaml');
       let originalMovementConfig = '';
 
       try {
-        // Ensure .movement directory exists
+        // Ensure .aptos directory exists
         if (!existsSync(movementConfigDir)) {
           mkdirSync(movementConfigDir, { recursive: true, mode: 0o700 });
         }
@@ -212,29 +216,33 @@ export async function initRuntime(
         }
 
         // Create Movement config with private key
-        // Movement CLI reads from ~/.movement/config.yaml
+        // Movement CLI reads from ~/.aptos/config.yaml
         const movementConfig: any = originalMovementConfig ? yaml.load(originalMovementConfig) : {};
 
         // Set profile with private key
+        // Use unescaped profile name as YAML key (YAML handles escaping automatically)
         if (!movementConfig.profiles) {
           movementConfig.profiles = {};
         }
-        if (!movementConfig.profiles[safeProfile]) {
-          movementConfig.profiles[safeProfile] = {};
+        if (!movementConfig.profiles[profile]) {
+          movementConfig.profiles[profile] = {};
         }
 
-        movementConfig.profiles[safeProfile].private_key = cleanPrivateKey;
-        movementConfig.profiles[safeProfile].public_key = account.publicKey.toString();
-        movementConfig.profiles[safeProfile].account = deployerAddress;
-        movementConfig.profiles[safeProfile].rest_url = config.rpc;
+        movementConfig.profiles[profile].private_key = cleanPrivateKey;
+        movementConfig.profiles[profile].public_key = account.publicKey.toString();
+        movementConfig.profiles[profile].account = deployerAddress;
+        movementConfig.profiles[profile].rest_url = config.rpc;
 
         // Write config file with restrictive permissions
         const configYaml = yaml.dump(movementConfig);
         writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
 
         // Execute publish command without exposing private key in CLI
-        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --assume-yes`;
-        const result = await execAsync(publishCmd);
+        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --profile ${safeProfile} --assume-yes`;
+        const result = await execAsync(publishCmd, {
+          timeout: 120000, // 2 minutes for blockchain transactions
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+        });
         publishOut = result.stdout || '';
         publishErr = result.stderr || '';
         if (publishOut) console.log(publishOut.trim());
@@ -291,7 +299,15 @@ export async function initRuntime(
 
       return deployment;
     } catch (error: any) {
-      console.error(`❌ Failed to publish module: ${error.message}`);
+      // Enhanced error reporting with stderr if available
+      let errorMsg = error.message;
+      if (error.stderr) {
+        errorMsg += `\n${error.stderr}`;
+      }
+      if (error.stdout) {
+        console.log(error.stdout);
+      }
+      console.error(`❌ Failed to publish module: ${errorMsg}`);
       throw error;
     }
   };

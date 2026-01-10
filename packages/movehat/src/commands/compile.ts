@@ -73,7 +73,11 @@ function extractNamedAddresses(moveDir: string): Set<string> {
 
 function run(command: string, cwd: string) {
   return new Promise<void>((resolve, reject) => {
-    exec(command, { cwd }, (error, stdout, stderr) => {
+    exec(command, {
+      cwd,
+      timeout: 120000, // 2 minutes for git dependency downloads
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+    }, (error, stdout, stderr) => {
       if (stdout) console.log(stdout.trim());
       if (stderr) console.error(stderr.trim());
       if (error) {
