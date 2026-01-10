@@ -80,6 +80,8 @@ jobs:
       - name: Commit version bump back to repository
         if: github.event_name == 'release'
         run: |
+          set -e  # Exit on any error
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -91,15 +93,46 @@ jobs:
           git fetch origin main
           git checkout main
 
+          # Rebase onto latest main to avoid non-fast-forward rejections
+          echo "Rebasing onto latest main..."
+          if ! git pull --rebase origin main; then
+            echo "ERROR: Failed to rebase onto main. Main branch may have advanced with conflicting changes."
+            git rebase --abort || true
+            exit 1
+          fi
+
           # Apply the stashed version changes
-          git stash pop
+          echo "Applying version bump changes..."
+          if ! git stash pop; then
+            echo "ERROR: Failed to apply stashed changes. There may be merge conflicts."
+            git stash drop || true
+            exit 1
+          fi
 
           # Commit the version bump
           git add packages/movehat/package.json packages/movehat/src/templates/package.json
-          git commit -m "chore: bump version to ${{ steps.get_version.outputs.version }} [skip ci]"
+          if ! git diff --cached --quiet; then
+            echo "Committing version bump..."
+            if ! git commit -m "chore: bump version to ${{ steps.get_version.outputs.version }} [skip ci]"; then
+              echo "ERROR: Failed to commit version bump."
+              exit 1
+            fi
+          else
+            echo "No changes to commit (version already up to date)"
+            exit 0
+          fi
 
           # Push to main branch
-          git push origin main
+          echo "Pushing to main branch..."
+          if ! git push origin main; then
+            echo "ERROR: Failed to push to main. This could be due to:"
+            echo "  - Non-fast-forward rejection (main advanced after rebase)"
+            echo "  - Permission issues"
+            echo "  - Network issues"
+            exit 1
+          fi
+
+          echo "Successfully pushed version bump to main"
 
       - name: Create Git tag (if manual trigger)
         if: github.event_name == 'workflow_dispatch'

@@ -130,7 +130,8 @@ export default async function updateCommand() {
       initial: true
     });
 
-    if (!response.confirm) {
+    // Handle cancellation (Ctrl+C) or explicit "no"
+    if (response.confirm === undefined || !response.confirm) {
       logger.info('Update cancelled');
       logger.newline();
       return;
