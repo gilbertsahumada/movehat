@@ -52,38 +52,36 @@ npm run compile
 npm test
 ```
 
+When you run `npm test`, you'll see an **interactive menu**:
+
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
+```
+
 **Two types of tests available:**
 
 1. **Move Unit Tests** (`move/sources/Counter.move` in `#[test]` blocks)
    - Written in Move with `#[test]` annotations
    - Test internal logic and business rules
    - Ultra-fast execution (milliseconds)
-   - Run with: `npm run test:move`
+   - Run with: `npm run test:move` or `movehat test --move`
 
 2. **TypeScript Integration Tests** (`tests/Counter.test.ts`)
    - Written in TypeScript on a **local Movement blockchain**
    - Automatically starts a local node, funds accounts, and deploys contracts
    - Runs real transactions (not simulation!)
    - Just like Hardhat - zero manual setup
-   - Run with: `npm run test:ts`
-
-**How it works:**
-Tests run on a real local blockchain (similar to Hardhat):
-- 🚀 Automatically starts a Movement node locally
-- 💰 Funds test accounts from local faucet
-- 📦 Auto-deploys your contracts
-- ✅ Runs real transactions
-- 🧹 Cleans up when done
-
-**Two modes available:**
-- `local-node` (default): Full blockchain with real transactions
-- `fork`: Read-only snapshot of testnet (faster but limited)
+   - Run with: `npm run test:ts` or `movehat test --ts`
 
 **Commands:**
-- `npm test` - Runs both Move + TypeScript tests
-- `npm run test:move` - Only Move unit tests (fast)
-- `npm run test:ts` - Only TypeScript integration tests
-- `npm run test:watch` - TypeScript tests in watch mode
+- `npm test` - Interactive menu to choose test type
+- `npm run test:move` or `movehat test --move` - Only Move unit tests (fast)
+- `npm run test:ts` or `movehat test --ts` - Only TypeScript integration tests
+- `movehat test --all` - Both Move + TypeScript tests
+- `npm run test:watch` or `movehat test --watch` - TypeScript tests in watch mode
 
 ### 5. Deploy (optional)
 

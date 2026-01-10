@@ -1,78 +1,207 @@
 import { spawn } from "child_process";
-import { join, resolve } from "path";
+import { join } from "path";
 import { existsSync } from "fs";
+import prompts from "prompts";
 import { runMoveTests } from "../helpers/move-tests.js";
+import { logger, colors, symbols } from "../ui/index.js";
 
 interface TestOptions {
-  moveOnly?: boolean;
-  tsOnly?: boolean;
+  move?: boolean;
+  ts?: boolean;
+  all?: boolean;
   watch?: boolean;
   filter?: string;
+  // Legacy flags (for backward compatibility)
+  moveOnly?: boolean;
+  tsOnly?: boolean;
 }
+
+type TestType = "move" | "ts" | "all";
 
 export default async function testCommand(options: TestOptions = {}) {
-  // Handle move-only flag
-  if (options.moveOnly) {
-    if (options.watch) {
-      console.error("ERROR: --watch flag is not supported with --move-only");
-      console.error("       Watch mode only works with TypeScript tests");
-      process.exit(1);
+  // Handle legacy flags
+  if (options.moveOnly) options.move = true;
+  if (options.tsOnly) options.ts = true;
+
+  // Determine test type from flags
+  let testType: TestType | undefined;
+
+  if (options.all) {
+    testType = "all";
+  } else if (options.move && options.ts) {
+    testType = "all";
+  } else if (options.move) {
+    testType = "move";
+  } else if (options.ts) {
+    testType = "ts";
+  }
+
+  // If no flags provided, show interactive menu
+  if (!testType) {
+    testType = await showTestMenu();
+    if (!testType) {
+      // User cancelled
+      process.exit(0);
     }
-    return runMoveTestsSync(options.filter);
   }
 
-  // Handle ts-only flag or watch flag (watch implies ts-only)
-  if (options.tsOnly || options.watch) {
-    return runTypeScriptTests(options.watch);
+  // Execute based on test type
+  switch (testType) {
+    case "move":
+      await runMoveTestsOnly(options.filter);
+      break;
+    case "ts":
+      await runTypeScriptTestsOnly(options.watch);
+      break;
+    case "all":
+      await runAllTests(options.filter);
+      break;
   }
+}
 
-  // Default: Run both Move and TypeScript tests (no watch mode)
-  console.log("Running all tests...\n");
-  console.log("=" + "=".repeat(60) + "\n");
+/**
+ * Show interactive menu to select test type
+ */
+async function showTestMenu(): Promise<TestType | undefined> {
+  logger.newline();
 
-  // First run Move tests (fail fast)
+  const response = await prompts({
+    type: "select",
+    name: "testType",
+    message: "What tests do you want to run?",
+    choices: [
+      {
+        title: `${colors.success("Move unit tests")} ${colors.muted("(fast, no node required)")}`,
+        value: "move",
+        description: "Run #[test] functions in your Move contracts",
+      },
+      {
+        title: `${colors.info("TypeScript integration tests")} ${colors.muted("(starts local node)")}`,
+        value: "ts",
+        description: "Run .test.ts files with a local Movement node",
+      },
+      {
+        title: `${colors.brand("All tests")} ${colors.muted("(Move + TypeScript)")}`,
+        value: "all",
+        description: "Run both Move and TypeScript tests sequentially",
+      },
+    ],
+    initial: 0,
+  });
+
+  return response.testType;
+}
+
+/**
+ * Run only Move unit tests
+ */
+async function runMoveTestsOnly(filter?: string): Promise<void> {
+  logger.newline();
+  console.log(colors.bold("Move Unit Tests"));
+  console.log(colors.muted("─".repeat(50)));
+  logger.newline();
+
   try {
-    await runMoveTestsSync();
-    console.log("\n" + "=" + "=".repeat(60) + "\n");
+    await runMoveTests({
+      filter,
+      skipIfMissing: false, // Fail if no Move directory
+    });
   } catch (error) {
-    console.error("\n✗ Move tests failed");
-    console.log("\n" + "=" + "=".repeat(60));
+    logger.newline();
+    logger.error("Move tests failed");
+    process.exit(1);
+  }
+}
+
+/**
+ * Run only TypeScript integration tests
+ */
+async function runTypeScriptTestsOnly(watch: boolean = false): Promise<void> {
+  logger.newline();
+  console.log(colors.bold("TypeScript Integration Tests"));
+  console.log(colors.muted("─".repeat(50)));
+
+  if (!watch) {
+    logger.newline();
+    logger.info("This will start a local Movement node for testing");
+    logger.newline();
+  }
+
+  try {
+    await runTypeScriptTests(watch);
+    if (!watch) {
+      logger.newline();
+      logger.success("TypeScript tests passed");
+    }
+  } catch (error) {
+    logger.newline();
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(message);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run all tests (Move + TypeScript)
+ */
+async function runAllTests(filter?: string): Promise<void> {
+  logger.newline();
+  console.log(colors.bold("Running All Tests"));
+  console.log(colors.muted("═".repeat(50)));
+
+  // Section 1: Move Tests
+  logger.newline();
+  console.log(`${colors.brandBright("1.")} ${colors.bold("Move Unit Tests")}`);
+  console.log(colors.muted("─".repeat(50)));
+  logger.newline();
+
+  try {
+    await runMoveTests({
+      filter,
+      skipIfMissing: true, // Gracefully skip if no Move directory
+    });
+  } catch (error) {
+    logger.newline();
+    logger.error("Move tests failed");
+    console.log(colors.muted("═".repeat(50)));
     process.exit(1);
   }
 
-  // Then run TypeScript tests (never in watch mode for "all tests")
+  // Section 2: TypeScript Tests
+  logger.newline();
+  console.log(colors.muted("═".repeat(50)));
+  logger.newline();
+  console.log(`${colors.brandBright("2.")} ${colors.bold("TypeScript Integration Tests")}`);
+  console.log(colors.muted("─".repeat(50)));
+  logger.newline();
+
   try {
     await runTypeScriptTests(false);
-    console.log("\n" + "=" + "=".repeat(60));
-    console.log("\n✓ All tests passed!\n");
+    logger.newline();
+    console.log(colors.muted("═".repeat(50)));
+    logger.newline();
+    logger.success("All tests passed!");
+    logger.newline();
   } catch (error) {
-    console.error("\n" + "=" + "=".repeat(60));
+    logger.newline();
+    console.log(colors.muted("═".repeat(50)));
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`\n${message}\n`);
+    logger.error(message);
     process.exit(1);
   }
 }
 
-async function runMoveTestsSync(filter?: string): Promise<void> {
-  console.log("1. Move Unit Tests");
-  console.log("-" + "-".repeat(60) + "\n");
-
-  return runMoveTests({
-    filter,
-    skipIfMissing: true, // Gracefully skip if no Move directory (orchestrated test mode)
-  });
-}
-
+/**
+ * Run TypeScript tests using Mocha
+ */
 function runTypeScriptTests(watch: boolean = false): Promise<void> {
   return new Promise((resolve, reject) => {
-    console.log("2. TypeScript Integration Tests");
-    console.log("-" + "-".repeat(60) + "\n");
-
     const testDir = join(process.cwd(), "tests");
 
     if (!existsSync(testDir)) {
-      console.log("⊘ No TypeScript tests found (tests directory not found)");
-      console.log("   Skipping TypeScript tests...\n");
+      console.log(`${colors.muted(symbols.info)} No TypeScript tests found ${colors.muted("(tests/ directory not found)")}`);
+      console.log(`   ${colors.muted("Skipping TypeScript tests...")}`);
+      logger.newline();
       resolve();
       return;
     }
@@ -80,8 +209,8 @@ function runTypeScriptTests(watch: boolean = false): Promise<void> {
     const mochaPath = join(process.cwd(), "node_modules", ".bin", "mocha");
 
     if (!existsSync(mochaPath)) {
-      console.error("✗ Mocha not found in project dependencies.");
-      console.error("   Install it with: npm install --save-dev mocha");
+      logger.error("Mocha not found in project dependencies");
+      console.log(`   ${colors.muted("Install it with:")} ${colors.info("npm install --save-dev mocha")}`);
       reject(new Error("Mocha not found"));
       return;
     }
@@ -97,7 +226,8 @@ function runTypeScriptTests(watch: boolean = false): Promise<void> {
 
     // In watch mode, Mocha never exits, so resolve immediately
     if (watch) {
-      console.log("Watch mode active. Press Ctrl+C to exit.\n");
+      console.log(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
+      logger.newline();
       resolve();
       return;
     }
@@ -105,7 +235,6 @@ function runTypeScriptTests(watch: boolean = false): Promise<void> {
     // Non-watch mode: wait for exit
     child.on("exit", (code) => {
       if (code === 0) {
-        console.log("\n✓ TypeScript tests passed");
         resolve();
       } else {
         const exitCode = typeof code === "number" ? code : 1;
@@ -114,7 +243,7 @@ function runTypeScriptTests(watch: boolean = false): Promise<void> {
     });
 
     child.on("error", (error) => {
-      console.error(`Failed to run TypeScript tests: ${error.message}`);
+      logger.error(`Failed to run TypeScript tests: ${error.message}`);
       reject(error);
     });
   });

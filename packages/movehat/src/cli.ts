@@ -80,12 +80,22 @@ program
 
 program
     .command('test')
-    .description('Run all tests (Move + TypeScript)')
-    .option('--move-only', 'Run only Move unit tests')
-    .option('--ts-only', 'Run only TypeScript integration tests')
-    .option('--watch', 'Run TypeScript tests in watch mode (implies --ts-only)')
-    .option('--filter <pattern>', 'Filter Move tests by name pattern (Move tests only)')
-    .action((options) => testCommand(options));
+    .description('Run tests (interactive menu if no flags provided)')
+    .option('--move', 'Run only Move unit tests (fast, no node required)')
+    .option('--ts', 'Run only TypeScript integration tests (starts local node)')
+    .option('--all', 'Run all tests (Move + TypeScript)')
+    .option('--watch', 'Run TypeScript tests in watch mode (implies --ts)')
+    .option('--filter <pattern>', 'Filter Move tests by name pattern')
+    // Legacy flags for backward compatibility
+    .option('--move-only', 'Alias for --move (deprecated)')
+    .option('--ts-only', 'Alias for --ts (deprecated)')
+    .action((options) => {
+        // --watch implies --ts
+        if (options.watch && !options.ts && !options.all) {
+            options.ts = true;
+        }
+        testCommand(options);
+    });
 
 program
     .command('test:move')

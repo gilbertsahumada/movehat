@@ -320,9 +320,12 @@ console.log(`Value: ${parseInt(value)}`);
 ## Available Commands
 
 ```bash
-npx movehat compile          # Compile Move contracts
-npx movehat deploy          # Deploy contracts
-npx movehat test            # Run tests
+npx movehat compile             # Compile Move contracts
+npx movehat test                # Interactive menu to choose test type
+npx movehat test --move         # Run only Move unit tests (fast)
+npx movehat test --ts           # Run only TypeScript tests (starts local node)
+npx movehat test --all          # Run all tests (Move + TypeScript)
+npx movehat run scripts/...     # Run deployment scripts
 ```
 
 ## System Requirements

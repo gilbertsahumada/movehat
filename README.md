@@ -185,13 +185,18 @@ pnpm test
 ```
 
 **How it works:**
-- Tests run on a **real local Movement blockchain** (like Hardhat's local network)
-- Automatically starts a local node, funds accounts, and deploys contracts
-- **Two testing modes available:**
-  - `local-node` (default): Full blockchain with real transactions
-  - `fork`: Read-only snapshot of testnet for faster tests
-- Zero manual setup - just run `npm test` and everything starts automatically
-- Perfect for CI/CD and rapid development
+- When you run `npm test` (or `movehat test`), you'll see an **interactive menu**:
+
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
+```
+
+- **Move unit tests**: Fast tests written in Move with `#[test]` annotations
+- **TypeScript integration tests**: Tests that run on a **real local Movement blockchain** (like Hardhat)
+- Use flags for CI/scripts: `--move`, `--ts`, or `--all`
 
 ### 7. Use Fork System
 
@@ -494,7 +499,7 @@ public fun test_increment(account: &signer) acquires Counter {
 
 **Run Move tests:**
 ```bash
-npm run test:move
+movehat test --move
 # or
 movehat test:move
 ```
@@ -609,12 +614,12 @@ describe("Counter Contract", () => {
 
 **Run TypeScript tests:**
 ```bash
-npm run test:ts
+movehat test --ts
 # or
 movehat test:ts
 
 # Watch mode for development
-npm run test:watch
+movehat test --watch
 ```
 
 ---
@@ -624,9 +629,9 @@ npm run test:watch
 Run both Move and TypeScript tests together:
 
 ```bash
-npm test
+movehat test --all
 # or
-movehat test
+movehat test  # Then select "All tests" from the menu
 ```
 
 **Output:**
@@ -698,14 +703,23 @@ movehat run scripts/deploy-counter.ts --network testnet --redeploy  # Force rede
 ```
 
 ### `movehat test`
-Run all tests (Move + TypeScript). Runs Move tests first for fast failure, then TypeScript integration tests.
+Run tests with an interactive menu or flags. If no flags are provided, shows an interactive menu to choose test type.
 
 ```bash
-movehat test                    # Run all tests
-movehat test --move-only        # Run only Move tests
-movehat test --ts-only          # Run only TypeScript tests
-movehat test --watch            # Run TypeScript tests in watch mode
+movehat test                    # Interactive menu to choose test type
+movehat test --move             # Run only Move unit tests (fast, no node required)
+movehat test --ts               # Run only TypeScript integration tests (starts local node)
+movehat test --all              # Run all tests (Move + TypeScript)
+movehat test --watch            # Run TypeScript tests in watch mode (implies --ts)
 movehat test --filter pattern   # Filter Move tests by pattern
+```
+
+**Interactive Menu:**
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
 ```
 
 ### `movehat test:move`

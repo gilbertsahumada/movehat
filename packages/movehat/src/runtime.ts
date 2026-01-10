@@ -148,9 +148,25 @@ export async function initRuntime(
     console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
 
     try {
-      // Build first
+      // Get the deployer address to use for named addresses
+      const deployerAddress = account.accountAddress.toString();
+
+      // Detect named addresses from Move files
+      const { extractNamedAddresses } = await import("./commands/compile.js");
+      const detectedAddresses = extractNamedAddresses(dir);
+
+      // Build named addresses argument - use deployer address for all detected addresses
+      let namedAddressesArg = "";
+      if (detectedAddresses.size > 0) {
+        const addressPairs = Array.from(detectedAddresses)
+          .map(name => `${name}=${deployerAddress}`)
+          .join(",");
+        namedAddressesArg = `--named-addresses ${addressPairs}`;
+      }
+
+      // Build first with named addresses
       console.log("🔨 Building package...");
-      const buildCmd = `movement move build --package-dir ${safeDir}`;
+      const buildCmd = `movement move build --package-dir ${safeDir} ${namedAddressesArg}`.trim();
       const { stdout: buildOut } = await execAsync(buildCmd, {
         timeout: 120000, // 2 minutes for git dependency downloads
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
@@ -167,8 +183,7 @@ export async function initRuntime(
         cleanPrivateKey = cleanPrivateKey.replace('ed25519-priv-', '');
       }
 
-      // Get the deployer address
-      const deployerAddress = account.accountAddress.toString();
+      // deployerAddress is already declared above
 
       // Read Move.toml to update named addresses with deployer address
       const moveTomlPath = join(dir, 'Move.toml');
@@ -238,7 +253,8 @@ export async function initRuntime(
         writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
 
         // Execute publish command without exposing private key in CLI
-        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --profile ${safeProfile} --assume-yes`;
+        // Include named addresses for publish as well
+        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --profile ${safeProfile} --assume-yes ${namedAddressesArg}`.trim();
         const result = await execAsync(publishCmd, {
           timeout: 120000, // 2 minutes for blockchain transactions
           maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
