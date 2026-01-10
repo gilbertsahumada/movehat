@@ -56,12 +56,29 @@ jobs:
       - name: Replace workspace:* in template with actual version
         run: |
           cd packages/movehat/src/templates
-          sed -i 's/"movehat": "workspace:\*"/"movehat": "^${{ steps.get_version.outputs.version }}"/' package.json
+          sed -i 's/"movehat": "workspace:[*]"/"movehat": "^${{ steps.get_version.outputs.version }}"/' package.json
           echo "Template package.json updated"
           cat package.json
 
+      - name: Run tests
+        run: pnpm test:smoke
+
       - name: Build package
         run: pnpm build:movehat
+
+      - name: Verify build output
+        run: |
+          cd packages/movehat
+          if [ ! -d "dist" ]; then
+            echo "ERROR: Build output directory 'dist' not found"
+            exit 1
+          fi
+          if [ ! -f "dist/index.js" ]; then
+            echo "ERROR: Main build file 'dist/index.js' not found"
+            exit 1
+          fi
+          echo "Build verification passed"
+          ls -la dist/
 
       - name: Publish to npm
         run: |
@@ -134,10 +151,52 @@ jobs:
 
           echo "Successfully pushed version bump to main"
 
-      - name: Create Git tag (if manual trigger)
+      - name: Commit version bump and create tag (if manual trigger)
         if: github.event_name == 'workflow_dispatch'
         run: |
+          set -e  # Exit on any error
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Ensure we're on main branch
+          echo "Checking out main branch..."
+          git fetch origin main
+          git checkout main
+
+          # Rebase onto latest main
+          echo "Rebasing onto latest main..."
+          if ! git pull --rebase origin main; then
+            echo "ERROR: Failed to rebase onto main"
+            git rebase --abort || true
+            exit 1
+          fi
+
+          # Commit version changes
+          git add packages/movehat/package.json packages/movehat/src/templates/package.json
+          if ! git diff --cached --quiet; then
+            echo "Committing version bump..."
+            if ! git commit -m "chore: bump version to ${{ steps.get_version.outputs.version }} [skip ci]"; then
+              echo "ERROR: Failed to commit version bump"
+              exit 1
+            fi
+          else
+            echo "No changes to commit (version already up to date)"
+          fi
+
+          # Create and push tag
+          echo "Creating tag v${{ steps.get_version.outputs.version }}..."
           git tag -a "v${{ steps.get_version.outputs.version }}" -m "Release v${{ steps.get_version.outputs.version }}"
-          git push origin "v${{ steps.get_version.outputs.version }}"
+
+          # Push both commit and tag
+          echo "Pushing commit and tag to remote..."
+          if ! git push origin main; then
+            echo "ERROR: Failed to push to main"
+            exit 1
+          fi
+          if ! git push origin "v${{ steps.get_version.outputs.version }}"; then
+            echo "ERROR: Failed to push tag"
+            exit 1
+          fi
+
+          echo "Successfully pushed version bump and tag to repository"
