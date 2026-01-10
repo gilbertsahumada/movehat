@@ -29,9 +29,13 @@ describe("Counter Contract", () => {
   });
 
   describe("Counter functionality", () => {
-    it("should initialize with value 0", async () => {
+    it("should initialize counter for deployer", async () => {
       const counter = fixture.contracts.counter; // Type-safe, no `!` needed
       const deployer = fixture.accounts.deployer;
+
+      // Initialize counter for deployer (required before get/increment)
+      const tx = await counter.call(deployer, "init", []);
+      console.log(`   Init transaction: ${tx.hash}`);
 
       // Read counter value (returns string from view function)
       const value = await counter.view<string>("get", [
@@ -63,13 +67,17 @@ describe("Counter Contract", () => {
       expect(parseInt(value)).to.equal(1);
     });
 
-    it("alice can also increment counter", async () => {
+    it("alice can initialize and increment her counter", async () => {
       const counter = fixture.contracts.counter;
       const alice = fixture.accounts.alice;
 
+      // Alice must initialize her counter first
+      const initTx = await counter.call(alice, "init", []);
+      console.log(`   Alice init transaction: ${initTx.hash}`);
+
       // Alice increments her own counter
       const tx = await counter.call(alice, "increment", []);
-      console.log(`   Alice's transaction: ${tx.hash}`);
+      console.log(`   Alice's increment transaction: ${tx.hash}`);
 
       // Read counter value for Alice (each user has their own counter)
       const aliceValue = await counter.view<string>("get", [
@@ -88,13 +96,17 @@ describe("Counter Contract", () => {
       expect(parseInt(deployerValue)).to.equal(1);
     });
 
-    it("bob can also increment the counter", async () => {
+    it("bob can initialize and increment his counter", async () => {
       const counter = fixture.contracts.counter;
       const bob = fixture.accounts.bob;
 
+      // Bob must initialize his counter first
+      const initTx = await counter.call(bob, "init", []);
+      console.log(`   Bob init transaction: ${initTx.hash}`);
+
       // Bob increments his own counter
       const tx = await counter.call(bob, "increment", []);
-      console.log(`   Bob's transaction: ${tx.hash}`);
+      console.log(`   Bob's increment transaction: ${tx.hash}`);
 
       // Read counter value for Bob (each user has their own counter)
       const bobValue = await counter.view<string>("get", [
