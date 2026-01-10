@@ -42,7 +42,7 @@ function findMoveFiles(dir: string, maxDepth: number = 10, currentDepth: number 
  * Extract named addresses used in Move files
  * Looks for patterns like: module <address>::<module_name>
  */
-function extractNamedAddresses(moveDir: string): Set<string> {
+export function extractNamedAddresses(moveDir: string): Set<string> {
   const addresses = new Set<string>();
   const moveFiles = findMoveFiles(moveDir);
 
