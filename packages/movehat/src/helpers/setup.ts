@@ -21,8 +21,10 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
   const network = networkName || process.env.MH_CLI_NETWORK;
   const config = await resolveNetworkConfig(userConfig, network);
 
+  // Movement Network uses custom chain IDs, so we need to use Network.CUSTOM
+  // and let the SDK fetch the actual chainId from the node
   const aptosConfig = new AptosConfig({
-    network: config.network as Network,
+    network: Network.CUSTOM,
     fullnode: config.rpc,
   });
 

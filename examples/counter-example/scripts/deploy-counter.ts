@@ -23,19 +23,19 @@ async function main() {
   // Get contract instance
   const counter = mh.getContract(deployment.address, "counter");
 
-  // Initialize the counter
-  console.log("\n📝 Initializing counter...");
-  const txResult = await counter.call(mh.account, "init", []);
+  // Increment the counter (this also initializes it if not exists)
+  console.log("\n📝 Incrementing counter...");
+  const txResult = await counter.call(mh.account, "increment", []);
 
   console.log(`✅ Transaction hash: ${txResult.hash}`);
-  console.log(`✅ Counter initialized successfully!`);
+  console.log(`✅ Counter incremented successfully!`);
 
   // Verify
   const value = await counter.view<number>("get", [
     mh.account.accountAddress.toString()
   ]);
 
-  console.log(`\n📊 Initial counter value: ${value}`);
+  console.log(`\n📊 Counter value: ${value}`);
 }
 
 main().catch((error) => {

@@ -4,9 +4,10 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-hello_blockchain = "0xcafe"
+hello_blockchain = "_"
 
 [dev-addresses]
+hello_blockchain = "0xcafe"
 
 [dependencies.AptosFramework]
 git = "https://github.com/movementlabsxyz/aptos-core.git"
