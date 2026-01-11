@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+
+# Run tests before pushing
+echo "Running tests before push..."
+pnpm --filter movehat test
+
+# Check test exit code
+if [ $? -ne 0 ]; then
+  echo "Tests failed! Push aborted."
+  exit 1
+fi
+
+echo "All tests passed!"
