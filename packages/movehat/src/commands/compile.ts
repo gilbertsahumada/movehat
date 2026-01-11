@@ -71,6 +71,120 @@ export function extractNamedAddresses(moveDir: string): Set<string> {
   return addresses;
 }
 
+/**
+ * List of dev addresses to use for auto-assignment (to avoid conflicts)
+ */
+const DEV_ADDRESSES = [
+  "0xcafe",
+  "0xbeef",
+  "0xdead",
+  "0xface",
+  "0xfeed",
+  "0xc0de",
+  "0xbabe",
+  "0xf00d",
+];
+
+/**
+ * Update Move.toml with detected addresses
+ * Adds missing addresses to [addresses] and [dev-addresses] sections
+ */
+export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>): string[] {
+  const moveTomlPath = path.join(moveDir, "Move.toml");
+  
+  if (!fs.existsSync(moveTomlPath)) {
+    return [];
+  }
+
+  let content = fs.readFileSync(moveTomlPath, "utf-8");
+  const addedAddresses: string[] = [];
+
+  // Parse existing addresses from [addresses] section
+  const existingAddresses = new Set<string>();
+  const addressesMatch = content.match(/\[addresses\]([\s\S]*?)(?=\[|$)/);
+  if (addressesMatch) {
+    const addressesSection = addressesMatch[1];
+    const addrRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/gm;
+    let match;
+    while ((match = addrRegex.exec(addressesSection)) !== null) {
+      existingAddresses.add(match[1]);
+    }
+  }
+
+  // Parse existing dev-addresses
+  const existingDevAddresses = new Map<string, string>();
+  const devAddressesMatch = content.match(/\[dev-addresses\]([\s\S]*?)(?=\[|$)/);
+  if (devAddressesMatch) {
+    const devSection = devAddressesMatch[1];
+    const devRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"(0x[a-fA-F0-9]+)"/gm;
+    let match;
+    while ((match = devRegex.exec(devSection)) !== null) {
+      existingDevAddresses.set(match[1], match[2].toLowerCase());
+    }
+  }
+
+  // Get used dev addresses to avoid conflicts
+  const usedDevAddresses = new Set(existingDevAddresses.values());
+
+  // Find addresses that need to be added
+  const missingAddresses: string[] = [];
+  for (const addr of detectedAddresses) {
+    if (!existingAddresses.has(addr)) {
+      missingAddresses.push(addr);
+    }
+  }
+
+  if (missingAddresses.length === 0) {
+    return [];
+  }
+
+  // Assign unique dev addresses to new addresses
+  const newDevAddresses: Map<string, string> = new Map();
+  let devAddrIndex = 0;
+  
+  for (const addr of missingAddresses) {
+    // Find next available dev address
+    while (devAddrIndex < DEV_ADDRESSES.length && usedDevAddresses.has(DEV_ADDRESSES[devAddrIndex])) {
+      devAddrIndex++;
+    }
+    
+    if (devAddrIndex < DEV_ADDRESSES.length) {
+      newDevAddresses.set(addr, DEV_ADDRESSES[devAddrIndex]);
+      usedDevAddresses.add(DEV_ADDRESSES[devAddrIndex]);
+      devAddrIndex++;
+    } else {
+      // Generate a unique address if we run out of predefined ones
+      const uniqueAddr = `0x${(0x1000 + devAddrIndex).toString(16)}`;
+      newDevAddresses.set(addr, uniqueAddr);
+      devAddrIndex++;
+    }
+  }
+
+  // Update [addresses] section
+  if (addressesMatch) {
+    const addressesSection = addressesMatch[1];
+    const newLines = missingAddresses.map(addr => `${addr} = "_"`).join("\n");
+    const updatedSection = addressesSection.trimEnd() + "\n" + newLines + "\n";
+    content = content.replace(addressesMatch[0], `[addresses]${updatedSection}`);
+  }
+
+  // Update [dev-addresses] section
+  const updatedDevMatch = content.match(/\[dev-addresses\]([\s\S]*?)(?=\[|$)/);
+  if (updatedDevMatch) {
+    const devSection = updatedDevMatch[1];
+    const newDevLines = missingAddresses.map(addr => `${addr} = "${newDevAddresses.get(addr)}"`).join("\n");
+    // Remove trailing comments/whitespace before adding new lines
+    const cleanedSection = devSection.replace(/\n*$/, "\n");
+    const updatedDevSection = cleanedSection + newDevLines + "\n";
+    content = content.replace(updatedDevMatch[0], `[dev-addresses]${updatedDevSection}`);
+  }
+
+  // Write updated content
+  fs.writeFileSync(moveTomlPath, content);
+  
+  return missingAddresses;
+}
+
 function run(command: string, cwd: string) {
   return new Promise<void>((resolve, reject) => {
     exec(command, {
@@ -94,8 +208,9 @@ function run(command: string, cwd: string) {
  *
  * This command:
  * - Detects named addresses used in Move modules
+ * - Auto-updates Move.toml with missing addresses
  * - Merges auto-detected addresses with user-configured addresses
- * - Auto-assigns development addresses (0xcafe) for missing addresses
+ * - Auto-assigns development addresses for missing addresses
  * - Executes `movement move build` with proper named address mappings
  *
  * @example
@@ -123,6 +238,12 @@ export default async function compileCommand() {
 
     // Auto-detect named addresses from Move files
     const detectedAddresses = extractNamedAddresses(moveDir);
+
+    // Auto-update Move.toml with missing addresses
+    const addedToToml = updateMoveToml(moveDir, detectedAddresses);
+    if (addedToToml.length > 0) {
+      logger.success(`Added ${addedToToml.length} address(es) to Move.toml: ${addedToToml.join(", ")}`);
+    }
 
     // Merge user-configured addresses with auto-detected ones
     const namedAddresses = { ...(userConfig.namedAddresses ?? {}) };
