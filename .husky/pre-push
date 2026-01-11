@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+
+# ===========================================
+# Pre-push hook for MoveHat
+# ===========================================
+# Runs unit tests before allowing push
+# Set MOVEHAT_E2E=1 to also run E2E tests
+# ===========================================
+
+echo "Running pre-push checks..."
+
+# Run unit tests (fast)
+echo "→ Running unit tests..."
+pnpm --filter movehat test
+
+if [ $? -ne 0 ]; then
+  echo "❌ Unit tests failed! Push aborted."
+  exit 1
+fi
+
+echo "✓ Unit tests passed!"
+
+# Optional: Run E2E tests (slow, only if MOVEHAT_E2E=1)
+if [ "$MOVEHAT_E2E" = "1" ]; then
+  echo ""
+  echo "→ Running E2E tests (MOVEHAT_E2E=1)..."
+  pnpm test:e2e:quick
+  
+  if [ $? -ne 0 ]; then
+    echo "❌ E2E tests failed! Push aborted."
+    exit 1
+  fi
+  
+  echo "✓ E2E tests passed!"
+fi
+
+echo ""
+echo "✅ All pre-push checks passed!"

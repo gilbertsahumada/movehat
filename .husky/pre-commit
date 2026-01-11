@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+# Pre-commit hook - lightweight checks only
+# Full test suite runs on pre-push
+
+# Optional: Add lint-staged or other quick checks here
+# Example: pnpm lint-staged

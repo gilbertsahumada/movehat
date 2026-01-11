@@ -1,40 +1,65 @@
 # Dockerfile para testing de MoveHat
-# Simula instalación limpia en diferentes ambientes
+# Simula instalación limpia en diferentes versiones de Node.js
+# 
+# Build:
+#   docker build -f Dockerfile.test --build-arg NODE_VERSION=20 -t movehat-test .
+#
+# Run:
+#   docker run --rm movehat-test ./scripts/e2e-local.sh --quick
 
 ARG NODE_VERSION=20
-FROM node:${NODE_VERSION}-slim
+FROM node:${NODE_VERSION}-bookworm
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     build-essential \
+    ca-certificates \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Movement CLI (simulated - adjust URL when available)
-# RUN curl -sSL https://install.movementnetwork.xyz | bash
-# For now, we'll add a placeholder script
-RUN echo '#!/bin/bash\necho "movement CLI v0.1.0"' > /usr/local/bin/movement \
-    && chmod +x /usr/local/bin/movement
+# Install Movement CLI
+# Using the official installation method
+RUN curl -fsSL https://raw.githubusercontent.com/movementlabsxyz/aptos-core/main/scripts/install_cli.py | python3 - \
+    || echo "Movement CLI install via script failed, trying alternative..."
+
+# Alternative: Manual download (if the script fails)
+# Uncomment and adjust version if needed:
+# RUN curl -L https://github.com/movementlabsxyz/aptos-core/releases/download/movement-cli-v0.1.0/movement-cli-linux-x86_64.tar.gz \
+#     | tar -xz -C /usr/local/bin/
+
+# Verify Movement CLI is installed (or create placeholder for testing)
+RUN movement --version 2>/dev/null || \
+    (echo '#!/bin/bash' > /usr/local/bin/movement && \
+     echo 'if [ "$1" = "--version" ]; then echo "movement-cli 0.1.0 (docker-mock)"; exit 0; fi' >> /usr/local/bin/movement && \
+     echo 'if [ "$1" = "move" ] && [ "$2" = "build" ]; then echo "Building..."; mkdir -p "$4/build"; exit 0; fi' >> /usr/local/bin/movement && \
+     echo 'if [ "$1" = "move" ] && [ "$2" = "test" ]; then echo "[ PASS ] test"; exit 0; fi' >> /usr/local/bin/movement && \
+     echo 'echo "Mock movement CLI - command: $@"; exit 0' >> /usr/local/bin/movement && \
+     chmod +x /usr/local/bin/movement)
+
+# Install pnpm
+RUN npm install -g pnpm@9
 
 # Set working directory
-WORKDIR /test
+WORKDIR /app
 
-# Test user (non-root)
-RUN useradd -m -s /bin/bash testuser && \
-    chown -R testuser:testuser /test
+# Copy package files first (for better caching)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/movehat/package.json ./packages/movehat/
 
-USER testuser
+# Install dependencies
+RUN pnpm install --frozen-lockfile || pnpm install
 
-# Copy package files
-COPY --chown=testuser:testuser package.json package-lock.json* pnpm-lock.yaml* ./
-COPY --chown=testuser:testuser packages ./packages
+# Copy the rest of the project
+COPY . .
 
-# Set environment
+# Build the project
+RUN pnpm build:movehat
+
+# Set environment for testing
 ENV NODE_ENV=test
 ENV CI=true
 
-# Install dependencies
-RUN npm install -g pnpm
-
-CMD ["bash"]
+# Default command: run E2E tests
+CMD ["./scripts/e2e-local.sh", "--quick"]

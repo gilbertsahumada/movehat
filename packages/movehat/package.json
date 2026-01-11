@@ -21,6 +21,9 @@
     "copy-templates": "cp -r src/templates dist/",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -68,6 +71,9 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
     "@types/prompts": "^2.4.9",
-    "typescript": "^5.9.3"
+    "@vitest/coverage-v8": "^4.0.16",
+    "memfs": "^4.51.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   }
 }

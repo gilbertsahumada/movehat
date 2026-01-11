@@ -12,7 +12,8 @@
   "dependencies": {
     "movehat": "latest",
     "@aptos-labs/ts-sdk": "^5.1.5",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "got": "^11.8.6"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

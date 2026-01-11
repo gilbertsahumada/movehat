@@ -290,6 +290,13 @@ pnpm build              # Build all packages
 pnpm build:movehat      # Build only movehat
 pnpm dev                # Watch mode for development
 pnpm clean              # Clean compiled files
+pnpm test               # Run unit tests (Vitest)
+pnpm test:watch         # Run unit tests in watch mode
+pnpm test:coverage      # Run unit tests with coverage
+pnpm test:e2e           # Full E2E test (unit + integration)
+pnpm test:e2e:quick     # Quick E2E (skip unit tests)
+pnpm test:smoke         # Smoke test for publishing
+pnpm test:all           # Run all tests (unit + E2E)
 pnpm test:runtime       # Quick runtime test
 pnpm test:example       # Run example project tests
 ```
@@ -353,7 +360,9 @@ console.error("ERROR: Error message");
 
 Before submitting a PR, ensure:
 
+- [ ] `pnpm test` - Unit tests pass (Vitest)
 - [ ] `pnpm build:movehat` succeeds without errors
+- [ ] `pnpm test:e2e:quick` - E2E tests pass (or full `pnpm test:e2e`)
 - [ ] `movehat init` creates valid project structure
 - [ ] `movehat compile` works in example project
 - [ ] `movehat run` executes scripts correctly
@@ -365,6 +374,133 @@ Before submitting a PR, ensure:
 - [ ] TypeScript types are correct
 - [ ] Error messages are clear and helpful
 - [ ] Documentation is updated if needed
+
+## Testing Infrastructure
+
+MoveHat has a comprehensive testing infrastructure with multiple layers:
+
+### 1. Unit Tests (Fast)
+
+Unit tests use **Vitest** with **memfs** for filesystem mocking. They test pure functions without external dependencies.
+
+```bash
+pnpm test               # Run once
+pnpm test:watch         # Watch mode
+pnpm test:coverage      # With coverage report
+```
+
+**Location:** `packages/movehat/src/**/__tests__/*.test.ts`
+
+**Example:**
+```typescript
+// packages/movehat/src/commands/__tests__/compile.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import { vol, fs as memfsFs } from 'memfs';
+
+vi.mock('fs', () => ({
+  default: memfsFs,
+  ...memfsFs,
+}));
+
+describe('extractNamedAddresses', () => {
+  it('should extract module addresses', () => {
+    vol.fromJSON({
+      '/move/sources/counter.move': 'module counter::my_counter {}',
+    });
+    const addresses = extractNamedAddresses('/move');
+    expect(addresses).toContain('counter');
+  });
+});
+```
+
+### 2. E2E Tests (Local)
+
+E2E tests simulate the complete user journey from the README:
+
+```bash
+pnpm test:e2e           # Full E2E (includes unit tests)
+pnpm test:e2e:quick     # Quick E2E (skips unit tests)
+pnpm test:e2e:keep      # Keep test directory for inspection
+```
+
+**What it tests:**
+1. Prerequisites check (Node.js, pnpm, Movement CLI)
+2. Build from source
+3. `npm pack` creates valid package
+4. Global installation (`npm install -g`)
+5. `movehat init my-project`
+6. `npm install`
+7. `movehat compile`
+8. `movehat test --move`
+9. Fork system commands
+10. CLI help commands
+
+**Location:** `scripts/e2e-local.sh`
+
+### 3. Docker Tests (Isolated)
+
+For testing across different Node.js versions in isolated environments:
+
+```bash
+pnpm docker:test              # Run all Docker tests
+pnpm docker:test:node18       # Test on Node.js 18
+pnpm docker:test:node20       # Test on Node.js 20
+pnpm docker:test:node22       # Test on Node.js 22
+pnpm docker:clean             # Clean Docker artifacts
+```
+
+**Location:** `docker-compose.test.yml`, `Dockerfile.test`
+
+### 4. Smoke Tests (Pre-publish)
+
+Quick validation before publishing to npm:
+
+```bash
+pnpm test:smoke
+```
+
+**What it tests:**
+- Package builds successfully
+- `npm pack` creates valid tarball
+- Package contents are correct
+- Global installation works
+- CLI commands work
+
+### 5. Pre-push Hooks (Husky)
+
+Unit tests run automatically before every `git push`:
+
+```bash
+# Normal push - runs unit tests
+git push
+
+# With E2E tests (slower)
+MOVEHAT_E2E=1 git push
+```
+
+### Writing New Tests
+
+**Unit tests** - For pure functions:
+```typescript
+// src/mymodule/__tests__/mymodule.test.ts
+import { describe, it, expect, vi } from 'vitest';
+
+describe('myFunction', () => {
+  it('should do something', () => {
+    expect(myFunction('input')).toBe('expected');
+  });
+});
+```
+
+**E2E tests** - Add steps to `scripts/e2e-local.sh`:
+```bash
+step "Testing: my new feature"
+if movehat my-command; then
+    pass "My command works"
+else
+    fail "My command failed"
+fi
+```
 
 ## Common Development Tasks
 
