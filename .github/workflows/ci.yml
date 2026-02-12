@@ -42,6 +42,53 @@ jobs:
           path: packages/movehat/dist/
           retention-days: 1
 
+  # Unit tests with coverage
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run unit tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: packages/movehat/coverage/
+          retention-days: 7
+
+      - name: Check coverage threshold
+        run: |
+          cd packages/movehat
+          # Extract coverage percentage from coverage-summary.json
+          if [ -f "coverage/coverage-summary.json" ]; then
+            LINES=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+            echo "Line coverage: $LINES%"
+            # Fail if coverage is below 50% (adjust threshold as needed)
+            if (( $(echo "$LINES < 50" | bc -l) )); then
+              echo "Coverage is below 50% threshold!"
+              exit 1
+            fi
+          fi
+
   # Test matrix across Node versions
   test-matrix:
     name: Test (Node ${{ matrix.node }})
@@ -50,7 +97,7 @@ jobs:
 
     strategy:
       matrix:
-        node: ['20', '22']
+        node: ['18', '20', '22']
       fail-fast: false
 
     steps:
@@ -79,14 +126,17 @@ jobs:
       - name: Build
         run: pnpm build:movehat
 
+      - name: Run unit tests
+        run: pnpm test
+
       - name: Run smoke tests
         run: bash scripts/smoke-test.sh
 
-  # Integration tests (only on main PRs)
-  integration:
-    name: Integration Tests
+  # E2E tests (only on PRs to main)
+  e2e-tests:
+    name: E2E Tests
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, unit-tests]
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
 
     steps:
@@ -112,7 +162,7 @@ jobs:
           name: build-artifacts
           path: packages/movehat/dist/
 
-      - name: Install Movement CLI (testnet - Move 2 support)
+      - name: Install Movement CLI
         run: |
           curl -LO https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/movement-move2-testnet-linux-x86_64.tar.gz
           mkdir -p temp_extract
@@ -123,9 +173,9 @@ jobs:
           movement --version
 
       - name: Run E2E tests
-        run: bash scripts/test-e2e.sh
+        run: pnpm test:e2e:quick
         env:
-          MOVEMENT_RPC_URL: https://aptos.testnet.suzuka.movementlabs.xyz/v1
+          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
   # Code quality checks
   quality:

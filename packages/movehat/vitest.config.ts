@@ -8,7 +8,7 @@ export default defineConfig({
     exclude: ['src/templates/**'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
+      reporter: ['text', 'html', 'lcov', 'json-summary'],
       include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.test.ts',
@@ -16,7 +16,15 @@ export default defineConfig({
         'src/templates/**',
         'src/index.ts',
         'src/cli.ts',
+        'src/types/**',
       ],
+      // Start with low threshold, increase as we add more tests
+      thresholds: {
+        lines: 10,
+        functions: 10,
+        branches: 5,
+        statements: 10,
+      },
     },
     testTimeout: 10000,
   },
