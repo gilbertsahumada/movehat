@@ -1,0 +1,53 @@
+---
+title: Compilation
+description: Compile Move smart contracts with automatic address detection
+---
+
+## Compiling Contracts
+
+```bash
+movehat compile
+```
+
+### How It Works
+
+- Movehat **automatically detects** named addresses from your Move files (e.g., `module counter::counter` detects `counter`)
+- No manual address configuration needed for development
+- Uses temporary dev addresses (`0xcafe`) for compilation
+- Just like Hardhat — add any new contract and it compiles automatically
+
+### Project Structure
+
+Your Move contracts live in the `move/` directory:
+
+```
+my-project/
+├── move/
+│   ├── Move.toml
+│   └── sources/
+│       └── Counter.move
+```
+
+### Named Address Auto-Detection
+
+When you write a Move module:
+
+```move
+module counter::counter {
+    // ...
+}
+```
+
+Movehat detects `counter` as a named address and automatically configures it for compilation. You don't need to manually add it to `Move.toml` or your config file.
+
+### Compilation Output
+
+After compilation, the compiled modules are stored in the `move/build/` directory. These compiled artifacts are used for deployment and testing.
+
+## Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| `movement: command not found` | Install [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli) |
+| `Compilation failed: ENOENT: no such file or directory, uv_cwd` | Your current directory was deleted. Run `cd ~` then navigate to your project |
+| `Module not found` | Check your Move source file is in `move/sources/` |

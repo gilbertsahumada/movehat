@@ -1,0 +1,108 @@
+---
+title: movehat test
+description: Run Move unit tests and TypeScript integration tests
+---
+
+## Usage
+
+```bash
+movehat test [options]
+```
+
+Run tests with an interactive menu or flags. If no flags are provided, shows an interactive menu.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--move` | Run only Move unit tests (fast, no node required) |
+| `--ts` | Run only TypeScript integration tests (starts local node) |
+| `--all` | Run all tests (Move + TypeScript) |
+| `--watch` | Run TypeScript tests in watch mode (implies `--ts`) |
+| `--filter <pattern>` | Filter Move tests by pattern |
+
+## Interactive Menu
+
+When you run `movehat test` without flags:
+
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
+```
+
+## Examples
+
+```bash
+# Interactive menu
+movehat test
+
+# Run only Move tests (ultra-fast)
+movehat test --move
+
+# Run only TypeScript tests
+movehat test --ts
+
+# Run all tests
+movehat test --all
+
+# Watch mode for TypeScript tests
+movehat test --watch
+
+# Filter Move tests by pattern
+movehat test --move --filter test_increment
+```
+
+## Shorthand Commands
+
+```bash
+# Run only Move unit tests
+movehat test:move
+
+# Run only Move tests with filter
+movehat test:move --filter test_inc
+
+# Ignore compilation warnings
+movehat test:move --ignore-warnings
+
+# Run only TypeScript tests
+movehat test:ts
+
+# Watch mode
+movehat test:ts --watch
+```
+
+## Test Output Example
+
+```
+Running all tests...
+
+============================================================
+
+1. Move Unit Tests
+------------------------------------------------------------
+
+Running Move unit tests for package Counter
+[ PASS    ] 0xcafe::counter::test_increment
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+
+✓ Move tests passed
+
+============================================================
+
+2. TypeScript Integration Tests
+------------------------------------------------------------
+
+  Counter Contract
+      ✓ should initialize counter
+      ✓ should increment counter
+
+  2 passing (3s)
+
+✓ TypeScript tests passed
+
+============================================================
+
+✓ All tests passed!
+```

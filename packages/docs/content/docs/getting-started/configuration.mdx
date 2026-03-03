@@ -1,0 +1,115 @@
+---
+title: Configuration
+description: Configure networks, accounts, and project settings
+---
+
+## Network Configuration
+
+Edit `movehat.config.ts` to configure your networks:
+
+```typescript
+import dotenv from "dotenv";
+dotenv.config();
+
+export default {
+  // Default network to use when no --network flag is provided
+  defaultNetwork: "testnet",
+
+  // Network configurations
+  networks: {
+    testnet: {
+      url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
+      chainId: "testnet",
+    },
+    mainnet: {
+      url: "https://mainnet.movementnetwork.xyz/v1",
+      chainId: "mainnet",
+    },
+    local: {
+      url: "http://localhost:8080/v1",
+      chainId: "local",
+    },
+  },
+
+  // Global accounts configuration (Hardhat-style)
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+
+  // Move source directory
+  moveDir: "./move",
+
+  // Named addresses (optional — auto-detected from Move files)
+  namedAddresses: {
+    // Example: counter: "0x1234...",
+  },
+};
+```
+
+### Key Design Decisions
+
+- **One account for all networks** — Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
+- **Simpler configuration** — Networks only need their RPC URL
+- **Flexible** — You can still specify different accounts per network if needed
+
+## Environment Variables
+
+```bash
+# Required: Your wallet private key (works on all networks)
+PRIVATE_KEY=0x1234567890abcdef...
+
+# Optional: Override RPC URL or default network
+MOVEMENT_RPC_URL=https://custom-testnet.movementnetwork.xyz/v1
+MH_DEFAULT_NETWORK=mainnet
+```
+
+### Account Resolution Order
+
+Movehat looks for accounts in this order:
+
+1. Network-specific `accounts` in config
+2. Global `accounts` in config
+3. `PRIVATE_KEY` env variable
+
+## Environment Setup
+
+**For testing only?** Skip environment setup! Tests use auto-generated accounts.
+
+**For real deployment?** Configure your private key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```bash
+PRIVATE_KEY=0x1234567890abcdef...
+```
+
+**Security notes:**
+- The `PRIVATE_KEY` is only required for real deployments to testnet/mainnet and running deployment scripts
+- Tests automatically use safe, auto-generated test accounts (no configuration needed)
+
+## Network Options
+
+| Network | Description |
+|---------|-------------|
+| `testnet` (default) | Movement testnet, auto-generates test accounts |
+| `mainnet` | Movement mainnet, requires `PRIVATE_KEY` in `.env` |
+| `local` | Local fork server on `localhost:8080` |
+
+## Using Multiple Accounts
+
+```typescript
+// movehat.config.ts
+export default {
+  accounts: [
+    process.env.PRIVATE_KEY,     // Primary (mh.account)
+    process.env.SECONDARY_KEY,   // mh.accounts[1]
+  ].filter(Boolean),
+};
+
+// In your script
+const mh = await getMovehat();
+const primaryAccount = mh.account;               // accounts[0]
+const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
+```

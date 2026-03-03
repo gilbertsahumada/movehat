@@ -1,0 +1,53 @@
+---
+title: Installation
+description: Install Movehat and its prerequisites
+---
+
+## Prerequisites
+
+Before installing Movehat, make sure you have:
+
+- **Node.js** (v18 or later) — [Download](https://nodejs.org/)
+- **Movement CLI** — **REQUIRED** for compiling and deploying Move contracts
+
+### Install Movement CLI
+
+Follow the official guide: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementcli)
+
+Verify installation:
+
+```bash
+movement --version
+```
+
+**Without Movement CLI installed, compilation will fail with:**
+
+```
+Compilation failed: Command failed: movement move build
+/bin/sh: movement: command not found
+```
+
+## Install Movehat
+
+```bash
+npm install -g movehat
+# or
+pnpm install -g movehat
+```
+
+## System Requirements
+
+**Required:**
+- Node.js v18+
+- Movement CLI ([install from Movement docs](https://docs.movementnetwork.xyz/devs/movementcli))
+- npm or pnpm
+
+**Recommended:**
+- Git (for version control)
+- VS Code with Move syntax highlighting extension
+
+## Verify Installation
+
+```bash
+movehat --version
+```

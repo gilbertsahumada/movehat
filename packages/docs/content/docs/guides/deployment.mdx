@@ -1,0 +1,154 @@
+---
+title: Deployment
+description: Deploy Move smart contracts with the Movehat Runtime Environment
+---
+
+## Writing Deployment Scripts
+
+Deployment scripts use the **Movehat Runtime Environment (MRE)**:
+
+```typescript
+// scripts/deploy-counter.ts
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  console.log("Deploying from:", mh.account.accountAddress.toString());
+  console.log("Network:", mh.config.network);
+
+  // Deploy (publish) the module
+  const deployment = await mh.deployContract("counter");
+
+  console.log("Module deployed at:", deployment.address);
+  console.log("Transaction:", deployment.txHash);
+
+  // Get contract instance
+  const contract = mh.getContract(deployment.address, "counter");
+
+  // Initialize the counter
+  await contract.call(mh.account, "init", []);
+
+  console.log("Counter initialized!");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+```
+
+## Running Deployment Scripts
+
+```bash
+# Deploy to testnet (default)
+movehat run scripts/deploy-counter.ts
+
+# Deploy to specific network
+movehat run scripts/deploy-counter.ts --network mainnet
+movehat run scripts/deploy-counter.ts --network local
+```
+
+## Deployment Tracking
+
+Movehat **automatically tracks deployments** per network, similar to hardhat-deploy:
+
+```
+my-project/
+└── deployments/
+    ├── testnet/
+    │   ├── counter.json
+    │   └── token.json
+    ├── mainnet/
+    │   └── counter.json
+    └── local/
+        └── counter.json
+```
+
+Each deployment file contains:
+
+```json
+{
+  "address": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "moduleName": "counter",
+  "network": "testnet",
+  "deployer": "0x662a2aa90fdf2b8e400640a49fc922b713fe4baaec8c37b088ecef315561e4d9",
+  "timestamp": 1704985623564,
+  "txHash": "0x59cb0c2df832064174b50fc69909af5819c6e273cc644f9a2123102b20bb0ef2"
+}
+```
+
+## Automatic Deployment Check
+
+Movehat prevents accidental redeployments:
+
+**First time:**
+
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+# Deploys successfully
+```
+
+**Second time (already deployed):**
+
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+# Error: Module "counter" is already deployed on testnet
+#    Address: 0x662a...
+#    Deployed at: 12/5/2025, 11:38:14 PM
+#    Transaction: 0x59cb0c2df832...
+#
+#    To redeploy, run with the --redeploy flag:
+#    movehat run <script> --network testnet --redeploy
+```
+
+**Force redeploy:**
+
+```bash
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
+# Redeploys and updates deployment info
+```
+
+## Runtime Environment Properties
+
+```typescript
+const mh = await getMovehat();
+
+// Core
+mh.config         // Resolved configuration
+mh.network        // Network info (name, chainId, rpc)
+mh.aptos          // Aptos SDK client
+mh.account        // Primary account
+mh.accounts       // All configured accounts
+
+// Contract helpers
+mh.getContract    // Get contract helper
+
+// Deployment functions
+mh.deployContract       // Deploy and track module
+mh.getDeployment        // Get deployment info for a module
+mh.getDeployments       // Get all deployments for current network
+mh.getDeploymentAddress // Get deployed address for a module
+
+// Network management
+mh.switchNetwork  // Switch to different network
+```
+
+## Multi-Network Deployment
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  if (mh.config.network === "mainnet") {
+    console.log("WARNING: Deploying to MAINNET");
+  }
+
+  const deployment = await mh.deployContract("counter");
+  console.log(`Deployed on ${mh.config.network}:`, deployment.address);
+}
+
+main().catch(console.error);
+```

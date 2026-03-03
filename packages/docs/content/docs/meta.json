@@ -1,0 +1,13 @@
+{
+  "title": "Docs",
+  "pages": [
+    "---Getting Started---",
+    "getting-started",
+    "---Guides---",
+    "guides",
+    "---CLI Reference---",
+    "cli",
+    "---Community---",
+    "contributing"
+  ]
+}

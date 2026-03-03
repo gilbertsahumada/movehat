@@ -1,0 +1,49 @@
+---
+title: movehat init
+description: Initialize a new Movehat project
+---
+
+## Usage
+
+```bash
+movehat init [project-name]
+```
+
+Initialize a new Movehat project with the standard project structure.
+
+## Examples
+
+```bash
+# Create a new project in a new directory
+movehat init my-project
+
+# Initialize in the current directory
+movehat init
+```
+
+## Generated Structure
+
+```
+my-project/
+├── move/                     # Move smart contracts
+│   ├── Move.toml
+│   └── sources/
+│       └── Counter.move
+├── scripts/                  # Deployment scripts (TypeScript)
+│   └── deploy-counter.ts
+├── tests/                    # Test files (TypeScript)
+│   └── Counter.test.ts
+├── movehat.config.ts         # Movehat configuration
+├── .env.example
+├── package.json
+└── tsconfig.json
+```
+
+## What It Creates
+
+- **Counter.move** — A sample Move smart contract with increment/decrement functions and Move unit tests
+- **Counter.test.ts** — TypeScript integration test file using `setupTestFixture`
+- **deploy-counter.ts** — Deployment script using the Movehat Runtime Environment
+- **movehat.config.ts** — Network configuration (testnet, mainnet, local)
+- **package.json** — Dependencies including `movehat`
+- **.env.example** — Environment variable template

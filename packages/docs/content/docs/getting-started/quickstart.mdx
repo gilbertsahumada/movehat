@@ -1,0 +1,183 @@
+---
+title: Quick Start
+description: Get up and running with Movehat in 30 seconds
+---
+
+## Create Your First Project
+
+```bash
+# 1. Create project
+npx movehat init my-project
+cd my-project
+
+# 2. Install dependencies
+npm install
+
+# 3. Compile contracts (auto-detects addresses)
+npx movehat compile
+
+# 4. Run tests (uses simulation — no setup needed)
+npm test
+```
+
+Done! Your tests are running with Transaction Simulation.
+
+## What Just Happened?
+
+1. **Created a Move project** with a Counter contract example
+2. **Compiled contracts** — Movehat auto-detected the `counter` named address
+3. **Ran tests** using a local Movement blockchain:
+   - No real blockchain required
+   - No gas costs
+   - Auto-generated test accounts
+   - Instant feedback
+
+## Project Structure
+
+```
+my-project/
+├── move/
+│   ├── sources/
+│   │   └── Counter.move       # Your Move smart contract
+│   └── Move.toml
+├── tests/
+│   └── Counter.test.ts        # TypeScript tests
+├── scripts/
+│   └── deploy-counter.ts      # Deployment script
+├── movehat.config.ts          # Network configuration
+└── .env.example               # Environment template
+```
+
+## Testing Workflow
+
+Movehat provides **two types of tests** for comprehensive coverage:
+
+### Move Unit Tests (Fast)
+
+Tests written directly in your Move files:
+
+```move
+#[test(account = @0x1)]
+public fun test_increment(account: &signer) acquires Counter {
+    let addr = signer::address_of(account);
+    aptos_framework::account::create_account_for_test(addr);
+
+    init(account);
+    assert!(get(addr) == 0, 0);
+
+    increment(account);
+    assert!(get(addr) == 1, 1);
+}
+```
+
+Run with: `movehat test --move` (ultra-fast, milliseconds)
+
+### TypeScript Integration Tests (Local Node)
+
+Tests written in TypeScript that run on a **local Movement blockchain**:
+
+```typescript
+import { setupTestFixture, teardownTestFixture } from "movehat/helpers";
+
+describe("Counter Contract", () => {
+  let fixture;
+
+  before(async function () {
+    this.timeout(60000);
+    // Starts local node, funds accounts, deploys contracts
+    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+  });
+
+  it("should increment counter", async () => {
+    const counter = fixture.contracts.counter;
+    const deployer = fixture.accounts.deployer;
+
+    // Real transaction on local blockchain
+    await counter.call(deployer, "increment", []);
+
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
+
+    expect(parseInt(value)).to.equal(1);
+  });
+
+  after(async () => {
+    await teardownTestFixture();
+  });
+});
+```
+
+Run with: `movehat test --ts` (starts local node)
+
+### Interactive Test Menu
+
+When you run `npm test` (or `movehat test`), you'll see:
+
+```
+? What tests do you want to run?
+❯ Move unit tests (fast, no node required)
+  TypeScript integration tests (starts local node)
+  All tests (Move + TypeScript)
+```
+
+## Ready to Deploy?
+
+For real deployment to Movement testnet/mainnet:
+
+1. **Set up your private key:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env`:**
+
+   ```bash
+   PRIVATE_KEY=0x1234567890abcdef...
+   ```
+
+3. **Deploy:**
+
+   ```bash
+   npx movehat run scripts/deploy-counter.ts --network testnet
+   ```
+
+## Common Commands
+
+```bash
+# Compile contracts
+npx movehat compile
+
+# Run tests (interactive menu)
+npm test
+
+# Run only Move tests (ultra-fast)
+movehat test --move
+
+# Run only TypeScript tests (starts local node)
+movehat test --ts
+
+# Run all tests
+movehat test --all
+
+# Run TypeScript tests in watch mode
+movehat test --watch
+
+# Filter Move tests
+movehat test --move --filter test_increment
+
+# Deploy to testnet
+npx movehat run scripts/deploy-counter.ts
+
+# Deploy to mainnet
+npx movehat run scripts/deploy-counter.ts --network mainnet
+```
+
+## Next Steps
+
+1. **Edit `move/sources/Counter.move`** — Modify your Move contract and add `#[test]` functions
+2. **Run `npm run test:move`** — Ultra-fast feedback on Move logic (TDD workflow)
+3. **Edit `tests/Counter.test.ts`** — Add TypeScript integration tests
+4. **Run `npm test`** — Full test suite
+5. **Deploy when ready** — Use deployment scripts for real networks
