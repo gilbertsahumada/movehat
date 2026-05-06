@@ -30,20 +30,21 @@ export function validateSafeName(name: string, type: "network" | "module"): void
     );
   }
 
+  // Reject hidden-file names first so the error message is specific
+  // (otherwise the alphanumeric check below would fire generically).
+  if (name.startsWith(".")) {
+    throw new Error(
+      `Invalid ${type} name: "${name}"\n` +
+      `Names cannot start with a dot (.) to prevent hidden file creation.`
+    );
+  }
+
   // Only allow alphanumeric, hyphens, underscores
   const safePattern = /^[a-zA-Z0-9_-]+$/;
   if (!safePattern.test(name)) {
     throw new Error(
       `Invalid ${type} name: "${name}"\n` +
       `Only alphanumeric characters, hyphens (-), and underscores (_) are allowed.`
-    );
-  }
-
-  // Additional check: prevent starting with dot (hidden files)
-  if (name.startsWith(".")) {
-    throw new Error(
-      `Invalid ${type} name: "${name}"\n` +
-      `Names cannot start with a dot (.) to prevent hidden file creation.`
     );
   }
 }

@@ -21,6 +21,8 @@ Run tests with an interactive menu or flags. If no flags are provided, shows an 
 | `--watch` | Run TypeScript tests in watch mode (implies `--ts`) |
 | `--filter <pattern>` | Filter Move tests by pattern |
 
+> Shorthand commands like `movehat test:move` forward additional flags to the underlying runner. For example, `movehat test:move --ignore-warnings` is valid and forwards `--ignore-warnings` to the Move test runner.
+
 ## Interactive Menu
 
 When you run `movehat test` without flags:

@@ -20,16 +20,16 @@ npx movehat compile
 npm test
 ```
 
-Done! Your tests are running with Transaction Simulation.
+Done! Your tests run against a local Movement node started by Movehat.
 
 ## What Just Happened?
 
 1. **Created a Move project** with a Counter contract example
 2. **Compiled contracts** — Movehat auto-detected the `counter` named address
-3. **Ran tests** using a local Movement blockchain:
-   - No real blockchain required
+3. **Ran tests** against a local Movement node spawned by Movehat:
+   - No public network access required
    - No gas costs
-   - Auto-generated test accounts
+   - Auto-generated test accounts funded from the local faucet
    - Instant feedback
 
 ## Project Structure
@@ -134,7 +134,7 @@ For real deployment to Movement testnet/mainnet:
 2. **Edit `.env`:**
 
    ```bash
-   PRIVATE_KEY=0x1234567890abcdef...
+   PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
    ```
 
 3. **Deploy:**
@@ -167,8 +167,8 @@ movehat test --watch
 # Filter Move tests
 movehat test --move --filter test_increment
 
-# Deploy to testnet
-npx movehat run scripts/deploy-counter.ts
+# Deploy to testnet (explicit flag avoids relying on default network)
+npx movehat run scripts/deploy-counter.ts --network testnet
 
 # Deploy to mainnet
 npx movehat run scripts/deploy-counter.ts --network mainnet

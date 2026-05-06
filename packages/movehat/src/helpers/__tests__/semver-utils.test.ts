@@ -96,8 +96,8 @@ describe('isNewerVersion', () => {
       expect(() => isNewerVersion('1..0', '1.0.0')).toThrow('Invalid version format');
     });
 
-    it('should handle versions starting with v (after stripping)', () => {
-      // Note: The function expects clean versions, caller should strip 'v'
+    it('should reject versions with unstripped "v" prefix', () => {
+      // isNewerVersion expects pre-stripped versions; callers must remove leading "v".
       expect(() => isNewerVersion('v1.0.0', '1.0.0')).toThrow('Invalid version format');
     });
   });
