@@ -154,6 +154,7 @@ fork
     .description('Start a local RPC server serving the fork')
     .option('-f, --fork <path>', 'Path to the fork')
     .option('-p, --port <port>', 'Port to listen on (default: 8080)', parsePort, 8080)
+    .option('--host <host>', 'Interface to bind (default: 127.0.0.1; use 0.0.0.0 to expose to LAN)', '127.0.0.1')
     .action((options) => forkServeCommand(options));
 
 program.parse(process.argv);

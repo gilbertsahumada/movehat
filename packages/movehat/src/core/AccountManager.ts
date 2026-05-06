@@ -216,9 +216,10 @@ export class AccountManager {
   static saveAccountPool(poolPath?: string): void {
     const basePath = poolPath || this.defaultPoolPath;
 
-    // Ensure directory exists
+    // Ensure directory exists with restrictive perms (the pool file holds
+    // plaintext private keys, so the directory must not be world-readable).
     if (!existsSync(basePath)) {
-      mkdirSync(basePath, { recursive: true });
+      mkdirSync(basePath, { recursive: true, mode: 0o700 });
     }
 
     // Build stored accounts array
@@ -255,9 +256,13 @@ export class AccountManager {
       labelMap: labelMapObject,
     };
 
-    // Write to file
+    // Write to file with owner-only permissions — file contains plaintext
+    // private keys for test accounts.
     const poolFilePath = join(basePath, "test-pool.json");
-    writeFileSync(poolFilePath, JSON.stringify(poolData, null, 2), "utf-8");
+    writeFileSync(poolFilePath, JSON.stringify(poolData, null, 2), {
+      encoding: "utf-8",
+      mode: 0o600,
+    });
   }
 
   /**
