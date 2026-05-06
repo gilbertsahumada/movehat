@@ -6,6 +6,7 @@ import { ForkServer } from '../../fork/server.js';
 interface ForkServeOptions {
   fork?: string;
   port?: number;
+  host?: string;
 }
 
 /**
@@ -43,9 +44,10 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
 
     // Get port (already validated by Commander's parsePort in cli.ts)
     const port = options.port ?? 8080;
+    const host = options.host ?? '127.0.0.1';
 
     // Create and start server
-    const server = new ForkServer(forkPath, port);
+    const server = new ForkServer(forkPath, port, host);
 
     // Handle graceful shutdown (use 'once' to prevent duplicate shutdowns)
     const shutdown = async () => {

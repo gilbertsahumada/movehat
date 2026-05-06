@@ -10,10 +10,17 @@ export class ForkServer {
   private server: http.Server | null = null;
   private forkManager: ForkManager;
   private port: number;
+  private host: string;
 
-  constructor(forkPath: string, port: number = 8080) {
+  /**
+   * @param host Interface to bind. Defaults to `127.0.0.1` so cached fork
+   *   state (which may include sensitive resources) is not exposed on the LAN.
+   *   Pass `'0.0.0.0'` only if you intentionally need to expose the server.
+   */
+  constructor(forkPath: string, port: number = 8080, host: string = '127.0.0.1') {
     this.forkManager = new ForkManager(forkPath);
     this.port = port;
+    this.host = host;
   }
 
   /**
@@ -67,12 +74,24 @@ export class ForkServer {
       // Listen for errors during startup
       this.server!.once('error', onError);
 
-      this.server!.listen(this.port, () => {
+      this.server!.listen(this.port, this.host, () => {
         // Remove error listener after successful start
         this.server!.removeListener('error', onError);
 
-        console.log(`\nFork Server listening on http://localhost:${this.port}`);
-        console.log(`  Ledger Info: http://localhost:${this.port}/v1/`);
+        // IPv6 literals must be wrapped in brackets in URLs (RFC 3986).
+        const isIpv6 = this.host.includes(':');
+        const displayHost =
+          this.host === '0.0.0.0'
+            ? 'localhost'
+            : isIpv6
+              ? `[${this.host}]`
+              : this.host;
+        console.log(`\nFork Server listening on http://${displayHost}:${this.port}`);
+        console.log(`  Bound interface: ${this.host}`);
+        console.log(`  Ledger Info: http://${displayHost}:${this.port}/v1/`);
+        if (this.host === '0.0.0.0') {
+          console.warn(`  ⚠️  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
+        }
         console.log(`\nPress Ctrl+C to stop`);
         resolve();
       });
