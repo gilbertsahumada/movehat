@@ -44,9 +44,8 @@ describe('validateSafeName', () => {
   });
 
   it('should reject hidden files (starting with dot)', () => {
-    // Note: dot is rejected by the alphanumeric check, not the specific dot check
-    expect(() => validateSafeName('.hidden', 'network')).toThrow('Only alphanumeric');
-    expect(() => validateSafeName('.gitignore', 'module')).toThrow('Only alphanumeric');
+    expect(() => validateSafeName('.hidden', 'network')).toThrow('cannot start with a dot');
+    expect(() => validateSafeName('.gitignore', 'module')).toThrow('cannot start with a dot');
   });
 
   it('should reject empty strings', () => {

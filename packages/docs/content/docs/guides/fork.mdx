@@ -244,6 +244,7 @@ describe('Token Tests', () => {
   let fork: ForkManager;
 
   before(async () => {
+    const networkUrl = 'https://testnet.movementnetwork.xyz/v1';
     fork = new ForkManager('.movehat/forks/token-tests');
     await fork.initialize(networkUrl, 'testnet');
   });
