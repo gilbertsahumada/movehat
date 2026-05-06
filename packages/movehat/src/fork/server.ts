@@ -78,7 +78,14 @@ export class ForkServer {
         // Remove error listener after successful start
         this.server!.removeListener('error', onError);
 
-        const displayHost = this.host === '0.0.0.0' ? 'localhost' : this.host;
+        // IPv6 literals must be wrapped in brackets in URLs (RFC 3986).
+        const isIpv6 = this.host.includes(':');
+        const displayHost =
+          this.host === '0.0.0.0'
+            ? 'localhost'
+            : isIpv6
+              ? `[${this.host}]`
+              : this.host;
         console.log(`\nFork Server listening on http://${displayHost}:${this.port}`);
         console.log(`  Bound interface: ${this.host}`);
         console.log(`  Ledger Info: http://${displayHost}:${this.port}/v1/`);

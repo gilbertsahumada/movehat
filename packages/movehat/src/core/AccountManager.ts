@@ -2,7 +2,7 @@ import {
   Account,
   Ed25519PrivateKey,
 } from "@aptos-labs/ts-sdk";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { MovehatConfig } from "../types/config.js";
 
@@ -218,9 +218,12 @@ export class AccountManager {
 
     // Ensure directory exists with restrictive perms (the pool file holds
     // plaintext private keys, so the directory must not be world-readable).
+    // Note: mkdirSync's mode is masked by the process umask, so we chmod
+    // explicitly afterwards to guarantee 0o700 regardless of umask.
     if (!existsSync(basePath)) {
       mkdirSync(basePath, { recursive: true, mode: 0o700 });
     }
+    chmodSync(basePath, 0o700);
 
     // Build stored accounts array
     const storedAccounts: StoredAccount[] = [];
@@ -257,12 +260,15 @@ export class AccountManager {
     };
 
     // Write to file with owner-only permissions — file contains plaintext
-    // private keys for test accounts.
+    // private keys for test accounts. writeFileSync's mode is masked by
+    // the process umask, so we chmod explicitly afterwards to guarantee
+    // 0o600 regardless of umask.
     const poolFilePath = join(basePath, "test-pool.json");
     writeFileSync(poolFilePath, JSON.stringify(poolData, null, 2), {
       encoding: "utf-8",
       mode: 0o600,
     });
+    chmodSync(poolFilePath, 0o600);
   }
 
   /**
