@@ -78,15 +78,16 @@ jobs:
       - name: Check coverage threshold
         run: |
           cd packages/movehat
-          # Extract coverage percentage from coverage-summary.json
-          if [ -f "coverage/coverage-summary.json" ]; then
-            LINES=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
-            echo "Line coverage: $LINES%"
-            # Fail if coverage is below 15% (baseline; raise as tests grow)
-            if (( $(echo "$LINES < 15" | bc -l) )); then
-              echo "Coverage is below 15% threshold!"
-              exit 1
-            fi
+          if [ ! -f "coverage/coverage-summary.json" ]; then
+            echo "::error::coverage/coverage-summary.json not found; cannot enforce threshold."
+            exit 1
+          fi
+          LINES=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Line coverage: $LINES%"
+          # Fail if coverage is below 15% (baseline; raise as tests grow)
+          if (( $(echo "$LINES < 15" | bc -l) )); then
+            echo "Coverage is below 15% threshold!"
+            exit 1
           fi
 
   # Test matrix across Node versions

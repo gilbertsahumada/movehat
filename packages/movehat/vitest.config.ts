@@ -18,12 +18,12 @@ export default defineConfig({
         'src/cli.ts',
         'src/types/**',
       ],
-      // Start with low threshold, increase as we add more tests
+      // Aligned with CI gate (.github/workflows/ci.yml). Raise as tests grow.
       thresholds: {
-        lines: 10,
-        functions: 10,
-        branches: 5,
-        statements: 10,
+        lines: 15,
+        functions: 15,
+        branches: 10,
+        statements: 15,
       },
     },
     testTimeout: 10000,

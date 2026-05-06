@@ -12,7 +12,7 @@ export const baseOptions: BaseLayoutProps = {
     },
     {
       text: 'GitHub',
-      url: 'https://github.com/movehat/movehat',
+      url: 'https://github.com/gilbertsahumada/movehat',
       external: true,
     },
     {
