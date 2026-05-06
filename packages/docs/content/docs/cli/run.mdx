@@ -1,0 +1,70 @@
+---
+title: movehat run
+description: Execute TypeScript/JavaScript scripts with the Movehat Runtime
+---
+
+## Usage
+
+```bash
+movehat run <script> [options]
+```
+
+Execute a TypeScript/JavaScript script with the Movehat Runtime Environment.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--network <name>` | Target network (default: from config) |
+| `--redeploy` | Force redeploy even if module is already deployed |
+
+## Examples
+
+```bash
+# Deploy to default network (testnet)
+movehat run scripts/deploy-counter.ts
+
+# Deploy to specific network
+movehat run scripts/deploy-counter.ts --network testnet
+movehat run scripts/deploy-counter.ts --network mainnet
+movehat run scripts/deploy-counter.ts --network local
+
+# Force redeploy
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
+```
+
+## How It Works
+
+1. Parses `--network` and `--redeploy` flags
+2. Spawns `tsx` with your script
+3. Your script calls `getMovehat()` to get the runtime
+4. The runtime loads configuration, connects to the network, and sets up accounts
+5. If `deployContract()` is called, deployment tracking checks/saves are performed
+
+## Deployment Tracking
+
+When a script deploys a contract:
+
+- **First deploy**: Succeeds and saves deployment info to `deployments/<network>/<module>.json`
+- **Already deployed**: Shows error with deployment details and suggests `--redeploy`
+- **With `--redeploy`**: Force deploys and updates deployment info
+
+## Script Template
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  console.log("Network:", mh.config.network);
+  console.log("Account:", mh.account.accountAddress.toString());
+
+  // Your deployment logic here
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+```

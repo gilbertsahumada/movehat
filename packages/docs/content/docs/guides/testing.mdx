@@ -1,0 +1,198 @@
+---
+title: Testing
+description: Write and run Move unit tests and TypeScript integration tests
+---
+
+Movehat supports **two types of tests** for comprehensive coverage.
+
+## Move Unit Tests (Fast)
+
+Write tests directly in your Move files using `#[test]` annotations. Perfect for testing internal logic and business rules.
+
+```move
+#[test(account = @0x1)]
+public fun test_increment(account: &signer) acquires Counter {
+    let addr = signer::address_of(account);
+    aptos_framework::account::create_account_for_test(addr);
+
+    init(account);
+    assert!(get(addr) == 0, 0);
+
+    increment(account);
+    assert!(get(addr) == 1, 1);
+
+    increment(account);
+    assert!(get(addr) == 2, 2);
+}
+```
+
+**When to use Move tests:**
+- Testing internal logic and calculations
+- Validating business rules and invariants
+- Testing edge cases in pure functions
+- TDD during Move development (ultra-fast feedback)
+
+**Run Move tests:**
+
+```bash
+movehat test --move
+# or
+movehat test:move
+```
+
+## TypeScript Integration Tests (Local Blockchain)
+
+Write tests in TypeScript that run on a **real local Movement blockchain** (just like Hardhat!):
+
+```typescript
+import { describe, it, before, after } from "mocha";
+import { expect } from "chai";
+import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+
+describe("Counter Contract", () => {
+  let fixture: TestFixture<'counter'>;
+
+  before(async function () {
+    this.timeout(60000);
+    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+
+    console.log(`\nTesting on local blockchain`);
+    console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
+    console.log(`   Alice: ${fixture.accounts.alice.accountAddress.toString()}`);
+  });
+
+  it("should initialize with value 0", async () => {
+    const counter = fixture.contracts.counter;
+    const deployer = fixture.accounts.deployer;
+
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
+
+    expect(parseInt(value)).to.equal(0);
+  });
+
+  it("should increment counter", async () => {
+    const counter = fixture.contracts.counter;
+    const deployer = fixture.accounts.deployer;
+
+    const tx = await counter.call(deployer, "increment", []);
+    console.log(`   Transaction: ${tx.hash}`);
+
+    const value = await counter.view<string>("get", [
+      deployer.accountAddress.toString()
+    ]);
+
+    expect(parseInt(value)).to.equal(1);
+  });
+
+  it("alice can also increment counter", async () => {
+    const counter = fixture.contracts.counter;
+    const alice = fixture.accounts.alice;
+
+    await counter.call(alice, "increment", []);
+
+    const aliceValue = await counter.view<string>("get", [
+      alice.accountAddress.toString()
+    ]);
+    expect(parseInt(aliceValue)).to.equal(1);
+  });
+
+  after(async () => {
+    await teardownTestFixture();
+  });
+});
+```
+
+**When to use TypeScript tests:**
+- Testing real transaction flows with actual state changes
+- Validating multi-account interactions
+- Testing contract upgrades and migrations
+- End-to-end integration testing
+- CI/CD pipelines
+
+**Run TypeScript tests:**
+
+```bash
+movehat test --ts
+# or
+movehat test:ts
+
+# Watch mode for development
+movehat test --watch
+```
+
+## Running All Tests
+
+Run both Move and TypeScript tests together:
+
+```bash
+movehat test --all
+# or
+movehat test  # Then select "All tests" from the menu
+```
+
+**Example output:**
+
+```
+Running all tests...
+
+============================================================
+
+1. Move Unit Tests
+------------------------------------------------------------
+
+Running Move unit tests for package Counter
+[ PASS    ] 0xcafe::counter::test_increment
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+
+============================================================
+
+2. TypeScript Integration Tests
+------------------------------------------------------------
+
+  Counter Contract
+      ✓ should initialize counter
+      ✓ should increment counter
+
+  2 passing (3s)
+
+============================================================
+
+All tests passed!
+```
+
+## Testing Best Practices
+
+### During Development (TDD)
+
+```bash
+# Write Move function, add Move test, run instantly
+movehat test --move
+
+# Iterate until logic is correct
+```
+
+### Before Committing
+
+```bash
+# Run full test suite
+movehat test --all
+```
+
+### In CI/CD
+
+```bash
+# Fast tests only (no node required)
+movehat test --move
+
+# Or full tests
+movehat test --all
+```
+
+## Benefits of Dual Testing
+
+- **Move tests** catch logic errors early (milliseconds)
+- **TypeScript tests** verify integration works (seconds)
+- **Comprehensive coverage** from both perspectives
+- **Fast feedback loop** for development

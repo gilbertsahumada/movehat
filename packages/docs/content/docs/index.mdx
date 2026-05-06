@@ -1,0 +1,67 @@
+---
+title: Introduction
+description: A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts
+---
+
+# Movehat
+
+**A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts.**
+
+Write your tests and deployment scripts in TypeScript while building Move smart contracts.
+
+## Features
+
+- **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
+- **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
+- **Auto-Deploy in Tests** - Contracts deploy automatically when tests run — zero manual setup
+- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts
+- **Zero Setup Testing** - Auto-generated test accounts funded from local faucet
+- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code
+- **Native Fork System** - Create local snapshots of Movement L1 with actual network state
+- **TypeScript-first** - Write tests and deployment scripts in TypeScript
+- **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
+- **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
+- **Hardhat-like workflow** - Familiar commands and project structure
+- **Movehat Runtime Environment** - Global context object similar to Hardhat's HRE
+- **Movement CLI integration** - Wraps Movement CLI for compilation and publishing
+- **Deployment tracking** - Automatic per-network deployment tracking (like hardhat-deploy)
+- **Security-focused** - Built-in protection against path traversal, command injection, and YAML injection
+
+## Quick Start
+
+Get started in 4 commands:
+
+```bash
+# 1. Create project
+npx movehat init my-project && cd my-project
+
+# 2. Install dependencies
+npm install
+
+# 3. Compile contracts (auto-detects addresses)
+npx movehat compile
+
+# 4. Run tests (runs on real local blockchain)
+npm test
+```
+
+No manual setup needed — local blockchain starts automatically.
+
+## How It Works
+
+- Tests run on a **real local Movement node** (full blockchain, just like Hardhat!)
+- Automatically starts blockchain, funds accounts, deploys contracts
+- Zero manual setup — perfect for learning and rapid development
+
+## Key Differences
+
+| Feature | Movehat | Hardhat | Foundry |
+|---------|---------|---------|---------|
+| **Move Unit Tests** | Yes (`test:move`) | N/A | Yes (`forge test`) |
+| **Integration Tests** | Yes (`test:ts`) | Yes (`test`) | Yes (`test --fork`) |
+| **Dual Testing** | Yes | No | Yes |
+| **Setup for Testing** | Zero config | Need local node | Zero config |
+| **Named Addresses** | Auto-detected | N/A | Manual |
+| **Account Config** | Single `PRIVATE_KEY` | Single account | Multiple |
+| **Fork System** | Built-in JSON | External | Built-in |
+| **Language** | Move + TypeScript | Solidity + JS/TS | Solidity |

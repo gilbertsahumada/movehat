@@ -4,6 +4,15 @@ dist/
 node_modules/
 .env
 
+coverage/
+
+# Fumadocs auto-generated
+.source/
+out/
+
+# Next.js
+.next/
+
 # Test artifacts
 *.tgz
 /tmp/

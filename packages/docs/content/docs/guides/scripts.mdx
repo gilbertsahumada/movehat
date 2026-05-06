@@ -1,0 +1,118 @@
+---
+title: Scripts
+description: Write and run TypeScript scripts with the Movehat Runtime Environment
+---
+
+## Running Scripts
+
+Execute TypeScript/JavaScript scripts with the Movehat Runtime:
+
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+```
+
+The `movehat run` command provides your script with access to the **Movehat Runtime Environment (MRE)**, which includes the Aptos SDK client, account management, contract helpers, and more.
+
+## Writing Scripts
+
+### Deploy and Initialize
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  // 1. Deploy (publish) the module
+  const deployment = await mh.deployContract("counter");
+  console.log("Module deployed at:", deployment.address);
+  console.log("Transaction:", deployment.txHash);
+
+  // 2. Initialize
+  const contract = mh.getContract(deployment.address, "counter");
+  await contract.call(mh.account, "init", []);
+
+  // 3. Verify
+  const value = await contract.view("getValue", []);
+  console.log("Initial value:", value);
+}
+
+main().catch(console.error);
+```
+
+### Multi-Network Deployment
+
+```typescript
+import { getMovehat } from "movehat";
+
+async function main() {
+  const mh = await getMovehat();
+
+  if (mh.config.network === "mainnet") {
+    console.log("WARNING: Deploying to MAINNET");
+    // Add confirmation logic
+  }
+
+  // Deploy module — automatically tracked per network
+  const deployment = await mh.deployContract("counter");
+  console.log(`Deployed on ${mh.config.network}:`, deployment.address);
+}
+
+main().catch(console.error);
+```
+
+## Network Selection
+
+```bash
+# Deploy to testnet (default)
+movehat run scripts/deploy-counter.ts
+
+# Deploy to specific network
+movehat run scripts/deploy-counter.ts --network mainnet
+movehat run scripts/deploy-counter.ts --network local
+
+# Force redeploy
+movehat run scripts/deploy-counter.ts --network testnet --redeploy
+```
+
+## Available Runtime Properties
+
+```typescript
+const mh = await getMovehat();
+
+// Core
+mh.config         // Resolved configuration
+mh.network        // Network info (name, chainId, rpc)
+mh.aptos          // Aptos SDK client
+mh.account        // Primary account
+mh.accounts       // All configured accounts
+
+// Contract helpers
+mh.getContract    // Get contract helper
+
+// Deployment functions
+mh.deployContract       // Deploy and track module
+mh.getDeployment        // Get deployment info
+mh.getDeployments       // Get all deployments
+mh.getDeploymentAddress // Get deployed address
+
+// Network management
+mh.switchNetwork  // Switch to different network
+```
+
+## Using Multiple Accounts
+
+```typescript
+// movehat.config.ts
+export default {
+  accounts: [
+    process.env.PRIVATE_KEY,     // Primary (mh.account)
+    process.env.SECONDARY_KEY,   // mh.accounts[1]
+  ].filter(Boolean),
+};
+
+// In your script
+const mh = await getMovehat();
+const primaryAccount = mh.account;
+const secondaryAccount = mh.getAccountByIndex(1);
+```

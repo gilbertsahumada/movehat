@@ -1,0 +1,104 @@
+---
+title: movehat fork
+description: Manage local forks of Movement/Aptos networks
+---
+
+## Usage
+
+```bash
+movehat fork <command> [options]
+```
+
+Manage local forks of Movement/Aptos networks.
+
+## Commands
+
+### `fork create`
+
+Create a new fork from a network.
+
+```bash
+movehat fork create --network testnet --name my-fork
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--network <name>` | Network to fork | from config |
+| `--name <name>` | Name for the fork | `<network>-fork` |
+| `--path <path>` | Custom path for the fork | — |
+
+### `fork list`
+
+List all available forks with metadata.
+
+```bash
+movehat fork list
+```
+
+### `fork view-resource`
+
+View a resource from the fork.
+
+```bash
+movehat fork view-resource \
+  --fork .movehat/forks/my-fork \
+  --account 0x1 \
+  --resource "0x1::coin::CoinInfo<0x1::aptos_coin::AptosCoin>"
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--fork <path>` | Path to the fork | `.movehat/forks/<network>-fork` |
+| `--account <address>` | Account address | **required** |
+| `--resource <type>` | Resource type | **required** |
+
+### `fork fund`
+
+Fund an account in the fork.
+
+```bash
+movehat fork fund \
+  --fork .movehat/forks/my-fork \
+  --account 0x123 \
+  --amount 5000000000
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--fork <path>` | Path to the fork | — |
+| `--account <address>` | Account address | **required** |
+| `--amount <amount>` | Amount to fund | **required** |
+| `--coin-type <type>` | Coin type | `0x1::aptos_coin::AptosCoin` |
+
+### `fork serve`
+
+Start a local RPC server serving fork data via the Movement/Aptos API.
+
+```bash
+movehat fork serve --fork .movehat/forks/my-fork --port 8080
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--fork <path>` | Path to the fork | `.movehat/forks/<network>-fork` |
+| `--port <port>` | Port to listen on | `8080` |
+
+**Supported endpoints:**
+- `GET /v1/` — Ledger info
+- `GET /v1/accounts/:address` — Account data
+- `GET /v1/accounts/:address/resource/:type` — Specific resource
+- `GET /v1/accounts/:address/resources` — All resources
+
+**Connect with Aptos SDK:**
+
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({
+  network: Network.CUSTOM,
+  fullnode: "http://localhost:8080/v1",
+});
+const aptos = new Aptos(config);
+
+const ledgerInfo = await aptos.getLedgerInfo();
+```

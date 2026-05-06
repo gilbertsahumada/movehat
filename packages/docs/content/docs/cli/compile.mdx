@@ -1,0 +1,44 @@
+---
+title: movehat compile
+description: Compile Move smart contracts using Movement CLI
+---
+
+## Usage
+
+```bash
+movehat compile
+```
+
+Compile Move smart contracts using the Movement CLI. Movehat automatically detects named addresses from your Move source files.
+
+## How It Works
+
+1. Scans your Move source files for module declarations (e.g., `module counter::counter`)
+2. Extracts named addresses automatically
+3. Configures temporary dev addresses (`0xcafe`) for compilation
+4. Invokes the Movement CLI to build the contracts
+
+## Auto-Detection of Named Addresses
+
+When you write:
+
+```move
+module counter::counter {
+    // ...
+}
+```
+
+Movehat detects `counter` as a named address. No manual configuration needed — just like Hardhat.
+
+## Prerequisites
+
+- **Movement CLI** must be installed and available in your PATH
+- Move source files in the `move/sources/` directory
+
+## Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| `movement: command not found` | Install [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli) |
+| `Compilation failed: ENOENT` | `cd ~` then navigate back to your project |
+| `Cannot find package 'dotenv'` | Run `npm install` in your project |

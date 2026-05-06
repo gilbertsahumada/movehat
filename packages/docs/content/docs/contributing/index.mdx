@@ -1,0 +1,166 @@
+---
+title: Contributing
+description: Development setup and guidelines for contributing to Movehat
+---
+
+Thank you for your interest in contributing to Movehat!
+
+## Prerequisites
+
+- **Node.js** >= 18
+- **pnpm** >= 9.0.0
+- **Movement CLI** installed and configured
+
+## Development Setup
+
+### 1. Clone and Install
+
+```bash
+git clone https://github.com/gilbertsahumada/movehat.git
+cd movehat
+pnpm install
+```
+
+### 2. Build the Package
+
+```bash
+pnpm build:movehat
+```
+
+### 3. Link for Global Testing
+
+```bash
+cd packages/movehat
+npm link
+```
+
+### 4. Verify Installation
+
+```bash
+which movehat
+movehat --version
+```
+
+## Development Workflow
+
+### Making Changes
+
+1. **Edit source code** in `packages/movehat/src/`
+2. **Rebuild** with `pnpm build:movehat` (or `pnpm dev` for watch mode)
+3. **Test locally** using the example project
+
+### Testing
+
+```bash
+# Unit tests (Vitest)
+pnpm test
+
+# Watch mode
+pnpm test:watch
+
+# Coverage
+pnpm test:coverage
+
+# E2E tests
+pnpm test:e2e
+
+# Quick E2E (skip unit tests)
+pnpm test:e2e:quick
+
+# Smoke test
+pnpm test:smoke
+```
+
+### Testing with the Example Project
+
+```bash
+cd examples/counter-example
+
+movehat compile
+movehat run scripts/deploy-counter.ts
+pnpm test
+```
+
+## Project Architecture
+
+### Workspace Structure
+
+```
+movehat/
+├── packages/
+│   └── movehat/              # Main CLI package
+│       ├── src/
+│       │   ├── cli.ts        # CLI entry point
+│       │   ├── runtime.ts    # Movehat Runtime Environment
+│       │   ├── commands/     # CLI commands
+│       │   ├── helpers/      # Helper functions
+│       │   ├── templates/    # Project templates
+│       │   └── types/        # TypeScript types
+│       └── dist/             # Compiled output
+├── examples/
+│   └── counter-example/      # Test bed project
+└── package.json              # Workspace root
+```
+
+### Key Concepts
+
+**Movehat Runtime Environment (MRE)** — Core of Movehat, similar to Hardhat's HRE. Provides config, network, Aptos SDK client, accounts, and helpers.
+
+**Configuration System** — User config in `movehat.config.ts` is resolved into a single-network context by `resolveNetworkConfig()`.
+
+**Template System** — Files copied when users run `movehat init`. Uses `workspace:*` during development, replaced with actual version on publish.
+
+**Deployment Tracking** — Automatically tracks deployments per network in `deployments/<network>/<module>.json`.
+
+## Code Guidelines
+
+- Use TypeScript for all new code
+- Add proper type definitions
+- Follow existing code patterns
+- Provide helpful error messages with actionable solutions
+- Use `.js` extensions in imports (TypeScript ESM requirement)
+
+## Testing Checklist
+
+Before submitting a PR:
+
+- [ ] `pnpm test` — Unit tests pass
+- [ ] `pnpm build:movehat` succeeds
+- [ ] `pnpm test:e2e:quick` — E2E tests pass
+- [ ] `movehat init` creates valid project structure
+- [ ] `movehat compile` works in example project
+- [ ] `movehat run` executes scripts correctly
+- [ ] `--network` and `--redeploy` flags work
+- [ ] Error messages are clear and helpful
+
+## Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes
+4. Test thoroughly
+5. Commit with clear messages
+6. Push and submit PR with:
+   - Clear description of changes
+   - Why the change is needed
+   - How you tested it
+
+## Common Development Tasks
+
+### Add a New CLI Command
+
+1. Create command file in `src/commands/`
+2. Import and register in `src/cli.ts`
+3. Rebuild and test
+
+### Add a Helper Function
+
+1. Add function to `src/helpers/`
+2. Export from `src/helpers/index.ts`
+3. Update types if needed
+
+## Questions?
+
+- **Bug reports**: Open an issue with reproduction steps
+- **Feature requests**: Open an issue describing the use case
+- **Security issues**: Email directly
