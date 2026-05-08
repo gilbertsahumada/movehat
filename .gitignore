@@ -18,6 +18,9 @@ out/
 /tmp/
 .movehat/
 
+# Local reference / external repos cloned alongside (not part of movehat)
+/catapulta/
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -42,3 +45,10 @@ pnpm-debug.log*
 !CONTRIBUTING.md
 !FORK_GUIDE.md
 !QUICKSTART.md
+!ROADMAP.md
+!LICENSE.md
+!SECURITY.md
+!CHANGELOG.md
+!BENCHMARKS.md
+!MOVEMENT_CLI_COMPAT.md
+!NOTICE.md
