@@ -2,6 +2,7 @@ import https from 'https';
 import http from 'http';
 import { URL } from 'url';
 import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js';
+import { normalizeAddressShort } from '../utils/address.js';
 
 /**
  * Client for interacting with Movement/Aptos-compatible JSON API
@@ -82,10 +83,7 @@ export class MovementApiClient {
    * Get account information
    */
   async getAccount(address: string): Promise<AccountData> {
-    // Normalize address (ensure 0x prefix and lowercase)
-    const normalizedAddress = address.toLowerCase().startsWith('0x')
-      ? address.toLowerCase()
-      : `0x${address.toLowerCase()}`;
+    const normalizedAddress = normalizeAddressShort(address);
 
     return this.get<AccountData>(this.apiPath(`/accounts/${normalizedAddress}`));
   }
@@ -94,9 +92,7 @@ export class MovementApiClient {
    * Get a specific account resource
    */
   async getAccountResource(address: string, resourceType: string): Promise<any> {
-    const normalizedAddress = address.toLowerCase().startsWith('0x')
-      ? address.toLowerCase()
-      : `0x${address.toLowerCase()}`;
+    const normalizedAddress = normalizeAddressShort(address);
 
     // URL encode the resource type
     const encodedType = encodeURIComponent(resourceType);
@@ -108,9 +104,7 @@ export class MovementApiClient {
    * Get all resources for an account
    */
   async getAccountResources(address: string): Promise<AccountResource[]> {
-    const normalizedAddress = address.toLowerCase().startsWith('0x')
-      ? address.toLowerCase()
-      : `0x${address.toLowerCase()}`;
+    const normalizedAddress = normalizeAddressShort(address);
 
     return this.get<AccountResource[]>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
   }
