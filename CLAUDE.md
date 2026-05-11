@@ -76,16 +76,21 @@ When in doubt about granularity: prefer one sub-issue per logical refactor (e.g.
 
 ## 6. Verify the Example Project
 
-**The `examples/counter-example/` is the canonical install-experience test. Any PR that touches `packages/movehat/src/**`, `packages/movehat/bin/**`, `packages/movehat/package.json` exports, or the published templates must verify the example still works before being declared ready.**
+**The `examples/counter-example/` is the canonical install-experience test. Any PR that touches `packages/movehat/src/**`, `packages/movehat/bin/**`, `packages/movehat/package.json` exports, or the published templates must keep the example working.**
 
-Practical checklist:
+There are two gates with different costs and coverage:
 
-- Run `pnpm test:example` (mocha suite under `examples/counter-example/tests/`) and report the result in the PR description.
-- For changes that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
-- For changes that affect deploy / runtime / fork paths, run `pnpm test:e2e:quick`.
-- If any of those scripts is broken by infrastructure (Movement CLI not installed, missing keys), say so explicitly in the PR rather than silently skipping.
+**Fast gate — enforced automatically by the `pre-push` hook:**
+- `pnpm check:example` — builds movehat and runs `tsc --noEmit` against `examples/counter-example`. ~10s, no network, no keys.
+- Catches every breakage of the public type surface (renamed/removed exports, changed signatures, type-incompatible refactors). If a sub-PR renames or removes anything from `movehat` or `movehat/helpers`, this gate fails and the push is aborted.
+- The hook itself is `.husky/pre-push`; if it fails, migrate `examples/counter-example` in the same PR before re-pushing.
 
-CI enforcement of this rule is itself M4 work — until then, the gate is manual but mandatory.
+**Full gate — manual, runtime behaviour:**
+- `pnpm test:example` — runs the mocha suite under `examples/counter-example/tests/`. Slow, requires Movement CLI installed locally, some tests need a `PRIVATE_KEY` env for testnet flows.
+- Run this before opening / re-requesting review on any sub-PR that touches `runtime.ts`, `helpers/`, `core/Publisher.ts`, `fork/*.ts`, or the published templates. Report the result in the PR description (pass / fail / skip-because-environment).
+- For PRs that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
+
+If a sub-PR breaks the example, fix it in the same sub-PR. The example is part of the entregable, not a separate concern. CI enforcement of the full gate is M4 work; until then the typecheck gate is mechanical and the runtime gate is honor-system but mandatory.
 
 ---
 

@@ -20,6 +20,21 @@ fi
 
 echo "✓ Unit tests passed!"
 
+# Example typecheck (fast — builds movehat, then tsc --noEmit against examples/counter-example).
+# Catches API breakage in `movehat/helpers` / root exports the moment it would land,
+# so a sub-PR that renames/removes an export must migrate the example in the same PR.
+echo "→ Typechecking examples/counter-example against movehat..."
+pnpm check:example
+
+if [ $? -ne 0 ]; then
+  echo "❌ Example typecheck failed! Push aborted."
+  echo "   examples/counter-example uses movehat as workspace:* — if you renamed"
+  echo "   or removed an export, migrate the example in this same PR."
+  exit 1
+fi
+
+echo "✓ Example typecheck passed!"
+
 # Optional: Run E2E tests (slow, only if MOVEHAT_E2E=1)
 if [ "$MOVEHAT_E2E" = "1" ]; then
   echo ""
