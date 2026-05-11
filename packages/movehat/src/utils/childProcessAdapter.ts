@@ -173,10 +173,18 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       stdio,
     });
 
+    // `exited` must settle whether the child dies via natural exit, kill,
+    // or a spawn-time `error` (e.g. ENOENT). Both events resolve once;
+    // a settled guard prevents double-resolve if both happen to fire.
     const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-      child.on('exit', (code, signal) => {
+      let settled = false;
+      const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (settled) return;
+        settled = true;
         resolve({ code, signal });
-      });
+      };
+      child.on('exit', (code, signal) => finish(code, signal));
+      child.on('error', () => finish(null, null));
     });
 
     return {

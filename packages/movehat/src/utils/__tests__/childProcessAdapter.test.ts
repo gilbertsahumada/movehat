@@ -171,6 +171,21 @@ describe('defaultChildProcessAdapter.spawn', () => {
     expect(first.code).toBe(7);
     expect(second.code).toBe(7);
   });
+
+  it('exited resolves when the command does not exist (error event)', async () => {
+    // Spawning a nonexistent binary fires `error` (ENOENT), not `exit`.
+    // exited must still settle so the caller doesn't hang.
+    const child = defaultChildProcessAdapter.spawn({
+      command: '/nonexistent/path/to/binary-xyz',
+      args: [],
+    });
+
+    const result = await child.exited;
+
+    // When the OS rejects the spawn, no exit code or signal is meaningful.
+    expect(result.code).toBeNull();
+    expect(result.signal).toBeNull();
+  });
 });
 
 describe('defaultChildProcessAdapter.run with inheritStdio', () => {
