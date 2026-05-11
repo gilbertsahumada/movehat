@@ -1,7 +1,7 @@
-import { spawn } from "child_process";
 import { existsSync } from "fs";
 import { resolve } from "path";
 import { loadUserConfig } from "../core/config.js";
+import { runCli } from "../utils/runCli.js";
 
 interface RunMoveTestsOptions {
   filter?: string;
@@ -44,25 +44,29 @@ export async function runMoveTests(options: RunMoveTestsOptions = {}): Promise<v
     args.push("--ignore-compile-warnings");
   }
 
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn("movement", args, {
-      stdio: "inherit",
-      cwd: process.cwd(),
-    });
+  let result;
+  try {
+    result = await runCli(
+      {
+        command: "movement",
+        args,
+        cwd: process.cwd(),
+        inheritStdio: true,
+      },
+      { throwOnNonZeroExit: false }
+    );
+  } catch (error) {
+    // Spawn-time failure (ENOENT, etc.). The original code logged a
+    // Movement-CLI-install hint here; keep that.
+    console.error(`Failed to run Move tests: ${(error as Error).message}`);
+    console.error("   Make sure Movement CLI is installed");
+    throw error;
+  }
 
-    child.on("exit", (code) => {
-      if (code === 0) {
-        console.log("\n✓ Move tests passed");
-        resolve();
-      } else {
-        reject(new Error("Move tests failed"));
-      }
-    });
+  if (result.exitCode === 0) {
+    console.log("\n✓ Move tests passed");
+    return;
+  }
 
-    child.on("error", (error) => {
-      console.error(`Failed to run Move tests: ${error.message}`);
-      console.error("   Make sure Movement CLI is installed");
-      reject(error);
-    });
-  });
+  throw new Error("Move tests failed");
 }
