@@ -60,6 +60,27 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Document Every Change in the Changelog
+
+**Every change must leave a professional trace in `CHANGELOG.md`.**
+
+For every PR, add an entry under `## [Unreleased]` in `CHANGELOG.md` following [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/):
+
+- Pick the correct category: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+- Write **one bullet per user-visible change**, in imperative voice and present tense ("Add X", "Fix Y", "Deprecate Z").
+- Describe **what the user sees**, not the implementation. No commit hashes, no file paths, no internal class names unless they are part of the public API.
+- Reference the PR or issue at the end of the bullet: `(#75)`.
+- Pure internal work (refactors, test-only changes, tooling, formatting) is the **only** exemption — and when in doubt, write an entry anyway. The publish workflow (M6) will block any tag whose CHANGELOG section is missing.
+
+Example:
+```
+### Added
+- `Harness.createLocal()` factory replacing `mh()` for local-node tests (#69).
+
+### Fixed
+- Account pool file is created with `0o600` permissions (#65).
+```
+
 ---
 
 ## Project-Specific Context

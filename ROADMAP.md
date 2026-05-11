@@ -24,6 +24,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 2. **Hardhat-style API.** Method names align with the broader Move/Aptos testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
 3. **TypeDoc complements Fumadocs.** TypeDoc emits MDX into `packages/docs/content/docs/api/`; Fumadocs renders.
 4. **Unit ≠ integration tests.** Unit tests may mock `child_process` via an injectable adapter. The integration suite runs the real Movement CLI without mocks.
+5. **Changelog discipline.** Every PR adds an entry to `CHANGELOG.md` under `[Unreleased]` in [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) format, with the correct category (`Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`), written in imperative voice, describing the user-visible change and referencing the PR or issue. Pure internal work (refactors, test-only, tooling) is the only exemption. The M6 publish workflow rejects tags whose CHANGELOG section is missing.
 
 ---
 
