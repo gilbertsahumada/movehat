@@ -3,8 +3,10 @@
 # ===========================================
 # Pre-push hook for MoveHat
 # ===========================================
-# Runs unit tests before allowing push
-# Set MOVEHAT_E2E=1 to also run E2E tests
+# Runs unit tests + example typecheck before allowing push.
+# Env flags:
+#   MOVEHAT_E2E=1                 → also run E2E tests
+#   MOVEHAT_SKIP_EXAMPLE_CHECK=1  → skip the example typecheck (for WIP)
 # ===========================================
 
 echo "Running pre-push checks..."
@@ -19,6 +21,39 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✓ Unit tests passed!"
+
+# Example typecheck gate (two phases so the failure message points at the right place).
+if [ "$MOVEHAT_SKIP_EXAMPLE_CHECK" = "1" ]; then
+  echo "→ Example typecheck skipped (MOVEHAT_SKIP_EXAMPLE_CHECK=1)"
+else
+  # Phase 1: movehat must compile. Failure here is a TS error inside packages/movehat/src.
+  echo "→ Building movehat (needed for example typecheck)..."
+  pnpm build:movehat
+
+  if [ $? -ne 0 ]; then
+    echo "❌ movehat build failed! Push aborted."
+    echo "   This is a TypeScript error in packages/movehat/src — fix the package itself."
+    echo "   The example wasn't even reached."
+    exit 1
+  fi
+
+  echo "✓ movehat build succeeded"
+
+  # Phase 2: example typechecks against the freshly built movehat. Failure here means
+  # the public surface changed in a way the example can't consume.
+  echo "→ Typechecking examples/counter-example against movehat..."
+  pnpm typecheck:example
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Example typecheck failed! Push aborted."
+    echo "   examples/counter-example uses movehat as workspace:* — if you renamed"
+    echo "   or removed an export, migrate the example in this same PR."
+    echo "   To push WIP intentionally, set MOVEHAT_SKIP_EXAMPLE_CHECK=1."
+    exit 1
+  fi
+
+  echo "✓ Example typecheck passed!"
+fi
 
 # Optional: Run E2E tests (slow, only if MOVEHAT_E2E=1)
 if [ "$MOVEHAT_E2E" = "1" ]; then

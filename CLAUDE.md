@@ -74,18 +74,49 @@ The rule:
 
 When in doubt about granularity: prefer one sub-issue per logical refactor (e.g. "migrate the address helpers" is one sub-issue, "migrate the child_process callers" is another). A sub-PR that takes more than a day of focused work is a sign it should be split further.
 
-## 6. Verify the Example Project
+## 6. The Example is a Scaffold, Not a Migration Target
 
-**The `examples/counter-example/` is the canonical install-experience test. Any PR that touches `packages/movehat/src/**`, `packages/movehat/bin/**`, `packages/movehat/package.json` exports, or the published templates must verify the example still works before being declared ready.**
+**`examples/counter-example/` is the canonical scaffold — the reference implementation of "how to use movehat" that users read, copy, and trust. Users do not migrate; *we* maintain it so that anyone running `npm install movehat` lands on a working setup. README.md and `packages/docs/` must reflect the same shape the example exhibits.**
 
-Practical checklist:
+Three things follow from this:
 
-- Run `pnpm test:example` (mocha suite under `examples/counter-example/tests/`) and report the result in the PR description.
-- For changes that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
-- For changes that affect deploy / runtime / fork paths, run `pnpm test:e2e:quick`.
-- If any of those scripts is broken by infrastructure (Movement CLI not installed, missing keys), say so explicitly in the PR rather than silently skipping.
+### 6.1 Fast gate — mechanical, enforced by `pre-push`
 
-CI enforcement of this rule is itself M4 work — until then, the gate is manual but mandatory.
+- Hook lives at `.husky/pre-push` and runs in two phases:
+  1. `pnpm build:movehat` — packages/movehat/src compiles cleanly. Failure here is a TypeScript error inside the package, not an example concern.
+  2. `pnpm typecheck:example` — `tsc --noEmit` over `examples/counter-example` against the freshly built movehat. Failure here means the public surface of `movehat` / `movehat/helpers` changed in a way the example can no longer consume.
+- Both can be invoked together as `pnpm check:example` (~10s total, no network, no keys).
+- Skip flag for intentional WIP pushes: `MOVEHAT_SKIP_EXAMPLE_CHECK=1`. The unit-test gate remains mandatory regardless.
+
+**Strictness asymmetry (deliberate):** `examples/counter-example/tsconfig.json` enables `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and `verbatimModuleSyntax`, all of which `packages/movehat/tsconfig.json` does not enable. That makes the example **the strictest consumer** of the movehat public surface. Code that compiles inside movehat but fails in the example is a signal that the API is fragile for end users — fix the API, do not loosen the example.
+
+### 6.2 Runtime gate — manual, honor-system but mandatory
+
+- `pnpm test:example` runs the mocha suite under `examples/counter-example/tests/`. Slow, requires Movement CLI installed locally; some tests need a `PRIVATE_KEY` env for testnet flows.
+- Run before opening or re-requesting review on any sub-PR that touches `runtime.ts`, `helpers/`, `core/Publisher.ts`, `fork/*.ts`, or the published templates. Report the result in the PR description: pass / fail / skip-with-reason.
+- For PRs that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
+
+### 6.3 Docs sync — README + packages/docs/ track the example
+
+The example is the *source of truth* for what a user sees. The README and `packages/docs/content/docs/` are derived views of the same shape — they describe what the example demonstrates. When a sub-PR changes the example (because the public surface changed), the same PR must:
+
+- Update any code snippet in `README.md` that quoted the now-changed surface.
+- Update any matching MDX page in `packages/docs/content/docs/{getting-started,guides,cli}/` that references the renamed / restructured API.
+- If the change is large enough that several MDX files drift, open a follow-up "docs sync" sub-PR (referenced in the original PR) rather than letting the rest of the work block on it. Never let docs go stale silently.
+
+Auto-generated docs (TypeDoc) are M5 work; until then this sync is manual and the responsibility falls on the author of the breaking sub-PR.
+
+### 6.4 Summary of the loop
+
+```
+movehat/src/*  →  example uses it  →  README + docs describe it
+       ↑                ↑                          ↑
+       └─ typecheck ────┘                          │
+                                                   │
+       └─────────── manual review per PR ──────────┘
+```
+
+If a sub-PR breaks the example, fix it in the same sub-PR. The example is part of the entregable, not a separate concern. CI enforcement of the runtime gate is M4 work; auto-generated docs are M5; until then the typecheck gate is mechanical and the rest is honor-system but mandatory.
 
 ---
 
