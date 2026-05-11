@@ -257,5 +257,25 @@ describe('ForkStorage', () => {
         storage.saveResource('0x123/../../etc', 'test::Resource', { value: 1 });
       }).toThrow('Invalid address format');
     });
+
+    it('should reject addresses with more than 64 hex chars (Aptos/Movement cap)', () => {
+      const storage = new ForkStorage(forkPath);
+      const sixtyFiveHex = '0x' + 'a'.repeat(65);
+
+      expect(() => {
+        storage.saveResource(sixtyFiveHex, 'test::Resource', { value: 1 });
+      }).toThrow('Invalid address format');
+    });
+
+    it('should accept addresses exactly at the 64 hex char limit', () => {
+      const storage = new ForkStorage(forkPath);
+      const sixtyFourHex = '0x' + 'a'.repeat(64);
+
+      expect(() => {
+        storage.saveResource(sixtyFourHex, 'test::Resource', { value: 1 });
+      }).not.toThrow();
+
+      expect(vol.existsSync(`${forkPath}/resources/${sixtyFourHex}.json`)).toBe(true);
+    });
   });
 });

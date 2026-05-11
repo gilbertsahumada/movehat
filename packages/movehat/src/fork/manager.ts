@@ -1,6 +1,7 @@
 import { MovementApiClient } from './api.js';
 import { ForkStorage } from './storage.js';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
+import { normalizeAddress } from '../utils/address.js';
 
 /**
  * Manager for fork operations
@@ -72,7 +73,7 @@ export class ForkManager {
    */
   async getAccount(address: string): Promise<AccountState> {
     // Normalize address
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
 
     // Check cache first
     let accountState = this.storage.getAccount(normalizedAddress);
@@ -103,7 +104,7 @@ export class ForkManager {
    * Get a specific resource (with lazy loading)
    */
   async getResource(address: string, resourceType: string): Promise<any> {
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
 
     // Check cache first
     let resource = this.storage.getResource(normalizedAddress, resourceType);
@@ -138,7 +139,7 @@ export class ForkManager {
    * Get all resources for an account (with lazy loading)
    */
   async getAllResources(address: string): Promise<Record<string, any>> {
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
 
     // Check if we have any cached resources
     let resources = this.storage.getAllResources(normalizedAddress);
@@ -169,7 +170,7 @@ export class ForkManager {
    * Set a resource value (for testing/mocking)
    */
   async setResource(address: string, resourceType: string, data: any): Promise<void> {
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);
     console.log(`  ✓ Updated resource ${resourceType} for ${normalizedAddress}`);
   }
@@ -178,7 +179,7 @@ export class ForkManager {
    * Fund an account with coins (adds to existing balance)
    */
   async fundAccount(address: string, amount: number, coinType: string = '0x1::aptos_coin::AptosCoin'): Promise<void> {
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
     // Try to get existing coin store
@@ -235,24 +236,6 @@ export class ForkManager {
     }
 
     console.log(`  ✓ Funded ${normalizedAddress} with ${amount} coins`);
-  }
-
-  /**
-   * Normalize address format
-   */
-  private normalizeAddress(address: string): string {
-    let normalized = address.toLowerCase();
-
-    if (!normalized.startsWith('0x')) {
-      normalized = `0x${normalized}`;
-    }
-
-    // Pad to 66 characters (0x + 64 hex chars)
-    if (normalized.length < 66) {
-      normalized = '0x' + normalized.slice(2).padStart(64, '0');
-    }
-
-    return normalized;
   }
 
   /**
@@ -317,7 +300,7 @@ export class ForkManager {
    * const account = await forkManager.getOrCreateAccount("0x123...");
    */
   async getOrCreateAccount(address: string): Promise<AccountState> {
-    const normalizedAddress = this.normalizeAddress(address);
+    const normalizedAddress = normalizeAddress(address);
 
     // Try to get existing account
     try {
