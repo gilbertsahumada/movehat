@@ -5,32 +5,11 @@ import {
   type RunInput,
   type RunResult,
 } from './childProcessAdapter.js';
+import { redactSecrets } from './redact.js';
+
+export { redactSecrets } from './redact.js';
 
 const STDOUT_PREVIEW_CHARS = 2000;
-
-/**
- * Patterns that match well-known secret shapes Movement / Aptos tools emit on
- * stderr or stdout. The matched span is replaced with `***REDACTED***`.
- *
- * Order matters when patterns overlap: the longer / more specific shape goes
- * first.
- */
-const SECRET_PATTERNS: readonly RegExp[] = [
-  /ed25519-priv-0x[0-9a-fA-F]{64}/g,
-  /(private[_-]?key|priv[_-]?key|priv|key)\s*[:=]\s*0x[0-9a-fA-F]{32,}/gi,
-];
-
-/**
- * Replaces every match of every known secret pattern with `***REDACTED***`.
- * Pure function; the input string is not mutated.
- */
-export function redactSecrets(text: string): string {
-  let out = text;
-  for (const pattern of SECRET_PATTERNS) {
-    out = out.replace(pattern, '***REDACTED***');
-  }
-  return out;
-}
 
 export interface RunCliOptions {
   /** Override the child-process adapter (defaults to spawn-based). */
