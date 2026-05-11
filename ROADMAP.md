@@ -52,7 +52,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **Goal**: Refactor core modules so they can be unit-tested without spawning real processes or relying on global state.
 
-**Sub-issues** (each is a separate PR, executed in order; M1.4 may parallelize with M1.5/M1.6 once M1.3 lands):
+**Sub-issues** (each is a separate PR. Execution order: M1.2 → M1.3 → M1.4 → M1.5 in serial — M1.4 and M1.5 both rewrite `runtime.ts` and would collide if run in parallel. M1.6 may parallelize with M1.4 or M1.5 because it touches `core/config.ts` and an isolated return signature. M1.7 may run at any time.):
 
 | Sub-PR | Issue | Focus | Closes |
 |--------|-------|-------|--------|
