@@ -102,3 +102,73 @@ describe('defaultChildProcessAdapter', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('defaultChildProcessAdapter.spawn', () => {
+  it('returns a handle with pid and streams, and exits cleanly when the child finishes on its own', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', "process.stdout.write('hi'); process.exit(0)"],
+    });
+
+    expect(typeof child.pid).toBe('number');
+    expect(child.stdout).not.toBeNull();
+    expect(child.stderr).not.toBeNull();
+    expect(child.stdin).not.toBeNull();
+
+    let captured = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      captured += chunk.toString('utf8');
+    });
+
+    const result = await child.exited;
+    expect(result.code).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(captured).toBe('hi');
+  });
+
+  it('kill(SIGTERM) terminates a long-running child and surfaces the signal in exited', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    });
+
+    const start = Date.now();
+    const killed = child.kill('SIGTERM');
+    expect(killed).toBe(true);
+
+    const result = await child.exited;
+    const elapsed = Date.now() - start;
+
+    expect(result.signal).toBe('SIGTERM');
+    expect(result.code).toBeNull();
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('with stdio: ignore, exposes null streams but still resolves exited', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', "process.stdout.write('hidden'); process.exit(0)"],
+      stdio: 'ignore',
+    });
+
+    expect(child.stdout).toBeNull();
+    expect(child.stderr).toBeNull();
+    expect(child.stdin).toBeNull();
+
+    const result = await child.exited;
+    expect(result.code).toBe(0);
+  });
+
+  it('exited can be awaited more than once', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', 'process.exit(7)'],
+    });
+
+    const first = await child.exited;
+    const second = await child.exited;
+
+    expect(first.code).toBe(7);
+    expect(second.code).toBe(7);
+  });
+});

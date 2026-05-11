@@ -13,6 +13,9 @@ function makeAdapter(result: RunResult, capture?: { last?: RunInput }): ChildPro
       if (capture) capture.last = input;
       return result;
     },
+    spawn() {
+      throw new Error('spawn not used in runCli tests');
+    },
   };
 }
 
@@ -198,6 +201,9 @@ describe('runCli', () => {
             });
           });
         });
+      },
+      spawn() {
+        throw new Error('spawn not used in this test');
       },
     };
 
