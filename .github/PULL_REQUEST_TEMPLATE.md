@@ -21,6 +21,7 @@
 ## Checklist
 
 - [ ] `pnpm test` passes locally
+- [ ] `pnpm test:example` passes — or this PR doesn't touch `packages/movehat/src/**`, `bin/**`, or published templates (mark N/A in "How was this tested?")
 - [ ] CHANGELOG `[Unreleased]` updated if user-visible
 - [ ] Docs updated if public API or CLI surface changed
 - [ ] Conventional Commits used in commit messages
