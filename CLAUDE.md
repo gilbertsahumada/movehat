@@ -118,6 +118,24 @@ movehat/src/*  →  example uses it  →  README + docs describe it
 
 If a sub-PR breaks the example, fix it in the same sub-PR. The example is part of the entregable, not a separate concern. CI enforcement of the runtime gate is M4 work; auto-generated docs are M5; until then the typecheck gate is mechanical and the rest is honor-system but mandatory.
 
+## 7. Keep ROADMAP.md in Sync with Reality
+
+**Every sub-PR that lands a roadmap milestone item must update `ROADMAP.md` in the same PR — never in a follow-up.**
+
+The rule:
+
+- Tick off `- [ ]` → `- [x]` for every DoD bullet the PR satisfies. If a bullet is partially satisfied (e.g. "M1.4 finishes the rest"), annotate inline with the dependent sub-issue rather than leaving it ambiguous.
+- Update the milestone's sub-PR table:
+  - Add a `✅` to the Status column when the row's work merges.
+  - Append the shipped PR number to the row (e.g. `(shipped in PR #87)`).
+  - If a milestone got split mid-flight into sub-PRs (e.g. M1.3 → M1.3a + M1.3b + M1.3c), record the split in the table when the split is decided, not after.
+- Update the milestone header line itself (`### MX — …`) with `— ✅ shipped in PR #N` when every DoD bullet flips to `[x]`. That gives a one-line scan view of milestone-level progress.
+- For items mechanically impossible to satisfy (e.g. "CI green" while GitHub Actions are paused), use `[N/A]` plus a one-line reason rather than leaving them unchecked indefinitely.
+
+Why this matters: without this rule, the ROADMAP drifts from reality. M0 + M1.1 + M1.2 + M1.3a shipped before this rule was written, and every DoD bullet for those milestones was still `- [ ]` weeks later — making the ROADMAP useless as a status view and forcing readers to cross-reference issues and PR titles to know what's done.
+
+How to apply: when finalizing a sub-PR (before pushing), grep the ROADMAP for the milestone you just touched, and check off every bullet the PR satisfies. If you're unsure whether a bullet is satisfied, ask in the PR description rather than guessing.
+
 ---
 
 ## Project-Specific Context
