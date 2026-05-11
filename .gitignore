@@ -52,3 +52,4 @@ pnpm-debug.log*
 !BENCHMARKS.md
 !MOVEMENT_CLI_COMPAT.md
 !NOTICE.md
+!.github/**/*.md
