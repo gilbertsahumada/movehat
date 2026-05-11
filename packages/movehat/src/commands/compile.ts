@@ -189,8 +189,9 @@ async function runMovementBuild(
   args: readonly string[],
   cwd: string
 ): Promise<void> {
-  // runCli throws CliExecutionError on non-zero exit, which is what the
-  // outer catch in compileMove() turns into a "Compilation failed" message.
+  // Use throwOnNonZeroExit:false so we can log stdout/stderr in both
+  // success and failure paths, matching the behavior of the previous
+  // exec-based helper.
   const result = await runCli(
     {
       command: "movement",
@@ -198,10 +199,15 @@ async function runMovementBuild(
       cwd,
       timeoutMs: 120000, // 2 minutes for git dependency downloads
     },
-    { throwOnNonZeroExit: true }
+    { throwOnNonZeroExit: false }
   );
+
   if (result.stdout) console.log(result.stdout.trim());
   if (result.stderr) console.error(result.stderr.trim());
+
+  if (result.exitCode !== 0) {
+    throw new Error(`movement move build exited with code ${result.exitCode}`);
+  }
 }
 
 /**
