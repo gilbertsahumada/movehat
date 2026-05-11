@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/gilbertsahumada/movehat/security/advisories/new
+    about: Please report security issues privately, not as a public issue. See SECURITY.md.
+  - name: Documentation
+    url: https://github.com/gilbertsahumada/movehat#readme
+    about: Read the README and QUICKSTART before opening a question.
