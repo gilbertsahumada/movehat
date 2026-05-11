@@ -39,6 +39,9 @@ export async function runCli(
     stdout: redactSecrets(raw.stdout),
     stderr: redactSecrets(raw.stderr),
   };
+  if (raw.signal) {
+    result.signal = raw.signal;
+  }
 
   if (result.exitCode !== 0 && throwOnNonZeroExit) {
     throw new CliExecutionError(

@@ -148,4 +148,72 @@ describe('runCli', () => {
       expect(err.stdoutPreview.length).toBe(2000);
     }
   });
+
+  it('redacts secret-shaped args inside CliExecutionError.args', async () => {
+    const key = 'ed25519-priv-0x' + 'a'.repeat(64);
+    const adapter = makeAdapter({ exitCode: 1, stdout: '', stderr: '' });
+
+    try {
+      await runCli(
+        { command: 'movement', args: ['publish', '--private-key', key] },
+        { adapter }
+      );
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as CliExecutionError;
+      expect(err.args[0]).toBe('publish');
+      expect(err.args[1]).toBe('--private-key');
+      expect(err.args[2]).toBe('***REDACTED***');
+    }
+  });
+
+  it('preserves non-secret args unchanged', async () => {
+    const adapter = makeAdapter({ exitCode: 1, stdout: '', stderr: '' });
+    const args = ['move', 'publish', '--package-dir', '/tmp/pkg'];
+
+    try {
+      await runCli({ command: 'movement', args }, { adapter });
+      expect.fail('should have thrown');
+    } catch (e) {
+      const err = e as CliExecutionError;
+      expect(Array.from(err.args)).toEqual(args);
+    }
+  });
+
+  it('propagates AbortSignal to a slow adapter and returns the killed result', async () => {
+    const slowAdapter: ChildProcessAdapter = {
+      run(input) {
+        return new Promise((resolve) => {
+          const t = setTimeout(
+            () => resolve({ exitCode: 0, stdout: '', stderr: '' }),
+            5000
+          );
+          input.signal?.addEventListener('abort', () => {
+            clearTimeout(t);
+            resolve({
+              exitCode: -1,
+              stdout: '',
+              stderr: '',
+              signal: 'SIGTERM',
+            });
+          });
+        });
+      },
+    };
+
+    const controller = new AbortController();
+    const start = Date.now();
+    const promise = runCli(
+      { command: 'movement', args: ['move', 'test'], signal: controller.signal },
+      { adapter: slowAdapter, throwOnNonZeroExit: false }
+    );
+    setTimeout(() => controller.abort(), 20);
+
+    const result = await promise;
+    const elapsed = Date.now() - start;
+
+    expect(result.exitCode).toBe(-1);
+    expect(result.signal).toBe('SIGTERM');
+    expect(elapsed).toBeLessThan(500);
+  });
 });
