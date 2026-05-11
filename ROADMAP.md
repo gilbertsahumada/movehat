@@ -59,7 +59,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ✅ | M1.1 | (shipped in PR #76) | `utils/runCli.ts`, `utils/childProcessAdapter.ts`, `utils/address.ts` + tests; no migration | foundations |
 | ✅ | M1.2 | [#77](https://github.com/gilbertsahumada/movehat/issues/77) (shipped in PR #87) | Migrate `fork/{manager,api,storage}.ts` to `utils/address.ts` | [#56](https://github.com/gilbertsahumada/movehat/issues/56) |
 | ✅ | M1.3a | [#88](https://github.com/gilbertsahumada/movehat/issues/88) (shipped in PR #89) | Extend `ChildProcessAdapter` with `spawn()` + `inheritStdio` (foundations for M1.3 migration) | foundations |
-| ⏳ | M1.3b | [#90](https://github.com/gilbertsahumada/movehat/issues/90) | Migrate 6 simple callsites (`commands/{run,test,update,compile}`, `helpers/move-tests`, `fork/test`) to `runCli` | (partial of [#58](https://github.com/gilbertsahumada/movehat/issues/58)) |
+| ✅ | M1.3b | [#90](https://github.com/gilbertsahumada/movehat/issues/90) (shipped in PR #92) | Migrate 6 simple callsites (`commands/{run,test,update,compile}`, `helpers/move-tests`, `fork/test`) to `runCli` | (partial of [#58](https://github.com/gilbertsahumada/movehat/issues/58)) |
 | ⏳ | M1.3c | [#78](https://github.com/gilbertsahumada/movehat/issues/78) | Migrate `runtime.ts` publish + `node/LocalNodeManager.ts` daemon + stderr-redaction unit test | completes [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
 | ⏳ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy temp dir + SIGINT handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
 | ⏳ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
@@ -67,7 +67,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ⏳ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
 
 **Definition of Done** (rolled up from the sub-issues):
-- [x] `packages/movehat/src/utils/runCli.ts` exists (M1.1, #76) — replaces all direct `exec`/`spawn` callers ⏳ pending M1.3b/M1.3c
+- [x] `packages/movehat/src/utils/runCli.ts` exists (M1.1, #76) — replaces all direct `exec`/`spawn` callers ⏳ partial: 6 of 8 sites migrated in M1.3b (#92); `runtime.ts` + `LocalNodeManager.ts` pending M1.3c (#78)
 - [x] `packages/movehat/src/utils/childProcessAdapter.ts` exists with injectable interface (M1.1, #76) — extended with `spawn()` + `inheritStdio` in M1.3a (#89)
 - [x] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts` (M1.2, #87)
 - [ ] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it — pending M1.4 (#79)
