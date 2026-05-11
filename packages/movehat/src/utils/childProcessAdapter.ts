@@ -21,9 +21,19 @@ export interface RunInput {
 }
 
 export interface RunResult {
+  /**
+   * Numeric exit code from the child. `-1` when the child was terminated by
+   * a signal (no numeric exit code available) — in that case `signal` is
+   * populated.
+   */
   exitCode: number;
   stdout: string;
   stderr: string;
+  /**
+   * Populated when the child died from a signal (e.g. external abort, kill
+   * during shutdown). `undefined` for normal exits.
+   */
+  signal?: NodeJS.Signals;
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -70,14 +80,18 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         reject(err);
       });
 
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
         clearTimeout(timeoutHandle);
         input.signal?.removeEventListener('abort', onAbort);
-        resolve({
-          exitCode: code ?? 0,
+        const result: RunResult = {
+          exitCode: code !== null ? code : -1,
           stdout: Buffer.concat(stdoutChunks).toString('utf8'),
           stderr: Buffer.concat(stderrChunks).toString('utf8'),
-        });
+        };
+        if (signal) {
+          result.signal = signal;
+        }
+        resolve(result);
       });
 
       if (input.stdin !== undefined) {
