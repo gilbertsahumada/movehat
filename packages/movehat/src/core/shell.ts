@@ -16,19 +16,20 @@ export function escapeShellArg(arg: string): string {
 }
 
 /**
- * Validates that a path is safe (no command injection characters)
- * and returns the escaped version
+ * Validates that a path is safe (no command injection characters) and
+ * returns it unchanged. Use this for callers that pass paths to spawn-with-
+ * args (no shell), where shell quoting would be incorrect.
  *
- * @param path - The path to validate and escape
+ * @param path - The path to validate
  * @param name - Name for error messages (e.g., "package directory")
- * @returns The escaped path safe for shell execution
+ * @returns The original path, after validation
  */
-export function validateAndEscapePath(path: string, name: string = "path"): string {
+export function validatePathSafety(path: string, name: string = "path"): string {
   if (!path || typeof path !== "string") {
     throw new Error(`Invalid ${name}: must be a non-empty string`);
   }
 
-  // Check for obvious command injection attempts
+  // Check for obvious command injection attempts.
   const dangerousChars = /[;&|`$(){}[\]<>]/;
   if (dangerousChars.test(path)) {
     throw new Error(
@@ -38,8 +39,20 @@ export function validateAndEscapePath(path: string, name: string = "path"): stri
     );
   }
 
-  // Escape for shell safety
-  return escapeShellArg(path);
+  return path;
+}
+
+/**
+ * Validates a path and returns the shell-escaped form. Wraps
+ * `validatePathSafety` for callers that pass paths into shell-style
+ * commands (e.g. `exec`).
+ *
+ * @param path - The path to validate and escape
+ * @param name - Name for error messages
+ * @returns The escaped path safe for shell execution
+ */
+export function validateAndEscapePath(path: string, name: string = "path"): string {
+  return escapeShellArg(validatePathSafety(path, name));
 }
 
 /**

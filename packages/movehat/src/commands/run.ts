@@ -1,8 +1,8 @@
-import { spawn } from "child_process";
 import { resolve, extname, dirname, join } from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import { runCli } from "../utils/runCli.js";
 
 export default async function runCommand(scriptPath: string) {
   if (!scriptPath) {
@@ -79,21 +79,23 @@ export default async function runCommand(scriptPath: string) {
   }
 
   // Execute script with tsx (handles both .ts and .js files)
-  // Using 'node' to execute tsx for cross-platform compatibility
-  const child = spawn("node", [tsxPath, fullPath], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      // MH_CLI_NETWORK is already set by the CLI hook
-    },
-  });
-
-  child.on("exit", (code) => {
-    process.exit(code || 0);
-  });
-
-  child.on("error", (error) => {
-    console.error(`❌ Failed to execute script: ${error.message}`);
+  // Using 'node' to execute tsx for cross-platform compatibility.
+  try {
+    const result = await runCli(
+      {
+        command: "node",
+        args: [tsxPath, fullPath],
+        env: {
+          ...process.env,
+          // MH_CLI_NETWORK is already set by the CLI hook
+        },
+        inheritStdio: true,
+      },
+      { throwOnNonZeroExit: false }
+    );
+    process.exit(result.exitCode || 0);
+  } catch (error) {
+    console.error(`❌ Failed to execute script: ${(error as Error).message}`);
     process.exit(1);
-  });
+  }
 }

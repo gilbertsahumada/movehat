@@ -1,9 +1,9 @@
-import { spawn } from "child_process";
 import { join } from "path";
 import { existsSync } from "fs";
 import prompts from "prompts";
 import { runMoveTests } from "../helpers/move-tests.js";
 import { logger, colors, symbols } from "../ui/index.js";
+import { runCli } from "../utils/runCli.js";
 
 interface TestOptions {
   move?: boolean;
@@ -194,57 +194,69 @@ async function runAllTests(filter?: string): Promise<void> {
 /**
  * Run TypeScript tests using Mocha
  */
-function runTypeScriptTests(watch: boolean = false): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const testDir = join(process.cwd(), "tests");
+async function runTypeScriptTests(watch: boolean = false): Promise<void> {
+  const testDir = join(process.cwd(), "tests");
 
-    if (!existsSync(testDir)) {
-      console.log(`${colors.muted(symbols.info)} No TypeScript tests found ${colors.muted("(tests/ directory not found)")}`);
-      console.log(`   ${colors.muted("Skipping TypeScript tests...")}`);
-      logger.newline();
-      resolve();
-      return;
-    }
+  if (!existsSync(testDir)) {
+    console.log(`${colors.muted(symbols.info)} No TypeScript tests found ${colors.muted("(tests/ directory not found)")}`);
+    console.log(`   ${colors.muted("Skipping TypeScript tests...")}`);
+    logger.newline();
+    return;
+  }
 
-    const mochaPath = join(process.cwd(), "node_modules", ".bin", "mocha");
+  const mochaPath = join(process.cwd(), "node_modules", ".bin", "mocha");
 
-    if (!existsSync(mochaPath)) {
-      logger.error("Mocha not found in project dependencies");
-      console.log(`   ${colors.muted("Install it with:")} ${colors.info("npm install --save-dev mocha")}`);
-      reject(new Error("Mocha not found"));
-      return;
-    }
+  if (!existsSync(mochaPath)) {
+    logger.error("Mocha not found in project dependencies");
+    console.log(`   ${colors.muted("Install it with:")} ${colors.info("npm install --save-dev mocha")}`);
+    throw new Error("Mocha not found");
+  }
 
-    const args = watch ? ["--watch"] : [];
+  const args = watch ? ["--watch"] : [];
 
-    const child = spawn(mochaPath, args, {
-      stdio: "inherit",
-      env: {
-        ...process.env,
+  // Watch mode: Mocha never exits. We fire-and-forget runCli so it owns the
+  // terminal until the user Ctrl+Cs the parent (which kills the child via
+  // inherited stdio). Attach .catch so a spawn-time failure doesn't become
+  // an unhandled rejection.
+  if (watch) {
+    runCli(
+      {
+        command: mochaPath,
+        args,
+        env: { ...process.env },
+        inheritStdio: true,
       },
+      { throwOnNonZeroExit: false }
+    ).catch((error) => {
+      logger.error(`Mocha watch crashed: ${(error as Error).message}`);
+      process.exit(1);
     });
 
-    // In watch mode, Mocha never exits, so resolve immediately
-    if (watch) {
-      console.log(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
-      logger.newline();
-      resolve();
-      return;
-    }
+    console.log(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
+    logger.newline();
+    return;
+  }
 
-    // Non-watch mode: wait for exit
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        const exitCode = typeof code === "number" ? code : 1;
-        reject(new Error(`TypeScript tests failed with exit code ${exitCode}`));
-      }
-    });
+  // Non-watch mode: await the run, surface the exit code as a thrown error
+  // so the orchestrator above can summarize the failure.
+  let result;
+  try {
+    result = await runCli(
+      {
+        command: mochaPath,
+        args,
+        env: { ...process.env },
+        inheritStdio: true,
+      },
+      { throwOnNonZeroExit: false }
+    );
+  } catch (error) {
+    logger.error(`Failed to run TypeScript tests: ${(error as Error).message}`);
+    throw error;
+  }
 
-    child.on("error", (error) => {
-      logger.error(`Failed to run TypeScript tests: ${error.message}`);
-      reject(error);
-    });
-  });
+  if (result.exitCode === 0) {
+    return;
+  }
+  throw new Error(`TypeScript tests failed with exit code ${result.exitCode}`);
 }
