@@ -33,20 +33,20 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 
 Each milestone below lists **explicit, mechanically verifiable** acceptance criteria. The criteria use exact file paths, command outputs, and CLI invocations so progress is unambiguous.
 
-### M0 — Repository housekeeping (~1.5 days, issue #67)
+### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75
 
 **Goal**: Bring the repo to standard open-source hygiene.
 
 **Definition of Done**:
-- [ ] `LICENSE` (MIT) at repo root
-- [ ] `SECURITY.md` at repo root with disclosure policy and contact
-- [ ] `CHANGELOG.md` (Keep-a-Changelog) with `[Unreleased]` section
-- [ ] `.github/ISSUE_TEMPLATE/{bug,feature,question}.md` + `config.yml`
-- [ ] `.github/PULL_REQUEST_TEMPLATE.md`
-- [ ] `commitlint` + `@commitlint/config-conventional` installed; `commitlint.config.js` extends conventional preset
-- [ ] husky `commit-msg` hook calls `commitlint --edit "$1"`
-- [ ] `git commit -m "test"` is **rejected** by the local hook; `git commit -m "chore: test"` is accepted
-- [ ] CI green after PR lands
+- [x] `LICENSE` (MIT) at repo root
+- [x] `SECURITY.md` at repo root with disclosure policy and contact
+- [x] `CHANGELOG.md` (Keep-a-Changelog) with `[Unreleased]` section
+- [x] `.github/ISSUE_TEMPLATE/{bug,feature,question}.md` + `config.yml`
+- [x] `.github/PULL_REQUEST_TEMPLATE.md`
+- [x] `commitlint` + `@commitlint/config-conventional` installed; `commitlint.config.cjs` extends conventional preset
+- [x] husky `commit-msg` hook calls `commitlint --edit "$1"`
+- [x] `git commit -m "test"` is **rejected** by the local hook; `git commit -m "chore: test"` is accepted
+- [N/A] CI green after PR lands — GitHub Actions paused by user; security checks (GitGuardian, Socket, CodeRabbit) green
 
 ### M1 — Testability refactors (~5 days, issue #68)
 
@@ -54,28 +54,29 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **Sub-issues** (each is a separate PR. Execution order: M1.2 → M1.3 → M1.4 → M1.5 in serial — M1.4 and M1.5 both rewrite `runtime.ts` and would collide if run in parallel. M1.6 may parallelize with M1.4 or M1.5 because it touches `core/config.ts` and an isolated return signature. M1.7 may run at any time.):
 
-| Sub-PR | Issue | Focus | Closes |
-|--------|-------|-------|--------|
-| **M1.1** | (shipped in PR #76) | `utils/runCli.ts`, `utils/childProcessAdapter.ts`, `utils/address.ts` + tests; no migration | foundations |
-| M1.2 | [#77](https://github.com/gilbertsahumada/movehat/issues/77) | Migrate `fork/{manager,api,storage}.ts` to `utils/address.ts` | [#56](https://github.com/gilbertsahumada/movehat/issues/56) |
-| M1.3a | [#88](https://github.com/gilbertsahumada/movehat/issues/88) | Extend `ChildProcessAdapter` with `spawn()` + `inheritStdio` (foundations for M1.3 migration) | foundations |
-| M1.3b | [#78](https://github.com/gilbertsahumada/movehat/issues/78) | Migrate the 8 `exec`/`spawn` callsites to `runCli` using M1.3a foundations | [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
-| M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy temp dir + SIGINT handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
-| M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
-| M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache + `switchNetwork` returns runtime | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
-| M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
+| Status | Sub-PR | Issue | Focus | Closes |
+|---|---|---|---|---|
+| ✅ | M1.1 | (shipped in PR #76) | `utils/runCli.ts`, `utils/childProcessAdapter.ts`, `utils/address.ts` + tests; no migration | foundations |
+| ✅ | M1.2 | [#77](https://github.com/gilbertsahumada/movehat/issues/77) (shipped in PR #87) | Migrate `fork/{manager,api,storage}.ts` to `utils/address.ts` | [#56](https://github.com/gilbertsahumada/movehat/issues/56) |
+| ✅ | M1.3a | [#88](https://github.com/gilbertsahumada/movehat/issues/88) (shipped in PR #89) | Extend `ChildProcessAdapter` with `spawn()` + `inheritStdio` (foundations for M1.3 migration) | foundations |
+| ⏳ | M1.3b | [#90](https://github.com/gilbertsahumada/movehat/issues/90) | Migrate 6 simple callsites (`commands/{run,test,update,compile}`, `helpers/move-tests`, `fork/test`) to `runCli` | (partial of [#58](https://github.com/gilbertsahumada/movehat/issues/58)) |
+| ⏳ | M1.3c | [#78](https://github.com/gilbertsahumada/movehat/issues/78) | Migrate `runtime.ts` publish + `node/LocalNodeManager.ts` daemon + stderr-redaction unit test | completes [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
+| ⏳ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy temp dir + SIGINT handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
+| ⏳ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
+| ⏳ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache + `switchNetwork` returns runtime | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
+| ⏳ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
 
 **Definition of Done** (rolled up from the sub-issues):
-- [ ] `packages/movehat/src/utils/runCli.ts` exists; replaces all direct `exec`/`spawn` callers
-- [ ] `packages/movehat/src/utils/childProcessAdapter.ts` exists with injectable interface
-- [ ] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts`
-- [ ] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it
-- [ ] `grep -R "cachedRuntime\|currentForkServer\|currentForkManager\|currentLocalNode" packages/movehat/src` returns **no matches**
-- [ ] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn)
-- [ ] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml`
-- [ ] SIGINT during deploy leaves no private key on disk
-- [ ] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `Publisher`
-- [ ] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6)
+- [x] `packages/movehat/src/utils/runCli.ts` exists (M1.1, #76) — replaces all direct `exec`/`spawn` callers ⏳ pending M1.3b/M1.3c
+- [x] `packages/movehat/src/utils/childProcessAdapter.ts` exists with injectable interface (M1.1, #76) — extended with `spawn()` + `inheritStdio` in M1.3a (#89)
+- [x] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts` (M1.2, #87)
+- [ ] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it — pending M1.4 (#79)
+- [ ] `grep -R "cachedRuntime\|currentForkServer\|currentForkManager\|currentLocalNode" packages/movehat/src` returns **no matches** — pending M1.5 (#80)
+- [ ] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn) — pending M1.6 (#81)
+- [ ] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml` — pending M1.4 (#79)
+- [ ] SIGINT during deploy leaves no private key on disk — pending M1.4 (#79)
+- [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address` — `Publisher` tests pending M1.4 (currently **169/169** on develop)
+- [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate baseline 6/6 maintained (pre-existing #86 fails unrelated)
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 
