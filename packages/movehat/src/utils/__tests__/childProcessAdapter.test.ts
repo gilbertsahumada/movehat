@@ -61,8 +61,9 @@ describe('defaultChildProcessAdapter', () => {
     ).rejects.toThrow(/timed out/);
   });
 
-  it('aborts a running command when the signal fires', async () => {
+  it('aborts a running command with exitCode -1 and signal SIGTERM', async () => {
     const controller = new AbortController();
+    const start = Date.now();
     const promise = defaultChildProcessAdapter.run({
       command: NODE,
       args: ['-e', 'setTimeout(() => {}, 5000)'],
@@ -72,9 +73,11 @@ describe('defaultChildProcessAdapter', () => {
     setTimeout(() => controller.abort(), 20);
 
     const result = await promise;
-    // SIGTERM → child exits with non-zero (null on signal kill in some Node versions
-    // → adapter coerces to 0; we just assert it didn't hang)
-    expect(result).toBeDefined();
+    const elapsed = Date.now() - start;
+
+    expect(result.exitCode).toBe(-1);
+    expect(result.signal).toBe('SIGTERM');
+    expect(elapsed).toBeLessThan(500);
   });
 
   it('rejects synchronously when signal is already aborted', async () => {
