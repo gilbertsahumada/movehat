@@ -24,6 +24,8 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 2. **Hardhat-style API.** Method names align with the broader Move/Aptos testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
 3. **TypeDoc complements Fumadocs.** TypeDoc emits MDX into `packages/docs/content/docs/api/`; Fumadocs renders.
 4. **Unit ≠ integration tests.** Unit tests may mock `child_process` via an injectable adapter. The integration suite runs the real Movement CLI without mocks.
+5. **Big work is split into sub-issues.** Any milestone that needs more than one PR is broken into GitHub sub-issues, each with its own Definition of Done. The meta-issue closes only when every sub-issue closes. The sub-issue list lives inside each milestone section below.
+6. **`examples/counter-example/` is the install-experience gate.** Every PR that touches `packages/movehat/src/**`, `packages/movehat/bin/**`, or the published templates verifies the example still works (`pnpm test:example`, plus `pnpm test:smoke` for CLI-surface changes). M4 codifies this in CI; until then the gate is manual.
 
 ---
 
@@ -50,7 +52,19 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **Goal**: Refactor core modules so they can be unit-tested without spawning real processes or relying on global state.
 
-**Definition of Done**:
+**Sub-issues** (each is a separate PR. Execution order: M1.2 → M1.3 → M1.4 → M1.5 in serial — M1.4 and M1.5 both rewrite `runtime.ts` and would collide if run in parallel. M1.6 may parallelize with M1.4 or M1.5 because it touches `core/config.ts` and an isolated return signature. M1.7 may run at any time.):
+
+| Sub-PR | Issue | Focus | Closes |
+|--------|-------|-------|--------|
+| **M1.1** | (shipped in PR #76) | `utils/runCli.ts`, `utils/childProcessAdapter.ts`, `utils/address.ts` + tests; no migration | foundations |
+| M1.2 | [#77](https://github.com/gilbertsahumada/movehat/issues/77) | Migrate `fork/{manager,api,storage}.ts` to `utils/address.ts` | [#56](https://github.com/gilbertsahumada/movehat/issues/56) |
+| M1.3 | [#78](https://github.com/gilbertsahumada/movehat/issues/78) | Migrate the 8 `exec`/`spawn` callsites to `runCli` | [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
+| M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy temp dir + SIGINT handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
+| M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
+| M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache + `switchNetwork` returns runtime | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
+| M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
+
+**Definition of Done** (rolled up from the sub-issues):
 - [ ] `packages/movehat/src/utils/runCli.ts` exists; replaces all direct `exec`/`spawn` callers
 - [ ] `packages/movehat/src/utils/childProcessAdapter.ts` exists with injectable interface
 - [ ] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts`
@@ -60,6 +74,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml`
 - [ ] SIGINT during deploy leaves no private key on disk
 - [ ] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `Publisher`
+- [ ] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6)
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 

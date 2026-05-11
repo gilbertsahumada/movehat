@@ -1,0 +1,165 @@
+# CLAUDE.md
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Split Big Work Into Sub-Issues
+
+**Any milestone or feature that needs more than one PR must be broken into GitHub sub-issues, with each sub-issue detailed in `ROADMAP.md`.**
+
+The rule:
+
+- If the work cannot land in a single, reviewable PR, open a sub-issue for each PR you intend to ship. Use titles like `[M1.3] Migrate child_process callers to runCli`.
+- Each sub-issue carries its own Definition of Done — the same level of mechanical precision the meta-issue uses (exact file paths, exact greps, exact test commands).
+- The meta-issue (`[Roadmap] M1: …`) tracks the sub-issues. The meta-issue closes only when all sub-issues close.
+- `ROADMAP.md` lists every sub-issue under its milestone, with links and a one-line summary of what each PR delivers.
+- Each PR references its sub-issue with `Closes #<n>` and `Tracks #<meta>`.
+
+When in doubt about granularity: prefer one sub-issue per logical refactor (e.g. "migrate the address helpers" is one sub-issue, "migrate the child_process callers" is another). A sub-PR that takes more than a day of focused work is a sign it should be split further.
+
+## 6. Verify the Example Project
+
+**The `examples/counter-example/` is the canonical install-experience test. Any PR that touches `packages/movehat/src/**`, `packages/movehat/bin/**`, `packages/movehat/package.json` exports, or the published templates must verify the example still works before being declared ready.**
+
+Practical checklist:
+
+- Run `pnpm test:example` (mocha suite under `examples/counter-example/tests/`) and report the result in the PR description.
+- For changes that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
+- For changes that affect deploy / runtime / fork paths, run `pnpm test:e2e:quick`.
+- If any of those scripts is broken by infrastructure (Movement CLI not installed, missing keys), say so explicitly in the PR rather than silently skipping.
+
+CI enforcement of this rule is itself M4 work — until then, the gate is manual but mandatory.
+
+---
+
+## Project-Specific Context
+
+**What is Movehat?** A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts. Provides local blockchain testing, compilation, deployment, and testing utilities.
+
+### Package Structure
+```
+movehat-workspace/
+├── packages/
+│   ├── movehat/           # Main CLI package (src/cli.ts, src/runtime.ts, src/helpers/)
+│   └── docs/              # Fumadocs + Next.js 15 static site (out/)
+├── examples/
+│   └── counter-example/   # Example project demonstrating usage — the install-experience gate
+├── scripts/               # E2E, smoke-test, pre-publish scripts
+└── .github/workflows/     # CI: unit tests, E2E, security audit
+```
+
+### Key Commands
+```bash
+pnpm build              # Build all packages
+pnpm dev                # Dev mode for movehat CLI
+pnpm test               # Unit tests (movehat package)
+pnpm test:e2e           # E2E tests (requires Movement CLI tarball)
+pnpm test:watch         # Watch mode for tests
+pnpm test:coverage      # Coverage report (target 80%)
+pnpm test:example       # Run examples/counter-example mocha suite
+pnpm test:smoke         # Pack + global install + CLI smoke checks
+pnpm build:docs         # Build static docs site → out/
+pnpm dev:docs           # Dev server for docs
+```
+
+### Important Conventions
+
+**Dual Testing Modes:**
+- `local-node` — Full local blockchain (auto-starts node, funds accounts, deploys contracts)
+- `fork` — Read-only snapshot of remote network state
+
+**Test Fixture Pattern:**
+```typescript
+const fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+fixture.contracts.counter.call(deployer, "increment", []);
+fixture.contracts.counter.view<string>("get", [deployer.accountAddress.toString()]);
+```
+
+**Named Addresses:** Auto-detected from Move source; use directly without manual address resolution.
+
+**Coverage Target:** 80% (currently ~15%)
+
+### Docs Site
+- **Framework:** Fumadocs v15 + Next.js 15 with `output: 'export'` (static)
+- **Important:** Do NOT use fumadocs-core/ui v16+ with Next.js 15 — requires `useEffectEvent` which only works with Next.js 16
+- **Import workaround:** Use `import { docs } from '../.source/server'` instead of `fumadocs-mdx:collections/server`
+- **Content:** `packages/docs/content/docs/`
+
+### CI Workflow
+- **Unit tests:** On all PRs, Node 20/22, coverage threshold 15%
+- **E2E tests:** PRs to main only, downloads Movement CLI tarball
+- **Security audit:** Runs on PRs
+
+### Key Files (for reference)
+| File | Purpose |
+|------|---------|
+| `src/cli.ts` | Commander CLI entry point |
+| `src/runtime.ts` | Runtime (`getMovehat()`, `mh`) |
+| `src/helpers/index.ts` | `setupTestFixture`, `setupLocalTesting` |
+| `src/core/contract.ts` | `MoveContract` class |
+| `src/core/AccountManager.ts` | Account generation/funding |
+| `src/core/deployments.ts` | Deployment tracking |
+| `src/utils/childProcessAdapter.ts` | Injectable spawn abstraction (M1.1) |
+| `src/utils/runCli.ts` | CLI wrapper with stderr redaction (M1.1) |
+| `src/utils/address.ts` | Address normalization helpers (M1.1) |
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
