@@ -25,6 +25,12 @@ export interface RunCliOptions {
  *
  * Callers that need to inspect raw output should set `throwOnNonZeroExit:false`
  * and consume the returned `RunResult` directly — fields are still redacted.
+ *
+ * Pass `input.inheritStdio: true` for interactive commands (mocha, tsx,
+ * package managers) where the user expects to see live output. Under that
+ * flag, `stdout` and `stderr` in the returned `RunResult` are empty strings
+ * (and so is `stdoutPreview` on any `CliExecutionError`), since the child
+ * writes directly to the terminal rather than to a captured buffer.
  */
 export async function runCli(
   input: RunInput,

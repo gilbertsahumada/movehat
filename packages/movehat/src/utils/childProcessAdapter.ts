@@ -25,6 +25,19 @@ export interface RunInput {
   stdin?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * When `true`, the child inherits the parent's stdio (stdout, stderr,
+   * stdin go straight to the terminal). The resulting `RunResult.stdout`
+   * and `RunResult.stderr` will be empty strings because nothing is
+   * captured. Useful for interactive commands like `mocha`, `tsx`, or
+   * `pnpm install` where the user expects to see live output.
+   *
+   * If `inheritStdio` is `true`, `stdin` on this input is ignored — the
+   * child reads directly from the parent's stdin.
+   *
+   * Default: `false`.
+   */
+  inheritStdio?: boolean;
 }
 
 export interface RunResult {
@@ -90,12 +103,13 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       const child = spawn(input.command, [...input.args], {
         cwd: input.cwd,
         env: input.env ?? process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: input.inheritStdio ? 'inherit' : ['pipe', 'pipe', 'pipe'],
       });
 
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
 
+      // Streams are null when stdio is 'inherit'; the `?.` covers that.
       child.stdout?.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
       child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
@@ -138,10 +152,15 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         resolve(result);
       });
 
-      if (input.stdin !== undefined) {
-        child.stdin?.end(input.stdin);
-      } else {
-        child.stdin?.end();
+      // Under inheritStdio, child.stdin is null and the parent's stdin
+      // is wired through; we just skip the close call. Otherwise, end()
+      // either with the provided string or empty to close stdin cleanly.
+      if (!input.inheritStdio) {
+        if (input.stdin !== undefined) {
+          child.stdin?.end(input.stdin);
+        } else {
+          child.stdin?.end();
+        }
       }
     });
   }

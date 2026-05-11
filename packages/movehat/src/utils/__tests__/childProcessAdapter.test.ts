@@ -172,3 +172,31 @@ describe('defaultChildProcessAdapter.spawn', () => {
     expect(second.code).toBe(7);
   });
 });
+
+describe('defaultChildProcessAdapter.run with inheritStdio', () => {
+  it('returns empty stdout and stderr when inheritStdio is true', async () => {
+    // The child writes to stdout, but the parent inherits stdio so the bytes
+    // never go through the captured pipe — the adapter cannot see them.
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', "process.stdout.write('would-be-captured'); process.exit(0)"],
+      inheritStdio: true,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+
+  it('still propagates exit code under inheritStdio', async () => {
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', 'process.exit(42)'],
+      inheritStdio: true,
+    });
+
+    expect(result.exitCode).toBe(42);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+});
