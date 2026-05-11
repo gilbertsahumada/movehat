@@ -19,3 +19,28 @@ export class ModuleAlreadyDeployedError extends Error {
     }
   }
 }
+
+/**
+ * Thrown by runCli when a spawned process exits with a non-zero status.
+ *
+ * `stderr` and `stdoutPreview` are already redacted of well-known secret
+ * shapes (private keys, etc.) by the caller before construction, so the error
+ * is safe to log.
+ */
+export class CliExecutionError extends Error {
+  constructor(
+    message: string,
+    public readonly command: string,
+    public readonly args: readonly string[],
+    public readonly exitCode: number,
+    public readonly stderr: string,
+    public readonly stdoutPreview: string
+  ) {
+    super(message);
+    this.name = 'CliExecutionError';
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, CliExecutionError);
+    }
+  }
+}
