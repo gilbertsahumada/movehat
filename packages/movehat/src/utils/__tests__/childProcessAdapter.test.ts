@@ -102,3 +102,116 @@ describe('defaultChildProcessAdapter', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('defaultChildProcessAdapter.spawn', () => {
+  it('returns a handle with pid and streams, and exits cleanly when the child finishes on its own', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', "process.stdout.write('hi'); process.exit(0)"],
+    });
+
+    expect(typeof child.pid).toBe('number');
+    expect(child.stdout).not.toBeNull();
+    expect(child.stderr).not.toBeNull();
+    expect(child.stdin).not.toBeNull();
+
+    let captured = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      captured += chunk.toString('utf8');
+    });
+
+    const result = await child.exited;
+    expect(result.code).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(captured).toBe('hi');
+  });
+
+  it('kill(SIGTERM) terminates a long-running child and surfaces the signal in exited', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    });
+
+    const start = Date.now();
+    const killed = child.kill('SIGTERM');
+    expect(killed).toBe(true);
+
+    const result = await child.exited;
+    const elapsed = Date.now() - start;
+
+    expect(result.signal).toBe('SIGTERM');
+    expect(result.code).toBeNull();
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('with stdio: ignore, exposes null streams but still resolves exited', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', "process.stdout.write('hidden'); process.exit(0)"],
+      stdio: 'ignore',
+    });
+
+    expect(child.stdout).toBeNull();
+    expect(child.stderr).toBeNull();
+    expect(child.stdin).toBeNull();
+
+    const result = await child.exited;
+    expect(result.code).toBe(0);
+  });
+
+  it('exited can be awaited more than once', async () => {
+    const child = defaultChildProcessAdapter.spawn({
+      command: NODE,
+      args: ['-e', 'process.exit(7)'],
+    });
+
+    const first = await child.exited;
+    const second = await child.exited;
+
+    expect(first.code).toBe(7);
+    expect(second.code).toBe(7);
+  });
+
+  it('exited resolves when the command does not exist (error event)', async () => {
+    // Spawning a nonexistent binary fires `error` (ENOENT), not `exit`.
+    // exited must still settle so the caller doesn't hang.
+    const child = defaultChildProcessAdapter.spawn({
+      command: '/nonexistent/path/to/binary-xyz',
+      args: [],
+    });
+
+    const result = await child.exited;
+
+    // When the OS rejects the spawn, no exit code or signal is meaningful.
+    expect(result.code).toBeNull();
+    expect(result.signal).toBeNull();
+  });
+});
+
+describe('defaultChildProcessAdapter.run with inheritStdio', () => {
+  it('returns empty stdout and stderr when inheritStdio is true', async () => {
+    // The child writes to stdout, but the parent inherits stdio so the bytes
+    // never go through the captured pipe — the adapter cannot see them.
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', "process.stdout.write('would-be-captured'); process.exit(0)"],
+      inheritStdio: true,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+
+  it('still propagates exit code under inheritStdio', async () => {
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', 'process.exit(42)'],
+      inheritStdio: true,
+    });
+
+    expect(result.exitCode).toBe(42);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+});

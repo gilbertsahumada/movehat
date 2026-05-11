@@ -1,13 +1,20 @@
 import { spawn } from 'node:child_process';
+import type { Readable, Writable } from 'node:stream';
 
 /**
  * Injectable abstraction over `child_process.spawn`.
  *
  * Tests inject a fake adapter; production code uses `defaultChildProcessAdapter`.
  * Higher-level helpers (see `runCli`) wrap this with redaction and error handling.
+ *
+ * Two affordances:
+ *   - `run` for one-shot commands whose stdout/stderr fit in memory.
+ *   - `spawn` for long-running children where the caller wants to stream
+ *     output incrementally and decide when to kill the process.
  */
 export interface ChildProcessAdapter {
   run(input: RunInput): Promise<RunResult>;
+  spawn(input: SpawnInput): SpawnedProcess;
 }
 
 export interface RunInput {
@@ -18,6 +25,19 @@ export interface RunInput {
   stdin?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * When `true`, the child inherits the parent's stdio (stdout, stderr,
+   * stdin go straight to the terminal). The resulting `RunResult.stdout`
+   * and `RunResult.stderr` will be empty strings because nothing is
+   * captured. Useful for interactive commands like `mocha`, `tsx`, or
+   * `pnpm install` where the user expects to see live output.
+   *
+   * If `inheritStdio` is `true`, `stdin` on this input is ignored — the
+   * child reads directly from the parent's stdin.
+   *
+   * Default: `false`.
+   */
+  inheritStdio?: boolean;
 }
 
 export interface RunResult {
@@ -36,6 +56,43 @@ export interface RunResult {
   signal?: NodeJS.Signals;
 }
 
+/**
+ * Input for `spawn()`. Mirrors the subset of `RunInput` that applies to
+ * long-running children: no `stdin`, no `timeoutMs`, no `signal`. Callers
+ * control the lifecycle via the returned `SpawnedProcess`.
+ */
+export interface SpawnInput {
+  command: string;
+  args: readonly string[];
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  /**
+   * `'pipe'` (default) makes stdout/stderr/stdin streams available on the
+   * returned `SpawnedProcess`. `'ignore'` silences the child entirely
+   * (streams are `null`). For `'inherit'`, use `run` with `inheritStdio: true`
+   * instead — the spawn handle isn't useful when the parent owns stdio.
+   */
+  stdio?: 'pipe' | 'ignore';
+}
+
+/**
+ * Handle returned by `spawn()`. Callers can listen on streams, kill the
+ * process, or await `exited` for the final exit code and signal.
+ */
+export interface SpawnedProcess {
+  pid: number | undefined;
+  stdout: Readable | null;
+  stderr: Readable | null;
+  stdin: Writable | null;
+  kill(signal?: NodeJS.Signals): boolean;
+  /**
+   * Resolves once when the child exits, regardless of how the caller
+   * triggered it (natural exit, `kill`, or process death). Safe to await
+   * multiple times.
+   */
+  exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+}
+
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 class DefaultChildProcessAdapter implements ChildProcessAdapter {
@@ -46,12 +103,13 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       const child = spawn(input.command, [...input.args], {
         cwd: input.cwd,
         env: input.env ?? process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: input.inheritStdio ? 'inherit' : ['pipe', 'pipe', 'pipe'],
       });
 
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
 
+      // Streams are null when stdio is 'inherit'; the `?.` covers that.
       child.stdout?.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
       child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
@@ -94,12 +152,49 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         resolve(result);
       });
 
-      if (input.stdin !== undefined) {
-        child.stdin?.end(input.stdin);
-      } else {
-        child.stdin?.end();
+      // Under inheritStdio, child.stdin is null and the parent's stdin
+      // is wired through; we just skip the close call. Otherwise, end()
+      // either with the provided string or empty to close stdin cleanly.
+      if (!input.inheritStdio) {
+        if (input.stdin !== undefined) {
+          child.stdin?.end(input.stdin);
+        } else {
+          child.stdin?.end();
+        }
       }
     });
+  }
+
+  spawn(input: SpawnInput): SpawnedProcess {
+    const stdio = input.stdio ?? 'pipe';
+    const child = spawn(input.command, [...input.args], {
+      cwd: input.cwd,
+      env: input.env ?? process.env,
+      stdio,
+    });
+
+    // `exited` must settle whether the child dies via natural exit, kill,
+    // or a spawn-time `error` (e.g. ENOENT). Both events resolve once;
+    // a settled guard prevents double-resolve if both happen to fire.
+    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+      let settled = false;
+      const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (settled) return;
+        settled = true;
+        resolve({ code, signal });
+      };
+      child.on('exit', (code, signal) => finish(code, signal));
+      child.on('error', () => finish(null, null));
+    });
+
+    return {
+      pid: child.pid,
+      stdout: child.stdout,
+      stderr: child.stderr,
+      stdin: child.stdin,
+      kill: (signal?: NodeJS.Signals) => child.kill(signal),
+      exited,
+    };
   }
 }
 
