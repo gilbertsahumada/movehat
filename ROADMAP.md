@@ -76,7 +76,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml` — pending M1.4 (#79)
 - [ ] SIGINT during deploy leaves no private key on disk — pending M1.4 (#79)
 - [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address` — `Publisher` tests pending M1.4 (currently **169/169** on develop)
-- [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate baseline 6/6 maintained (pre-existing #86 fails unrelated)
+- [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate **9/9 passing** as of PR closing #86 (`message.test.ts` rewritten to local-node, broken-scaffold `greeting-fork.test.ts` removed)
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 
