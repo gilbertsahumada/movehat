@@ -222,10 +222,13 @@ function deriveAccountAddress(privateKeyHex: string | undefined): string {
     });
     return account.accountAddress.toString();
   } catch (err) {
+    // The private key may have come from several sources (network.accounts,
+    // global accounts, PRIVATE_KEY env, auto-generated testnet key). Keep
+    // the hint generic so it never points at the wrong source.
     console.warn(
-      `[movehat] Could not derive account address from privateKey: ${
+      `[movehat] Could not derive account address from the resolved private key: ${
         (err as Error).message
-      }. Check the PRIVATE_KEY value in your .env / movehat.config.ts.`
+      }. Verify the key configured for this network is a valid Ed25519 private key (with or without the "ed25519-priv-" prefix).`
     );
     return "";
   }
