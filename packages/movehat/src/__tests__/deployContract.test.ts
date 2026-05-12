@@ -94,7 +94,7 @@ version = "0.0.1"
 
   it("leak path #2 — rethrown error has redacted stderr (no raw ed25519-priv-)", async () => {
     const rawKey = "ed25519-priv-0x" + "a".repeat(64);
-    const { adapter } = makeAdapter({
+    const { adapter, calls } = makeAdapter({
       build: { exitCode: 0, stdout: "build ok", stderr: "" },
       publish: { exitCode: 1, stdout: "", stderr: `Movement publish failed: ${rawKey}` },
     });
@@ -113,6 +113,18 @@ version = "0.0.1"
     expect(err.stderr).toContain("***REDACTED***");
     expect(err.stderr).not.toContain("ed25519-priv-");
     expect(err.stderr).not.toContain(rawKey);
+
+    // Pin the call shape: build then publish, args reach the adapter un-quoted.
+    // A previous regression (shell-escape mismatch fixed in 511fd95) survived
+    // unit tests because no assertion checked what landed in `args`.
+    expect(calls).toHaveLength(2);
+    expect(calls[0].command).toBe("movement");
+    expect(calls[0].args.slice(0, 2)).toEqual(["move", "build"]);
+    expect(calls[1].args.slice(0, 2)).toEqual(["move", "publish"]);
+    for (const arg of [...calls[0].args, ...calls[1].args]) {
+      expect(arg.startsWith("'")).toBe(false);
+      expect(arg.endsWith("'")).toBe(false);
+    }
 
     // Bonus: deployContract's finally block must have restored / removed the
     // movement config file. If a future refactor breaks the finally, this
