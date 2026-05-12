@@ -1,7 +1,11 @@
-import { spawn, ChildProcess } from "child_process";
 import { existsSync, rmSync } from "fs";
 import { join } from "path";
 import { Account } from "@aptos-labs/ts-sdk";
+import {
+  defaultChildProcessAdapter,
+  type ChildProcessAdapter,
+  type SpawnedProcess,
+} from "../utils/childProcessAdapter.js";
 
 export interface LocalNodeOptions {
   testDir?: string;           // Directory for node data (default: .movehat/local-node)
@@ -10,6 +14,11 @@ export interface LocalNodeOptions {
   apiPort?: number;           // API/RPC port (default: 8080)
   readyPort?: number;         // Ready server port (default: 8070)
   silent?: boolean;           // Suppress node output
+  /**
+   * Override the child-process adapter. Tests inject a fake adapter so
+   * the daemon spawn never reaches the real `movement` binary.
+   */
+  adapter?: ChildProcessAdapter;
 }
 
 export interface LocalNodeInfo {
@@ -29,11 +38,14 @@ export interface LocalNodeInfo {
  * - Cleanup on shutdown
  */
 export class LocalNodeManager {
-  private process: ChildProcess | null = null;
-  private options: Required<LocalNodeOptions>;
+  private spawned: SpawnedProcess | null = null;
+  private killed = false;
+  private options: Required<Omit<LocalNodeOptions, "adapter">>;
+  private readonly adapter: ChildProcessAdapter;
   private starting: boolean = false;
 
   constructor(options: LocalNodeOptions = {}) {
+    this.adapter = options.adapter ?? defaultChildProcessAdapter;
     this.options = {
       testDir: options.testDir || join(process.cwd(), ".movehat", "local-node"),
       forceRestart: options.forceRestart ?? false,
@@ -50,7 +62,7 @@ export class LocalNodeManager {
    * @returns LocalNodeInfo with connection details
    */
   async start(): Promise<LocalNodeInfo> {
-    if (this.process) {
+    if (this.spawned) {
       console.log("Local node already running");
       return this.getNodeInfo();
     }
@@ -88,22 +100,24 @@ export class LocalNodeManager {
         args.push("--force-restart");
       }
 
-      // Start the node process
-      this.process = spawn("movement", args, {
+      // Start the node process via the injectable adapter.
+      this.killed = false;
+      this.spawned = this.adapter.spawn({
+        command: "movement",
+        args,
         stdio: this.options.silent ? "ignore" : "pipe",
-        detached: false,
       });
 
       // Handle process output
-      if (!this.options.silent && this.process.stdout && this.process.stderr) {
-        this.process.stdout.on("data", (data) => {
+      if (!this.options.silent && this.spawned.stdout && this.spawned.stderr) {
+        this.spawned.stdout.on("data", (data: Buffer) => {
           const output = data.toString().trim();
           if (output) {
             console.log(`[Node] ${output}`);
           }
         });
 
-        this.process.stderr.on("data", (data) => {
+        this.spawned.stderr.on("data", (data: Buffer) => {
           const output = data.toString().trim();
           if (output && !output.includes("WARN")) {
             console.error(`[Node Error] ${output}`);
@@ -111,17 +125,15 @@ export class LocalNodeManager {
         });
       }
 
-      // Handle process exit
-      this.process.on("exit", (code) => {
-        if (code !== 0 && code !== null) {
+      // The adapter's `exited` promise settles on both natural exit and on
+      // spawn-time error (e.g. ENOENT). On error the code is `null` — we don't
+      // log a generic "spawn failed" message here because `waitForReady` will
+      // surface a detailed timeout-with-hints error if movement never starts.
+      void this.spawned.exited.then(({ code }) => {
+        if (code !== null && code !== 0) {
           console.error(`\n❌ Local node exited with code ${code}`);
         }
-        this.process = null;
-      });
-
-      this.process.on("error", (error) => {
-        console.error(`\n❌ Failed to start local node: ${error.message}`);
-        this.process = null;
+        this.spawned = null;
       });
 
       // Wait for node to be ready
@@ -137,9 +149,10 @@ export class LocalNodeManager {
       this.starting = false;
 
       // Cleanup on failure
-      if (this.process) {
-        this.process.kill();
-        this.process = null;
+      if (this.spawned) {
+        this.killed = true;
+        this.spawned.kill();
+        this.spawned = null;
       }
 
       throw error;
@@ -150,42 +163,45 @@ export class LocalNodeManager {
    * Stop the local node
    */
   async stop(): Promise<void> {
-    if (!this.process) {
+    if (!this.spawned) {
       return;
     }
 
     console.log("\n🛑 Stopping local Movement node...");
 
-    return new Promise((resolve) => {
-      if (!this.process) {
-        resolve();
-        return;
+    const spawned = this.spawned;
+
+    // Mark killed synchronously so isRunning() reflects the intent right away,
+    // mirroring node's ChildProcess.killed semantics.
+    this.killed = true;
+
+    // Send SIGTERM for graceful shutdown
+    spawned.kill("SIGTERM");
+
+    // Force kill after 5 seconds if still running
+    const forceTimer = setTimeout(() => {
+      if (this.spawned === spawned) {
+        console.log("⚠️  Force killing node...");
+        spawned.kill("SIGKILL");
       }
+    }, 5000);
 
-      this.process.once("exit", () => {
-        console.log("✅ Local node stopped\n");
-        this.process = null;
-        resolve();
-      });
-
-      // Send SIGTERM for graceful shutdown
-      this.process.kill("SIGTERM");
-
-      // Force kill after 5 seconds if still running
-      setTimeout(() => {
-        if (this.process) {
-          console.log("⚠️  Force killing node...");
-          this.process.kill("SIGKILL");
-        }
-      }, 5000);
-    });
+    try {
+      await spawned.exited;
+      console.log("✅ Local node stopped\n");
+    } finally {
+      clearTimeout(forceTimer);
+      if (this.spawned === spawned) {
+        this.spawned = null;
+      }
+    }
   }
 
   /**
    * Check if the node is running
    */
   isRunning(): boolean {
-    return this.process !== null && !this.process.killed;
+    return this.spawned !== null && !this.killed;
   }
 
   /**
