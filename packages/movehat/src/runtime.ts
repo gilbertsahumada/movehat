@@ -95,7 +95,7 @@ export async function initRuntime(
     const { join } = await import("path");
     const { homedir } = await import("os");
     const yaml = await import("js-yaml");
-    const { validateAndEscapePath, validateAndEscapeProfile } = await import("./core/shell.js");
+    const { validatePathSafety, validateProfileSafety } = await import("./core/shell.js");
 
     // Check if --redeploy flag was passed via CLI
     const forceRedeploy = process.env.MH_CLI_REDEPLOY === 'true';
@@ -143,9 +143,11 @@ export async function initRuntime(
     const dir = options?.packageDir || config.moveDir;
     const profile = config.profile || "default";
 
-    // Validate and escape to prevent command injection
-    const safeDir = validateAndEscapePath(dir, "package directory");
-    const safeProfile = validateAndEscapeProfile(profile);
+    // Validate (no shell escape — runCli uses spawn, which takes args
+    // verbatim and would treat the single-quote wrapping as part of the
+    // literal path/profile, breaking Movement CLI argument parsing).
+    const safeDir = validatePathSafety(dir, "package directory");
+    const safeProfile = validateProfileSafety(profile);
 
     console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
 

@@ -56,17 +56,15 @@ export function validateAndEscapePath(path: string, name: string = "path"): stri
 }
 
 /**
- * Validates that a profile name is safe
- *
- * @param profile - The profile name to validate
- * @returns The escaped profile name
+ * Validates that a profile name is safe and returns it unchanged. Mirrors
+ * `validatePathSafety` — use this for callers that pass the profile to
+ * spawn-with-args (no shell), where shell quoting would be incorrect.
  */
-export function validateAndEscapeProfile(profile: string): string {
+export function validateProfileSafety(profile: string): string {
   if (!profile || typeof profile !== "string") {
     throw new Error("Invalid profile name: must be a non-empty string");
   }
 
-  // Profile names should only contain alphanumeric, hyphens, underscores
   const safePattern = /^[a-zA-Z0-9_-]+$/;
   if (!safePattern.test(profile)) {
     throw new Error(
@@ -75,5 +73,14 @@ export function validateAndEscapeProfile(profile: string): string {
     );
   }
 
-  return escapeShellArg(profile);
+  return profile;
+}
+
+/**
+ * Validates a profile and returns the shell-escaped form. Wraps
+ * `validateProfileSafety` for callers that pass the profile into shell-style
+ * commands (e.g. `exec`).
+ */
+export function validateAndEscapeProfile(profile: string): string {
+  return escapeShellArg(validateProfileSafety(profile));
 }
