@@ -97,7 +97,14 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 class DefaultChildProcessAdapter implements ChildProcessAdapter {
   run(input: RunInput): Promise<RunResult> {
-    const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // Skip the default 5-minute timeout when the caller wires stdio
+    // through to the terminal — interactive sessions (mocha, tsx scripts,
+    // `movement move test`, `pnpm install`) routinely exceed 5 minutes and
+    // SIGTERM'ing them silently is a regression vs the direct-spawn code
+    // these callers used before M1.3a. An explicitly-passed `timeoutMs`
+    // is always honored, regardless of `inheritStdio`.
+    const timeoutMs =
+      input.timeoutMs ?? (input.inheritStdio ? undefined : DEFAULT_TIMEOUT_MS);
 
     return new Promise<RunResult>((resolve, reject) => {
       const child = spawn(input.command, [...input.args], {
@@ -113,10 +120,17 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       child.stdout?.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
       child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
-      const timeoutHandle = setTimeout(() => {
-        child.kill('SIGTERM');
-        reject(new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`));
-      }, timeoutMs);
+      let timeoutHandle: NodeJS.Timeout | undefined;
+      const clearTimer = () => {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      };
+
+      if (timeoutMs !== undefined) {
+        timeoutHandle = setTimeout(() => {
+          child.kill('SIGTERM');
+          reject(new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`));
+        }, timeoutMs);
+      }
 
       const onAbort = () => {
         child.kill('SIGTERM');
@@ -124,7 +138,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
 
       if (input.signal) {
         if (input.signal.aborted) {
-          clearTimeout(timeoutHandle);
+          clearTimer();
           child.kill('SIGTERM');
           reject(new Error('Command aborted before start'));
           return;
@@ -133,13 +147,13 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       }
 
       child.on('error', (err) => {
-        clearTimeout(timeoutHandle);
+        clearTimer();
         input.signal?.removeEventListener('abort', onAbort);
         reject(err);
       });
 
       child.on('close', (code, signal) => {
-        clearTimeout(timeoutHandle);
+        clearTimer();
         input.signal?.removeEventListener('abort', onAbort);
         const result: RunResult = {
           exitCode: code !== null ? code : -1,
