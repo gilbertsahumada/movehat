@@ -1,36 +1,34 @@
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
-import { setupTestEnvironment, type TestEnvironment } from "movehat/helpers";
-import { getContract, MoveContract } from "movehat/helpers";
-import { assertTransactionSuccess } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Message Contract", () => {
-  let env: TestEnvironment;
-  let messageContract: MoveContract;
+  let fixture: TestFixture<'message'>;
 
   before(async function () {
-    this.timeout(30000); // Increase timeout for setup
+    this.timeout(60000); // Local node startup + auto-deploy
 
-    env = await setupTestEnvironment();
-
-    messageContract = getContract(env.aptos, env.config.account, "message");
+    // Auto-deploy the `message` module (declared in
+    // move/sources/hello_blockchain.move as `module hello_blockchain::message`)
+    // against a fresh local node. Same pattern as Counter.test.ts and
+    // greeting.test.ts — no testnet, no PRIVATE_KEY required.
+    fixture = await setupTestFixture(['message'] as const, []);
   });
 
   describe("get_message", () => {
     it("should set and retrieve a message", async function () {
       this.timeout(20000);
 
+      const message = fixture.contracts.message;
+      const deployer = fixture.accounts.deployer;
       const testMessage = "Hello, from MoveHat!";
 
-      const txResult = await messageContract.call(env.account, "set_message", [
-        testMessage,
-      ]);
+      const txResult = await message.call(deployer, "set_message", [testMessage]);
+      expect(txResult.success).to.equal(true);
 
-      assertTransactionSuccess(txResult);
-
-      const retrievedMessage = await messageContract.view<string>(
+      const retrievedMessage = await message.view<string>(
         "get_message",
-        [env.account.accountAddress.toString()]
+        [deployer.accountAddress.toString()]
       );
 
       expect(retrievedMessage).to.equal(testMessage);
@@ -39,20 +37,19 @@ describe("Message Contract", () => {
     it("should update an existing message", async function () {
       this.timeout(30000);
 
+      const message = fixture.contracts.message;
+      const deployer = fixture.accounts.deployer;
       const firstMessage = "First Message";
       const secondMessage = "Updated Message";
 
-      await messageContract.call(env.account, "set_message", [firstMessage]);
+      await message.call(deployer, "set_message", [firstMessage]);
 
-      const txResult = await messageContract.call(env.account, "set_message", [
-        secondMessage,
-      ]);
+      const txResult = await message.call(deployer, "set_message", [secondMessage]);
+      expect(txResult.success).to.equal(true);
 
-      assertTransactionSuccess(txResult);
-
-      const retrievedMessage = await messageContract.view<string>(
+      const retrievedMessage = await message.view<string>(
         "get_message",
-        [env.account.accountAddress.toString()]
+        [deployer.accountAddress.toString()]
       );
 
       expect(retrievedMessage).to.equal(secondMessage);
@@ -62,10 +59,10 @@ describe("Message Contract", () => {
       it("should return the correct module address", async function () {
         this.timeout(10000);
 
-        const signature = await messageContract.view<string>("signature");
+        const signature = await fixture.contracts.message.view<string>("signature");
 
         expect(signature).to.be.a("string");
-        console.log(`Module signature: ${signature}`);
+        console.log(`   Module signature: ${signature}`);
       });
     });
   });

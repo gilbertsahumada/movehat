@@ -1,25 +1,22 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
+import { isHexAddress } from '../utils/address.js';
 
 /**
- * Sanitize address to create a safe filename
- * Prevents path traversal by encoding the address
+ * Sanitize address to create a safe filename. Validates the address through
+ * the shared `isHexAddress` helper (length 1–64 hex chars, optional `0x`),
+ * then rebuilds a canonical `0x…` form. The trailing path-separator check is
+ * defense-in-depth: unreachable after `isHexAddress`, but cheap to keep.
  */
 function sanitizeAddressForFilename(address: string): string {
-  // Remove any path separators and normalize
-  const normalized = address.toLowerCase().replace(/^0x/, '');
-
-  // Validate that it's a valid hex string
-  if (!/^[0-9a-f]+$/.test(normalized)) {
+  if (!isHexAddress(address)) {
     throw new Error(`Invalid address format: ${address}. Expected hexadecimal string.`);
   }
 
-  // Encode to prevent any path traversal
-  // Use the normalized hex string directly as it's safe
+  const normalized = address.toLowerCase().replace(/^0x/, '');
   const safe = `0x${normalized}`;
 
-  // Validate no path separators in result
   if (safe.includes('/') || safe.includes('\\') || safe.includes('..')) {
     throw new Error(`Address contains invalid characters: ${address}`);
   }

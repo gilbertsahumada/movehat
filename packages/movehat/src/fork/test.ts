@@ -1,9 +1,6 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { join } from 'path';
 import { existsSync } from 'fs';
-
-const execFileAsync = promisify(execFile);
+import { runCli } from '../utils/runCli.js';
 
 export interface SnapshotOptions {
   path?: string;
@@ -40,15 +37,17 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
   console.log(`📸 Creating snapshot: ${name}...`);
 
   try {
-    // Initialize fork/snapshot using aptos CLI
-    // Use execFile with argument array to prevent command injection
-    const { stdout, stderr } = await execFileAsync('aptos', [
-      'move',
-      'sim',
-      'init',
-      '--path',
-      snapshotPath
-    ]);
+    // Initialize fork/snapshot using aptos CLI.
+    // runCli uses spawn-with-args under the hood (no shell), preventing
+    // command injection. Pass throwOnNonZeroExit:false so we can keep the
+    // existing "stderr-without-Success → throw" check intact.
+    const { stdout, stderr } = await runCli(
+      {
+        command: 'aptos',
+        args: ['move', 'sim', 'init', '--path', snapshotPath],
+      },
+      { throwOnNonZeroExit: false }
+    );
 
     if (stderr && !stderr.includes('Success')) {
       throw new Error(stderr);
@@ -125,18 +124,24 @@ export async function viewForkResource(
   resourceType: string
 ): Promise<any> {
   try {
-    // Use execFile with argument array to prevent command injection
-    const { stdout } = await execFileAsync('aptos', [
-      'move',
-      'sim',
-      'view-resource',
-      '--session',
-      sessionPath,
-      '--account',
-      account,
-      '--resource',
-      resourceType
-    ]);
+    // runCli uses spawn-with-args (no shell) to prevent command injection.
+    const { stdout } = await runCli(
+      {
+        command: 'aptos',
+        args: [
+          'move',
+          'sim',
+          'view-resource',
+          '--session',
+          sessionPath,
+          '--account',
+          account,
+          '--resource',
+          resourceType,
+        ],
+      },
+      { throwOnNonZeroExit: false }
+    );
 
     const result = JSON.parse(stdout);
 

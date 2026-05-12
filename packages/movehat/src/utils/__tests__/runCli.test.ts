@@ -13,6 +13,9 @@ function makeAdapter(result: RunResult, capture?: { last?: RunInput }): ChildPro
       if (capture) capture.last = input;
       return result;
     },
+    spawn() {
+      throw new Error('spawn not used in runCli tests');
+    },
   };
 }
 
@@ -180,6 +183,21 @@ describe('runCli', () => {
     }
   });
 
+  it('forwards inheritStdio flag to the adapter unchanged', async () => {
+    const capture: { last?: RunInput } = {};
+    const adapter = makeAdapter(
+      { exitCode: 0, stdout: '', stderr: '' },
+      capture
+    );
+
+    await runCli(
+      { command: 'mocha', args: ['--watch'], inheritStdio: true },
+      { adapter }
+    );
+
+    expect(capture.last?.inheritStdio).toBe(true);
+  });
+
   it('propagates AbortSignal to a slow adapter and returns the killed result', async () => {
     const slowAdapter: ChildProcessAdapter = {
       run(input) {
@@ -198,6 +216,9 @@ describe('runCli', () => {
             });
           });
         });
+      },
+      spawn() {
+        throw new Error('spawn not used in this test');
       },
     };
 

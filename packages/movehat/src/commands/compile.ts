@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
 import { loadUserConfig } from "../core/config.js";
-import { validateAndEscapePath, escapeShellArg } from "../core/shell.js";
+import { validatePathSafety } from "../core/shell.js";
 import { logger } from "../ui/index.js";
+import { runCli } from "../utils/runCli.js";
 
 /**
  * Recursively find all .move files in a directory
@@ -185,22 +185,29 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   return missingAddresses;
 }
 
-function run(command: string, cwd: string) {
-  return new Promise<void>((resolve, reject) => {
-    exec(command, {
+async function runMovementBuild(
+  args: readonly string[],
+  cwd: string
+): Promise<void> {
+  // Use throwOnNonZeroExit:false so we can log stdout/stderr in both
+  // success and failure paths, matching the behavior of the previous
+  // exec-based helper.
+  const result = await runCli(
+    {
+      command: "movement",
+      args,
       cwd,
-      timeout: 120000, // 2 minutes for git dependency downloads
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
-    }, (error, stdout, stderr) => {
-      if (stdout) console.log(stdout.trim());
-      if (stderr) console.error(stderr.trim());
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
+      timeoutMs: 120000, // 2 minutes for git dependency downloads
+    },
+    { throwOnNonZeroExit: false }
+  );
+
+  if (result.stdout) console.log(result.stdout.trim());
+  if (result.stderr) console.error(result.stderr.trim());
+
+  if (result.exitCode !== 0) {
+    throw new Error(`movement move build exited with code ${result.exitCode}`);
+  }
 }
 
 /**
@@ -233,8 +240,9 @@ export default async function compileCommand() {
       process.exit(1);
     }
 
-    // Validate and escape to prevent command injection
-    const safeMoveDir = validateAndEscapePath(moveDir, "Move directory");
+    // Validate the move directory before passing it to the child process.
+    // No shell escaping needed — runCli uses spawn-with-args, not exec.
+    const safeMoveDir = validatePathSafety(moveDir, "Move directory");
 
     // Auto-detect named addresses from Move files
     const detectedAddresses = extractNamedAddresses(moveDir);
@@ -257,11 +265,10 @@ export default async function compileCommand() {
       }
     }
 
-    let namedAddressesArg = "";
+    let namedAddressesValue = "";
 
     if (Object.keys(namedAddresses).length > 0) {
-      // Validate and escape each address name and value
-      const escapedAddresses = Object.entries(namedAddresses)
+      namedAddressesValue = Object.entries(namedAddresses)
         .map(([k, v]) => {
           // Validate address name (alphanumeric, underscore only)
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)) {
@@ -279,15 +286,15 @@ export default async function compileCommand() {
             );
           }
 
-          // No need to escape since we validated the format
           return `${k}=${v}`;
         })
         .join(",");
-
-      namedAddressesArg = `--named-addresses ${escapeShellArg(escapedAddresses)}`;
     }
 
-    const command = `movement move build --package-dir ${safeMoveDir} ${namedAddressesArg}`.trim();
+    const args: string[] = ["move", "build", "--package-dir", safeMoveDir];
+    if (namedAddressesValue) {
+      args.push("--named-addresses", namedAddressesValue);
+    }
 
     logger.kv('Move directory', moveDir, 2);
     if (detectedAddresses.size > 0) {
@@ -301,7 +308,7 @@ export default async function compileCommand() {
     }
     logger.newline();
 
-    await run(command, moveDir);
+    await runMovementBuild(args, moveDir);
 
     logger.newline();
     logger.success('Compilation finished successfully');

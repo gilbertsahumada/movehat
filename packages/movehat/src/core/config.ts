@@ -1,6 +1,7 @@
 import { pathToFileURL } from "url";
 import { join } from "path";
 import { existsSync } from "fs";
+import { Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 
 /**
@@ -178,6 +179,13 @@ export async function resolveNetworkConfig(
     ...(networkConfig.namedAddresses || {}),
   };
 
+  // Derive the deployer account address from the resolved private key.
+  // Without this, consumers reading `config.account` got an empty string
+  // (the previous "Will be derived from privateKey in runtime" TODO was
+  // never wired). Falls back to "" on malformed keys so we don't break
+  // existing callers that don't need the field.
+  const accountAddress = deriveAccountAddress(accounts[0]);
+
   // Build resolved config
   const resolvedConfig: MovehatConfig = {
     network: selectedNetwork,
@@ -186,10 +194,42 @@ export async function resolveNetworkConfig(
     allAccounts: accounts,
     profile: networkConfig.profile || "default",
     moveDir: userConfig.moveDir || "./move",
-    account: "", // Will be derived from privateKey in runtime
+    account: accountAddress,
     namedAddresses: mergedNamedAddresses,
     networkConfig: networkConfig,
   };
 
   return resolvedConfig;
+}
+
+/**
+ * Derive the on-chain account address from a private key. Strips the
+ * `ed25519-priv-` prefix that Movement CLI sometimes emits; returns ""
+ * on any parse failure so existing callers that don't consume the field
+ * keep working unchanged. Emits a console.warn on failure so a
+ * misconfigured `PRIVATE_KEY` surfaces here (loud, at config-resolution
+ * time) instead of as a cryptic "Hex string is too short" SDK error
+ * later in the call chain.
+ */
+function deriveAccountAddress(privateKeyHex: string | undefined): string {
+  if (!privateKeyHex) return "";
+  try {
+    const stripped = privateKeyHex.startsWith("ed25519-priv-")
+      ? privateKeyHex.slice("ed25519-priv-".length)
+      : privateKeyHex;
+    const account = Account.fromPrivateKey({
+      privateKey: new Ed25519PrivateKey(stripped),
+    });
+    return account.accountAddress.toString();
+  } catch (err) {
+    // The private key may have come from several sources (network.accounts,
+    // global accounts, PRIVATE_KEY env, auto-generated testnet key). Keep
+    // the hint generic so it never points at the wrong source.
+    console.warn(
+      `[movehat] Could not derive account address from the resolved private key: ${
+        (err as Error).message
+      }. Verify the key configured for this network is a valid Ed25519 private key (with or without the "ed25519-priv-" prefix).`
+    );
+    return "";
+  }
 }

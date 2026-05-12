@@ -17,8 +17,10 @@ import {
   DeploymentInfo,
   validateSafeName,
 } from "./core/deployments.js";
-import { ModuleAlreadyDeployedError } from "./errors.js";
+import { CliExecutionError, ModuleAlreadyDeployedError } from "./errors.js";
 import { AccountManager } from "./core/AccountManager.js";
+import { runCli } from "./utils/runCli.js";
+import type { ChildProcessAdapter } from "./utils/childProcessAdapter.js";
 
 let cachedRuntime: MovehatRuntime | null = null;
 
@@ -83,19 +85,17 @@ export async function initRuntime(
     moduleName: string,
     options?: {
       packageDir?: string;
+      adapter?: ChildProcessAdapter;
     }
   ): Promise<DeploymentInfo> => {
     // Validate moduleName early
     validateSafeName(moduleName, "module");
 
-    const { exec } = await import("child_process");
-    const { promisify } = await import("util");
-    const { existsSync, mkdirSync, writeFileSync, chmodSync } = await import("fs");
+    const { existsSync, mkdirSync, writeFileSync } = await import("fs");
     const { join } = await import("path");
     const { homedir } = await import("os");
     const yaml = await import("js-yaml");
-    const { validateAndEscapePath, validateAndEscapeProfile } = await import("./core/shell.js");
-    const execAsync = promisify(exec);
+    const { validatePathSafety, validateProfileSafety } = await import("./core/shell.js");
 
     // Check if --redeploy flag was passed via CLI
     const forceRedeploy = process.env.MH_CLI_REDEPLOY === 'true';
@@ -143,9 +143,11 @@ export async function initRuntime(
     const dir = options?.packageDir || config.moveDir;
     const profile = config.profile || "default";
 
-    // Validate and escape to prevent command injection
-    const safeDir = validateAndEscapePath(dir, "package directory");
-    const safeProfile = validateAndEscapeProfile(profile);
+    // Validate (no shell escape — runCli uses spawn, which takes args
+    // verbatim and would treat the single-quote wrapping as part of the
+    // literal path/profile, breaking Movement CLI argument parsing).
+    const safeDir = validatePathSafety(dir, "package directory");
+    const safeProfile = validateProfileSafety(profile);
 
     console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
 
@@ -157,23 +159,29 @@ export async function initRuntime(
       const { extractNamedAddresses } = await import("./commands/compile.js");
       const detectedAddresses = extractNamedAddresses(dir);
 
-      // Build named addresses argument - use deployer address for all detected addresses
-      let namedAddressesArg = "";
-      if (detectedAddresses.size > 0) {
-        const addressPairs = Array.from(detectedAddresses)
-          .map(name => `${name}=${deployerAddress}`)
-          .join(",");
-        namedAddressesArg = `--named-addresses ${addressPairs}`;
-      }
+      // Build named addresses argument - use deployer address for all detected addresses.
+      // Stored as a pre-split args fragment so the spawn path never has to parse
+      // shell tokens; an empty fragment becomes a no-op via spread.
+      const namedAddrArgs: string[] = detectedAddresses.size > 0
+        ? [
+            "--named-addresses",
+            Array.from(detectedAddresses)
+              .map(name => `${name}=${deployerAddress}`)
+              .join(","),
+          ]
+        : [];
 
       // Build first with named addresses
       console.log("🔨 Building package...");
-      const buildCmd = `movement move build --package-dir ${safeDir} ${namedAddressesArg}`.trim();
-      const { stdout: buildOut } = await execAsync(buildCmd, {
-        timeout: 120000, // 2 minutes for git dependency downloads
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
-      });
-      if (buildOut) console.log(buildOut.trim());
+      const buildResult = await runCli(
+        {
+          command: "movement",
+          args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
+          timeoutMs: 120000, // 2 minutes for git dependency downloads
+        },
+        { adapter: options?.adapter }
+      );
+      if (buildResult.stdout) console.log(buildResult.stdout.trim());
 
       // Publish using direct parameters (avoid config file issues)
       console.log("📤 Publishing to blockchain...");
@@ -254,15 +262,27 @@ export async function initRuntime(
         const configYaml = yaml.dump(movementConfig);
         writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
 
-        // Execute publish command without exposing private key in CLI
-        // Include named addresses for publish as well
-        const publishCmd = `movement move publish --package-dir ${safeDir} --url ${config.rpc} --profile ${safeProfile} --assume-yes ${namedAddressesArg}`.trim();
-        const result = await execAsync(publishCmd, {
-          timeout: 120000, // 2 minutes for blockchain transactions
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
-        });
-        publishOut = result.stdout || '';
-        publishErr = result.stderr || '';
+        // Execute publish command without exposing private key in CLI.
+        // Routed through runCli so stdout/stderr are redacted of any
+        // `ed25519-priv-…` shape before reaching console.log/console.error
+        // or the thrown CliExecutionError — that's bug #43.
+        const publishResult = await runCli(
+          {
+            command: "movement",
+            args: [
+              "move", "publish",
+              "--package-dir", safeDir,
+              "--url", config.rpc,
+              "--profile", safeProfile,
+              "--assume-yes",
+              ...namedAddrArgs,
+            ],
+            timeoutMs: 120000, // 2 minutes for blockchain transactions
+          },
+          { adapter: options?.adapter }
+        );
+        publishOut = publishResult.stdout;
+        publishErr = publishResult.stderr;
         if (publishOut) console.log(publishOut.trim());
         if (publishErr) console.error(publishErr.trim());
       } finally {
@@ -317,15 +337,20 @@ export async function initRuntime(
 
       return deployment;
     } catch (error: any) {
-      // Enhanced error reporting with stderr if available
-      let errorMsg = error.message;
-      if (error.stderr) {
-        errorMsg += `\n${error.stderr}`;
+      if (error instanceof CliExecutionError) {
+        // stdout/stderr are already redacted by runCli before reaching here,
+        // so this branch is safe to log verbatim.
+        if (error.stdoutPreview) console.log(error.stdoutPreview);
+        console.error(`❌ Failed to publish module: ${error.message}\n${error.stderr}`);
+      } else {
+        // Preserve existing behaviour for non-CLI errors (filesystem write
+        // failures from Move.toml / ~/.aptos/config.yaml, yaml parse errors,
+        // etc.). These paths can't carry private-key material so logging raw
+        // is safe.
+        const errorMsg = error.stderr ? `${error.message}\n${error.stderr}` : error.message;
+        if (error.stdout) console.log(error.stdout);
+        console.error(`❌ Failed to publish module: ${errorMsg}`);
       }
-      if (error.stdout) {
-        console.log(error.stdout);
-      }
-      console.error(`❌ Failed to publish module: ${errorMsg}`);
       throw error;
     }
   };

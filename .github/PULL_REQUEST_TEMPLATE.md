@@ -21,7 +21,10 @@
 ## Checklist
 
 - [ ] `pnpm test` passes locally
-- [ ] `pnpm test:example` passes — or this PR doesn't touch `packages/movehat/src/**`, `bin/**`, or published templates (mark N/A in "How was this tested?")
+- [ ] **Tier 2 install verification** (per CLAUDE.md §6.2) — both run for any PR touching `packages/movehat/src/**`, `bin/**`, or published templates; mark N/A in "How was this tested?" otherwise:
+  - [ ] `pnpm test:example` (workspace symlink runtime)
+  - [ ] `pnpm test:smoke` (npm-packed tarball + global install)
 - [ ] CHANGELOG `[Unreleased]` updated if user-visible
 - [ ] Docs updated if public API or CLI surface changed
+- [ ] ROADMAP `[ ]` → `[x]` ticked for any DoD bullet this PR satisfies (CLAUDE.md §7)
 - [ ] Conventional Commits used in commit messages

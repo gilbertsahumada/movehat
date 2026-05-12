@@ -1,4 +1,3 @@
-import { spawn } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -7,6 +6,7 @@ import prompts from "prompts";
 import { isNewerVersion } from "../helpers/semver-utils.js";
 import { fetchLatestVersion } from "../helpers/npm-registry.js";
 import { logger, withSpinner, box, colors } from "../ui/index.js";
+import { runCli } from "../utils/runCli.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -159,35 +159,38 @@ export default async function updateCommand() {
         break;
     }
 
-    // Execute update
-    // Use home directory as cwd to avoid packageManager conflicts from local package.json
-    const child = spawn(packageManager, updateArgs, {
-      stdio: "inherit",
-      cwd: homedir() || process.cwd(),
-    });
+    // Execute update.
+    // Use home directory as cwd to avoid packageManager conflicts from local package.json.
+    try {
+      const result = await runCli(
+        {
+          command: packageManager,
+          args: updateArgs,
+          cwd: homedir() || process.cwd(),
+          inheritStdio: true,
+        },
+        { throwOnNonZeroExit: false }
+      );
 
-    child.on("exit", (code) => {
-      if (code === 0) {
+      if (result.exitCode === 0) {
         logger.newline();
         logger.success(`Successfully updated to version ${latestVersion}!`);
         logger.newline();
         process.exit(0);
       } else {
         logger.newline();
-        logger.error('Update failed');
+        logger.error("Update failed");
         logger.plain(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
         logger.newline();
         process.exit(1);
       }
-    });
-
-    child.on("error", (error) => {
+    } catch (error) {
       logger.newline();
-      logger.error(`Failed to update: ${error.message}`);
+      logger.error(`Failed to update: ${(error as Error).message}`);
       logger.plain(`   Try manually: ${packageManager} ${updateArgs.join(" ")}`);
       logger.newline();
       process.exit(1);
-    });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.newline();
