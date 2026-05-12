@@ -151,6 +151,29 @@ Why this matters: without this rule, the ROADMAP drifts from reality. M0 + M1.1 
 
 How to apply: when finalizing a sub-PR (before pushing), grep the ROADMAP for the milestone you just touched, and check off every bullet the PR satisfies. If you're unsure whether a bullet is satisfied, ask in the PR description rather than guessing.
 
+## 8. Self-Review Before Merge — Unconditional
+
+**Every PR gets a structured self-review before `gh pr merge` runs. No exceptions — including pure-docs PRs, one-line fixes, single-file edits, and PRs the author is confident about.**
+
+The rule:
+
+- Before calling `gh pr merge N`, post a self-review via `gh pr review N --comment` using the same severity-tiered structure used on prior PRs:
+  - 🔴 blockers (correctness, security, broken contracts)
+  - 🟡 worth fixing before merge (real concerns, fragile assumptions, deferred-but-noted)
+  - 🟢 nits (style, naming, polish)
+- If the review surfaces **🔴 or 🟡** findings, either fix them on the same branch and post a resolution comment listing what was resolved vs deferred, or explicitly note in the resolution why a 🟡 is being deferred to a follow-up sub-PR.
+- Merge happens only after **(a)** review is posted, **(b)** 🟡-or-worse findings are resolved or explicitly deferred with a reason, **(c)** mergeable state is CLEAN.
+- Even "pure docs" / "single-line fix" / "obviously trivial" PRs go through this. The 30 seconds of forced re-reading catches dead links, terminology drift, misaligned tables, stale references, and assumption gaps that the author missed precisely because they thought the change was trivial.
+
+Why this matters: PRs #91 (ROADMAP backfill), #93 (install gate doc), and #94 (#86 fix) all merged without a self-review, each rationalized as "small / obvious / pure-docs". The retroactive review of #94 surfaced two real 🟡 items (duplicated derivation between `config.ts` and `runtime.ts:69`; silent `""` fallback in `deriveAccountAddress` masking malformed-key errors) and two 🟢 findings that the author had missed. The discipline is unconditional because the author's confidence is exactly what review is meant to challenge.
+
+How to apply: when ready to merge, the sequence is **always**:
+1. `gh pr review N --comment --body "..."` (post structured findings; "no findings, ready to merge" is a valid review body for genuinely trivial PRs, but the re-read still happens).
+2. Apply 🟡 fixes if any → push → post resolution comment.
+3. `gh pr merge N --merge --delete-branch`.
+
+If step 1 is skipped, the merge violates this rule and a retroactive review must be posted on the merged PR plus any follow-up sub-PRs needed.
+
 ---
 
 ## Project-Specific Context
