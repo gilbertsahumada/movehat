@@ -80,7 +80,7 @@ When in doubt about granularity: prefer one sub-issue per logical refactor (e.g.
 
 Three things follow from this:
 
-### 6.1 Fast gate — mechanical, enforced by `pre-push`
+### 6.1 Tier 1 — Type compatibility (fast, auto, pre-push)
 
 - Hook lives at `.husky/pre-push` and runs in two phases:
   1. `pnpm build:movehat` — packages/movehat/src compiles cleanly. Failure here is a TypeScript error inside the package, not an example concern.
@@ -90,13 +90,27 @@ Three things follow from this:
 
 **Strictness asymmetry (deliberate):** `examples/counter-example/tsconfig.json` enables `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and `verbatimModuleSyntax`, all of which `packages/movehat/tsconfig.json` does not enable. That makes the example **the strictest consumer** of the movehat public surface. Code that compiles inside movehat but fails in the example is a signal that the API is fragile for end users — fix the API, do not loosen the example.
 
-### 6.2 Runtime gate — manual, honor-system but mandatory
+**Caveat:** typecheck only verifies *types* against the workspace symlink. Runtime behaviour and what's actually packaged into the npm tarball are covered by Tiers 2 and 3.
 
-- `pnpm test:example` runs the mocha suite under `examples/counter-example/tests/`. Slow, requires Movement CLI installed locally; some tests need a `PRIVATE_KEY` env for testnet flows.
-- Run before opening or re-requesting review on any sub-PR that touches `runtime.ts`, `helpers/`, `core/Publisher.ts`, `fork/*.ts`, or the published templates. Report the result in the PR description: pass / fail / skip-with-reason.
-- For PRs that affect the CLI surface, also run `pnpm test:smoke` (packs movehat, installs globally, exercises `movehat init` etc.).
+### 6.2 Tier 2 — Per-PR runtime + install smoke (manual, honor-system, mandatory)
 
-### 6.3 Docs sync — README + packages/docs/ track the example
+Two scripts, both run before opening / re-requesting review on every sub-PR that touches `packages/movehat/src/**`, `bin/**`, or published templates. Report results explicitly in the PR description (`pass` / `fail` / `skip-with-reason`).
+
+- **`pnpm test:example`** — mocha against `examples/counter-example/tests/` using the workspace symlink. ~90s. Requires Movement CLI installed locally; some tests need `PRIVATE_KEY` for testnet flows. Verifies that the public API behaves the way the example expects when wired through `workspace:*`.
+
+- **`pnpm test:smoke`** — packs movehat into a tarball, installs it globally, exercises `movehat --version` / `--help` / `init`. ~20s. Catches packaging issues that the workspace symlink hides: missing files in `dist/`, missing `bin` shim, missing template files. Mandatory because Tier 1 cannot see "what's actually in the tarball" — only what's in the workspace.
+
+What Tier 2 still doesn't cover: the end-to-end install-then-use flow against the published artifact (e.g. would `pnpm install movehat` followed by `movehat compile` + `mocha tests/*` actually work?). That's Tier 3.
+
+### 6.3 Tier 3 — Full install-experience E2E (slow, before publish or develop→main batch)
+
+- **`pnpm test:e2e`** — packs movehat, installs globally, runs `movehat init`, `movehat test --move`, `movehat fork create/list`. ~60s. Drives the real new-user install flow. `--quick` mode skips the slow Move + fork steps and is roughly equivalent to `test:smoke`.
+
+- Wired into `scripts/pre-publish.sh`: `npm publish` is gated on `test:e2e` succeeding. Don't bypass this — it's the last chance to catch packaging regressions before the artifact reaches end users.
+
+- Also mandatory before any `develop → main` batch merge that ships a milestone. The PR that opens the batch must report a `test:e2e` pass; if it fails, the regression lands as its own sub-PR before the batch.
+
+### 6.4 Docs sync — README + packages/docs/ track the example
 
 The example is the *source of truth* for what a user sees. The README and `packages/docs/content/docs/` are derived views of the same shape — they describe what the example demonstrates. When a sub-PR changes the example (because the public surface changed), the same PR must:
 
@@ -106,17 +120,18 @@ The example is the *source of truth* for what a user sees. The README and `packa
 
 Auto-generated docs (TypeDoc) are M5 work; until then this sync is manual and the responsibility falls on the author of the breaking sub-PR.
 
-### 6.4 Summary of the loop
+### 6.5 Summary of the loop
 
 ```
 movehat/src/*  →  example uses it  →  README + docs describe it
        ↑                ↑                          ↑
-       └─ typecheck ────┘                          │
+   Tier 1               Tier 2 + 3                 │
+   (auto pre-push)      (manual per-PR & pre-pub)  │
                                                    │
        └─────────── manual review per PR ──────────┘
 ```
 
-If a sub-PR breaks the example, fix it in the same sub-PR. The example is part of the entregable, not a separate concern. CI enforcement of the runtime gate is M4 work; auto-generated docs are M5; until then the typecheck gate is mechanical and the rest is honor-system but mandatory.
+If a sub-PR breaks the example, fix it in the same sub-PR. The example is part of the entregable, not a separate concern. CI enforcement of Tier 2 / Tier 3 is M4 work; auto-generated docs are M5; until then Tier 1 is mechanical (pre-push hook) and Tiers 2 + 3 are honor-system but mandatory, recorded explicitly in the PR description.
 
 ## 7. Keep ROADMAP.md in Sync with Reality
 

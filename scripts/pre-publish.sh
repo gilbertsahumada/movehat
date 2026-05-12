@@ -105,6 +105,17 @@ bash scripts/smoke-test.sh
 check "Smoke tests passed"
 
 echo ""
+echo -e "${BLUE}5b. Running Tier 3 Install-Experience E2E${NC}"
+echo "----------------------------------------"
+# Per CLAUDE.md §6.3: the install-experience E2E packs movehat into a
+# tarball, installs it globally, and exercises `movehat init`, `movehat
+# test --move`, and the fork system end-to-end. This is the last chance
+# to catch packaging regressions (missing dist files, broken exports,
+# stale templates) before the artifact reaches npm users.
+bash scripts/e2e-local.sh
+check "Install-experience E2E passed"
+
+echo ""
 echo -e "${BLUE}6. Checking Package Size${NC}"
 echo "----------------------------------------"
 
