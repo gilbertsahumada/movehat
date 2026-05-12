@@ -206,7 +206,10 @@ export async function resolveNetworkConfig(
  * Derive the on-chain account address from a private key. Strips the
  * `ed25519-priv-` prefix that Movement CLI sometimes emits; returns ""
  * on any parse failure so existing callers that don't consume the field
- * keep working unchanged.
+ * keep working unchanged. Emits a console.warn on failure so a
+ * misconfigured `PRIVATE_KEY` surfaces here (loud, at config-resolution
+ * time) instead of as a cryptic "Hex string is too short" SDK error
+ * later in the call chain.
  */
 function deriveAccountAddress(privateKeyHex: string | undefined): string {
   if (!privateKeyHex) return "";
@@ -218,7 +221,15 @@ function deriveAccountAddress(privateKeyHex: string | undefined): string {
       privateKey: new Ed25519PrivateKey(stripped),
     });
     return account.accountAddress.toString();
-  } catch {
+  } catch (err) {
+    // The private key may have come from several sources (network.accounts,
+    // global accounts, PRIVATE_KEY env, auto-generated testnet key). Keep
+    // the hint generic so it never points at the wrong source.
+    console.warn(
+      `[movehat] Could not derive account address from the resolved private key: ${
+        (err as Error).message
+      }. Verify the key configured for this network is a valid Ed25519 private key (with or without the "ed25519-priv-" prefix).`
+    );
     return "";
   }
 }
