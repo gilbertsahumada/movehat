@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { defaultChildProcessAdapter } from '../childProcessAdapter.js';
 
 const NODE = process.execPath;
@@ -240,5 +240,27 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
       inheritStdio: true,
     });
     expect(result.exitCode).toBe(0);
+  });
+
+  it('does not schedule a setTimeout when inheritStdio is true and timeoutMs is omitted', async () => {
+    // Direct evidence (review follow-up): spy on globalThis.setTimeout and
+    // assert no timer scheduled with the DEFAULT_TIMEOUT_MS (300000ms) value.
+    // Short-running children may legitimately schedule small timers via
+    // their own logic, so we filter the spy calls to the default-timeout
+    // duration specifically — that's the value the regression repaired.
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      await defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'process.exit(0)'],
+        inheritStdio: true,
+      });
+      const defaultTimeoutCalls = setTimeoutSpy.mock.calls.filter(
+        (args) => args[1] === 5 * 60 * 1000
+      );
+      expect(defaultTimeoutCalls).toHaveLength(0);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 });

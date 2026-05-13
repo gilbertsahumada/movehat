@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { snapshot, viewForkResource } from '../test.js';
@@ -56,6 +56,27 @@ describe('fork/test — exitCode failure paths', () => {
     await expect(snapshot({ name: 'edge', adapter })).rejects.toThrow(
       /Success criteria not met/
     );
+  });
+
+  it('snapshot still throws when a stale directory from a prior run exists (the full edge case)', async () => {
+    // The pre-fix combined edge case: aptos exits non-zero, stderr happens
+    // to contain "Success" (so the stderr.includes('Success') gate would
+    // false-positive), AND the snapshot directory already exists from a
+    // previous successful run (so the existsSync check would false-positive
+    // too). The new exitCode check fires first and throws regardless.
+    const stalePath = join(tmpCwd, '.movehat', 'snapshots', 'stale');
+    mkdirSync(stalePath, { recursive: true });
+    writeFileSync(join(stalePath, 'config.json'), '{}');
+
+    const adapter = adapterReturning({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Failed but Success was nearby',
+    });
+
+    await expect(
+      snapshot({ name: 'stale', path: stalePath, adapter })
+    ).rejects.toThrow(/Failed but Success was nearby/);
   });
 
   it('viewForkResource throws on non-zero exit with non-JSON stderr (informative message)', async () => {
