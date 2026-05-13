@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CliExecutionError } from "../errors.js";
@@ -130,6 +137,46 @@ version = "0.0.1"
     // movement config file. If a future refactor breaks the finally, this
     // assertion fires before any real damage.
     expect(existsSync(join(tmpHome, ".aptos", "config.yaml"))).toBe(false);
+  });
+
+  it("does not mutate Move.toml during deploy (#38)", async () => {
+    // Pre-fix #38: deployContract overwrote every entry under [addresses]
+    // with the deployer address, then relied on `finally` to restore.
+    // Post-fix: Move.toml is never touched — `--named-addresses` carries
+    // the overrides on the CLI line for both build and publish.
+    const moveTomlPath = join(tmpCwd, "move", "Move.toml");
+    const moveTomlContent = `[package]
+name = "dummy"
+version = "0.0.1"
+
+[addresses]
+counter = "0x42"
+greeting = "0xcafe"
+`;
+    writeFileSync(moveTomlPath, moveTomlContent);
+
+    // Move source that references "counter" so extractNamedAddresses picks
+    // it up — otherwise the --named-addresses arg is empty and the test
+    // is uninteresting.
+    writeFileSync(
+      join(tmpCwd, "move", "sources", "dummy.move"),
+      "module counter::dummy { }\n"
+    );
+
+    const { adapter } = makeAdapter({
+      build: { exitCode: 0, stdout: "build ok", stderr: "" },
+      publish: {
+        exitCode: 0,
+        stdout: "Transaction hash: 0x" + "c".repeat(64),
+        stderr: "",
+      },
+    });
+
+    const runtime = await initRuntime();
+    await runtime.deployContract("counter", { adapter });
+
+    const after = readFileSync(moveTomlPath, "utf8");
+    expect(after).toBe(moveTomlContent);
   });
 
   it("leak path #1 — console.error on a noisy-but-successful publish never sees raw key", async () => {

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { readFile, writeFile, unlink } from "fs/promises";
+import { readFile, unlink } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
 import * as yaml from "js-yaml";
@@ -149,28 +149,11 @@ export class Publisher {
         cleanPrivateKey = cleanPrivateKey.replace("ed25519-priv-", "");
       }
 
-      // Read Move.toml to update named addresses with deployer address
-      const moveTomlPath = join(dir, "Move.toml");
-      let originalMoveToml = "";
-
-      if (existsSync(moveTomlPath)) {
-        originalMoveToml = await readFile(moveTomlPath, "utf-8");
-
-        // Replace addresses in [addresses] section with deployer address
-        const updatedMoveToml = originalMoveToml.replace(
-          /\[addresses\]([\s\S]*?)(?=\n\[|$)/,
-          (_match, addressesSection) => {
-            const updatedSection = addressesSection.replace(
-              /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"0x[a-fA-F0-9]+"/gm,
-              `$1 = "${deployerAddress}"`
-            );
-            return `[addresses]${updatedSection}`;
-          }
-        );
-
-        // Write updated Move.toml temporarily
-        await writeFile(moveTomlPath, updatedMoveToml, "utf-8");
-      }
+      // Bug #38: Move.toml is NOT mutated. All address overrides flow
+      // through the `--named-addresses` flag above, which Movement CLI
+      // applies during build + publish. The previous regex rewrite +
+      // restore-in-finally was destructive: if the process died between
+      // write and restore, the user's Move.toml stayed mutated.
 
       let publishOut = "";
       let publishErr = "";
@@ -254,11 +237,8 @@ export class Publisher {
             await unlink(movementConfigPath).catch(() => {});
           }
         }
-
-        // Restore original Move.toml
-        if (originalMoveToml && existsSync(moveTomlPath)) {
-          await writeFile(moveTomlPath, originalMoveToml, "utf-8");
-        }
+        // Note: Move.toml restoration removed — bug #38 fix means
+        // Move.toml is never mutated in the first place.
       }
 
       // Extract transaction hash from output
