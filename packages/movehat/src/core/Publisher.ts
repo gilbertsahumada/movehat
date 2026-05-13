@@ -22,7 +22,7 @@ import {
   validateSafeName,
 } from "./deployments.js";
 import { validatePathSafety, validateProfileSafety } from "./shell.js";
-import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
+import { CliExecutionError, ModuleAlreadyDeployedError, PostPublishError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { logger } from "../ui/index.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
@@ -389,7 +389,20 @@ export class Publisher {
         // a "snapshot" of the whole file (that's what the old code did,
         // and that's the bug #37 race). Removing only our key leaves
         // other concurrent deploys' profiles intact.
-        await withYamlLock(() => removeProfile(movementConfigPath, profile));
+        //
+        // CRITICAL: catch + log instead of throwing. `await` in a finally
+        // block that throws will clobber both the try block's successful
+        // return value AND any error already propagating. Without this
+        // catch, a yaml-write failure here would mask a successful
+        // publish (making the deploy look failed and inviting a redeploy)
+        // or mask the real publish error.
+        await withYamlLock(() => removeProfile(movementConfigPath, profile)).catch((err) => {
+          const cleanupMsg = err instanceof Error ? err.message : String(err);
+          logger.warning(
+            `Failed to remove deploy profile "${profile}" from ${movementConfigPath}: ${cleanupMsg}. ` +
+            `Run 'movement config delete-profile --profile ${profile}' to clean up manually.`
+          );
+        });
         // Unregister the sync cleanup hook — normal path. (The signal
         // handler stays installed for the process lifetime; cheap.)
         cleanupCallbacks.delete(syncCleanup);
@@ -414,7 +427,12 @@ export class Publisher {
 
       logger.success("Module published successfully!");
 
-      // Create deployment info
+      // ←← "Publish succeeded" boundary. Anything thrown below this
+      // point did NOT cause the publish to fail — the module is on
+      // chain. We surface those failures as PostPublishError so callers
+      // can distinguish a genuine publish failure from a local
+      // bookkeeping failure (and avoid a wasteful redeploy).
+
       const deployment: DeploymentInfo = {
         address: account.accountAddress.toString(),
         moduleName,
@@ -424,11 +442,36 @@ export class Publisher {
         txHash,
       };
 
-      // Save deployment
-      saveDeployment(deployment);
+      try {
+        saveDeployment(deployment);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        throw new PostPublishError(
+          `Module "${moduleName}" published to ${deployment.address} ` +
+          `but local deployment record could not be written: ${err.message}`,
+          deployment,
+          err
+        );
+      }
 
       return deployment;
     } catch (error) {
+      if (error instanceof PostPublishError) {
+        // Publish DID succeed; only local persistence failed. Log as
+        // warning (not error) so the user knows the deploy is real on
+        // chain. Re-throw so programmatic callers can react.
+        logger.warning(
+          `Module published successfully to ${error.deployment.address} ` +
+          `(tx=${error.deployment.txHash ?? "unknown"}) ` +
+          `but local deployment record could not be written.`
+        );
+        logger.warning(`   Cause: ${error.cause.message}`);
+        logger.warning(
+          `   To recover, manually write the deployment to ` +
+          `deployments/${error.deployment.network}/${error.deployment.moduleName}.json.`
+        );
+        throw error;
+      }
       if (error instanceof CliExecutionError) {
         // stdout/stderr are already redacted by runCli before reaching here,
         // so this branch is safe to log verbatim.

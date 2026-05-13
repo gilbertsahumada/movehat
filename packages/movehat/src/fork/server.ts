@@ -238,7 +238,7 @@ export class ForkServer {
         authentication_key: account.authenticationKey
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "";
+      const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('not found')) {
         this.send404(res, `Account not found: ${address}`);
       } else {
@@ -263,7 +263,7 @@ export class ForkServer {
         data: resource
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "";
+      const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('not found')) {
         this.send404(res, `Resource not found: ${resourceType}`, 'resource_not_found');
       } else {
@@ -290,7 +290,7 @@ export class ForkServer {
 
       this.sendJSON(res, 200, resourcesArray);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "";
+      const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('not found')) {
         this.send404(res, `Account not found: ${address}`);
       } else {

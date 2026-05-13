@@ -14,4 +14,4 @@ export { ForkServer } from "./fork/server.js";
 export type { ForkMetadata, AccountState, LedgerInfo, AccountData, AccountResource } from "./types/fork.js";
 
 // Export custom errors
-export { ModuleAlreadyDeployedError } from "./errors.js";
+export { ModuleAlreadyDeployedError, PostPublishError } from "./errors.js";

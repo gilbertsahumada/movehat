@@ -126,7 +126,7 @@ export class ForkManager {
         this.storage.saveResource(normalizedAddress, resourceType, resource);
         console.log(`  ✓ Cached resource ${resourceType}`);
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "";
+        const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes('404')) {
           throw new Error(`Resource ${resourceType} not found for account ${normalizedAddress}`);
         }
@@ -194,7 +194,7 @@ export class ForkManager {
       coinStore = await this.getResource(normalizedAddress, resourceType);
     } catch (error) {
       // Only catch "not found" errors, rethrow others (network, API, etc.)
-      const msg = error instanceof Error ? error.message : "";
+      const msg = error instanceof Error ? error.message : String(error);
       if (!msg.includes('not found')) {
         throw error;
       }

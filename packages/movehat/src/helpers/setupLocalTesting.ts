@@ -143,82 +143,94 @@ async function setupWithLocalNode(
 
   const nodeInfo = await localNode.start();
 
-  logger.step(`Generating ${accountLabels.length} test accounts...`);
-  const accounts = AccountManager.createBatch(accountLabels);
+  // Once the node is up, every later step (account creation, funding,
+  // runtime init, autoDeploy) is fallible. If any of them throws we
+  // must stop the node we just started — otherwise the child process
+  // leaks and port 8080 stays bound until the OS reaps it (manifests as
+  // "Movement command failed" on the next test:example run).
+  try {
+    logger.step(`Generating ${accountLabels.length} test accounts...`);
+    const accounts = AccountManager.createBatch(accountLabels);
 
-  for (const [label, account] of Object.entries(accounts)) {
-    logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
-  }
-  logger.newline();
+    for (const [label, account] of Object.entries(accounts)) {
+      logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
+    }
+    logger.newline();
 
-  if (autoFund) {
-    const accountsList = Object.values(accounts);
-    await localNode.fundAccounts(accountsList, defaultBalance);
-  }
-
-  logger.step("Initializing runtime for local network...");
-
-  const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
-
-  if (!deployerPrivateKey) {
-    throw new Error("Failed to get deployer private key");
-  }
-
-  const runtime = await initRuntime({
-    network: "local",
-    configOverride: {
-      networks: {
-        local: {
-          url: `${nodeInfo.rpcUrl}/v1`,
-          chainId: "local",
-        },
-      },
-      accounts: [deployerPrivateKey],
-    },
-  });
-
-  logger.success("Runtime initialized");
-  logger.newline();
-
-  if (options.autoDeploy && options.autoDeploy.length > 0) {
-    logger.step(`Auto-deploying ${options.autoDeploy.length} module(s)...`);
-
-    const previousRedeploy = process.env.MH_CLI_REDEPLOY;
-    process.env.MH_CLI_REDEPLOY = 'true';
-
-    try {
-      for (const moduleName of options.autoDeploy) {
-        try {
-          logger.plain(`   Deploying ${moduleName}...`);
-          await runtime.deployContract(moduleName);
-          logger.success(`${moduleName} deployed`, 2);
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          logger.error(`Failed to deploy ${moduleName}: ${msg}`, 2);
-          throw error;
-        }
-      }
-    } finally {
-      if (previousRedeploy === undefined) {
-        delete process.env.MH_CLI_REDEPLOY;
-      } else {
-        process.env.MH_CLI_REDEPLOY = previousRedeploy;
-      }
+    if (autoFund) {
+      const accountsList = Object.values(accounts);
+      await localNode.fundAccounts(accountsList, defaultBalance);
     }
 
+    logger.step("Initializing runtime for local network...");
+
+    const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
+
+    if (!deployerPrivateKey) {
+      throw new Error("Failed to get deployer private key");
+    }
+
+    const runtime = await initRuntime({
+      network: "local",
+      configOverride: {
+        networks: {
+          local: {
+            url: `${nodeInfo.rpcUrl}/v1`,
+            chainId: "local",
+          },
+        },
+        accounts: [deployerPrivateKey],
+      },
+    });
+
+    logger.success("Runtime initialized");
     logger.newline();
+
+    if (options.autoDeploy && options.autoDeploy.length > 0) {
+      logger.step(`Auto-deploying ${options.autoDeploy.length} module(s)...`);
+
+      const previousRedeploy = process.env.MH_CLI_REDEPLOY;
+      process.env.MH_CLI_REDEPLOY = 'true';
+
+      try {
+        for (const moduleName of options.autoDeploy) {
+          try {
+            logger.plain(`   Deploying ${moduleName}...`);
+            await runtime.deployContract(moduleName);
+            logger.success(`${moduleName} deployed`, 2);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            logger.error(`Failed to deploy ${moduleName}: ${msg}`, 2);
+            throw error;
+          }
+        }
+      } finally {
+        if (previousRedeploy === undefined) {
+          delete process.env.MH_CLI_REDEPLOY;
+        } else {
+          process.env.MH_CLI_REDEPLOY = previousRedeploy;
+        }
+      }
+
+      logger.newline();
+    }
+
+    logger.success("Local testing environment ready!");
+    logger.newline();
+    logger.plain(`   Mode: local-node`);
+    logger.plain(`   RPC: ${nodeInfo.rpcUrl}/v1`);
+    logger.plain(`   Faucet: ${nodeInfo.faucetUrl}`);
+    logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
+    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+    logger.newline();
+
+    return { runtime, localNode };
+  } catch (error) {
+    // Best-effort cleanup. Swallow the stop() error so the original
+    // setup failure surfaces unchanged.
+    await localNode.stop().catch(() => {});
+    throw error;
   }
-
-  logger.success("Local testing environment ready!");
-  logger.newline();
-  logger.plain(`   Mode: local-node`);
-  logger.plain(`   RPC: ${nodeInfo.rpcUrl}/v1`);
-  logger.plain(`   Faucet: ${nodeInfo.faucetUrl}`);
-  logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-  logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
-  logger.newline();
-
-  return { runtime, localNode };
 }
 
 /**
@@ -276,53 +288,61 @@ async function setupWithFork(
   logger.success(`Fork server running at http://localhost:${forkPort}`);
   logger.newline();
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Same cleanup-on-failure pattern as setupWithLocalNode: once the
+  // fork server is listening, any later throw must stop the server or
+  // we leak the listener.
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-  logger.step(`Generating ${accountLabels.length} test accounts...`);
-  const accounts = AccountManager.createBatch(accountLabels);
+    logger.step(`Generating ${accountLabels.length} test accounts...`);
+    const accounts = AccountManager.createBatch(accountLabels);
 
-  for (const [label, account] of Object.entries(accounts)) {
-    logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
-  }
-  logger.newline();
+    for (const [label, account] of Object.entries(accounts)) {
+      logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
+    }
+    logger.newline();
 
-  if (autoFund) {
-    const addresses = Object.values(accounts).map((acc) =>
-      acc.accountAddress.toString()
-    );
-    await forkManager.fundMultipleAccounts(addresses, defaultBalance);
-  }
+    if (autoFund) {
+      const addresses = Object.values(accounts).map((acc) =>
+        acc.accountAddress.toString()
+      );
+      await forkManager.fundMultipleAccounts(addresses, defaultBalance);
+    }
 
-  logger.step("Initializing runtime for local network...");
+    logger.step("Initializing runtime for local network...");
 
-  const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
+    const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
 
-  if (!deployerPrivateKey) {
-    throw new Error("Failed to get deployer private key");
-  }
+    if (!deployerPrivateKey) {
+      throw new Error("Failed to get deployer private key");
+    }
 
-  const runtime = await initRuntime({
-    network: "local",
-    configOverride: {
-      networks: {
-        local: {
-          url: `http://localhost:${forkPort}/v1`,
-          chainId: "local",
+    const runtime = await initRuntime({
+      network: "local",
+      configOverride: {
+        networks: {
+          local: {
+            url: `http://localhost:${forkPort}/v1`,
+            chainId: "local",
+          },
         },
+        accounts: [deployerPrivateKey],
       },
-      accounts: [deployerPrivateKey],
-    },
-  });
+    });
 
-  logger.success("Runtime initialized");
-  logger.newline();
-  logger.success("Local testing environment ready!");
-  logger.newline();
-  logger.plain(`   Mode: fork (read-only)`);
-  logger.plain(`   RPC: http://localhost:${forkPort}/v1`);
-  logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-  logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
-  logger.newline();
+    logger.success("Runtime initialized");
+    logger.newline();
+    logger.success("Local testing environment ready!");
+    logger.newline();
+    logger.plain(`   Mode: fork (read-only)`);
+    logger.plain(`   RPC: http://localhost:${forkPort}/v1`);
+    logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
+    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+    logger.newline();
 
-  return { runtime, forkServer, forkManager };
+    return { runtime, forkServer, forkManager };
+  } catch (error) {
+    await forkServer.stop().catch(() => {});
+    throw error;
+  }
 }
