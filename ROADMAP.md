@@ -96,7 +96,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ✅ | M2.1 | [#116](https://github.com/gilbertsahumada/movehat/issues/116) (shipped in PR #120 @ `c44f9cb`) | Harness skeleton + 3 factories + Proxy poisoning + cleanup + HarnessDisposedError (4 methods stubbed) | foundations |
 | ✅ | M2.2 | [#117](https://github.com/gilbertsahumada/movehat/issues/117) (shipped in PR #121 @ `c336077`) | `deployCodeObject` + `upgradeCodeObject` via `movement move deploy-object` / `upgrade-object` + extract `core/movementProfile.ts` | (partial of #69) |
 | ✅ | M2.3 | [#118](https://github.com/gilbertsahumada/movehat/issues/118) (shipped in PR #122 @ `a334991`) | `runViewFunction` + `runMoveScript` + extract `utils/parseCliOutput.ts` | (partial of #69) |
-| ✅ | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) | Migrate `examples/counter-example/` + templates + 8 docs MDX + new `api/harness.mdx`; `@deprecated` JSDoc on `getMovehat`; fix M2.2 `addressName` bug | closes #69 |
+| ✅ | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) (shipped in PR #123 @ `602cfca`) | Migrate `examples/counter-example/` + templates + 8 docs MDX + new `api/harness.mdx`; `@deprecated` JSDoc on `getMovehat`; fix M2.2 `addressName` bug | closes #69 |
 
 **Definition of Done — API surface**:
 - [x] `import { Harness } from 'movehat'` works from the built package (M2.4 — verified by Tier 2 smoke + Tier 3 e2e on the dev→main batch)
@@ -121,7 +121,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `getMovehat()` still exported with `@deprecated` JSDoc tag (M2.4 — full migration snippet inline; `initRuntime` stays public as a low-level utility used by `Harness.createLive`)
 - [x] `pnpm test` green (M2.4 — 222/222 unit tests; Tier 2 `test:example` 9/9 passing in ~1 min)
 
-**M2 status: ✅ ready for `develop → main` batch — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #N) merged to develop. Tier 3 `pnpm test:e2e` to be run on the batch PR per CLAUDE.md §6.3.**
+**M2 status: ✅ ready for `develop → main` batch (PR #124) — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #123) merged to develop. Tier 3 `pnpm test:e2e` 32/32 captured on M2.4 (PR #123) per CLAUDE.md §6.3.**
 
 ### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
 
