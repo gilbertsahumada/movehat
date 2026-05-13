@@ -85,14 +85,20 @@ version = "0.0.1"
     await harness.cleanup();
 
     // Property access itself throws — the call site never gets a Promise back.
-    expect(() => harness.deployCodeObject({})).toThrow(HarnessDisposedError);
+    // The args ({moduleName: "x"}) typecheck but never execute (the get trap
+    // fires before the method body runs).
+    expect(() => harness.deployCodeObject({ moduleName: "x" })).toThrow(
+      HarnessDisposedError
+    );
   });
 
   it("post-cleanup, upgradeCodeObject / runViewFunction / runMoveScript all throw HarnessDisposedError synchronously", async () => {
     const harness = await Harness.createLive("testnet");
     await harness.cleanup();
 
-    expect(() => harness.upgradeCodeObject({})).toThrow(HarnessDisposedError);
+    expect(() =>
+      harness.upgradeCodeObject({ moduleName: "x", objectAddress: "0x1" })
+    ).toThrow(HarnessDisposedError);
     expect(() => harness.runViewFunction({})).toThrow(HarnessDisposedError);
     expect(() => harness.runMoveScript({})).toThrow(HarnessDisposedError);
   });
@@ -103,7 +109,7 @@ version = "0.0.1"
 
     let captured: unknown;
     try {
-      harness.deployCodeObject({});
+      harness.deployCodeObject({ moduleName: "x" });
     } catch (err) {
       captured = err;
     }
@@ -121,11 +127,12 @@ version = "0.0.1"
     expect(harness.runtime).toBeDefined();
   });
 
-  it("before cleanup, the 4 stub methods reject (real impls in M2.2/M2.3) — but do NOT throw HarnessDisposedError", async () => {
+  it("before cleanup, the remaining M2.3 stub methods reject — but do NOT throw HarnessDisposedError", async () => {
+    // deployCodeObject + upgradeCodeObject got real bodies in M2.2; their
+    // behavior is covered by the codeObject test suite. The view + script
+    // stubs remain until M2.3.
     const harness = await Harness.createLive("testnet");
     try {
-      await expect(harness.deployCodeObject({})).rejects.toThrow(/not yet implemented/);
-      await expect(harness.upgradeCodeObject({})).rejects.toThrow(/not yet implemented/);
       await expect(harness.runViewFunction({})).rejects.toThrow(/not yet implemented/);
       await expect(harness.runMoveScript({})).rejects.toThrow(/not yet implemented/);
     } finally {
@@ -141,7 +148,7 @@ version = "0.0.1"
     // shape uses await. Confirm that pattern surfaces the error too.
     let captured: unknown;
     try {
-      await harness.deployCodeObject({});
+      await harness.deployCodeObject({ moduleName: "x" });
     } catch (err) {
       captured = err;
     }

@@ -3,9 +3,15 @@ import type { LocalNodeManager } from "../node/LocalNodeManager.js";
 import type { ForkServer } from "../fork/server.js";
 import type { ForkManager } from "../fork/manager.js";
 import type { LocalTestOptions } from "../types/config.js";
+import type {
+  DeployCodeObjectOptions,
+  UpgradeCodeObjectOptions,
+  CodeObjectInfo,
+} from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
 import { initRuntime } from "../runtime.js";
 import { createHarnessProxy } from "./proxy.js";
+import { deployCodeObject, upgradeCodeObject } from "./codeObject.js";
 
 export type HarnessMode = "local" | "fork" | "live";
 
@@ -139,16 +145,44 @@ export class Harness {
     }
   }
 
-  // ---- Stubbed methods (real bodies land in M2.2 / M2.3) ----
-
-  /** @stub M2.2 */
-  async deployCodeObject(_options: unknown): Promise<unknown> {
-    throw new Error("Harness.deployCodeObject is not yet implemented (M2.2).");
+  /**
+   * Deploy a Move package as a code object via `movement move deploy-object`.
+   *
+   * The derived object address is bound to `options.moduleName` as a
+   * named address at compile time, then captured into the returned
+   * {@link CodeObjectInfo.address} for later use with
+   * `harness.runtime.getContract(address, moduleName)`.
+   *
+   * Not available on fork-mode harnesses (forks are read-only). Calling
+   * this on a `Harness.createFork(...)` instance throws synchronously.
+   */
+  async deployCodeObject(options: DeployCodeObjectOptions): Promise<CodeObjectInfo> {
+    if (this.mode === "fork") {
+      throw new Error(
+        "Harness.createFork is read-only; code-object deployment requires Harness.createLocal or createLive."
+      );
+    }
+    return deployCodeObject(this.runtime, options);
   }
 
-  /** @stub M2.2 */
-  async upgradeCodeObject(_options: unknown): Promise<unknown> {
-    throw new Error("Harness.upgradeCodeObject is not yet implemented (M2.2).");
+  /**
+   * Upgrade an existing code object via `movement move upgrade-object`.
+   *
+   * Requires {@link UpgradeCodeObjectOptions.objectAddress} (the existing
+   * on-chain object). Overwrites the local deployment record's timestamp
+   * + txHash; address stays the same.
+   *
+   * Not available on fork-mode harnesses (forks are read-only).
+   */
+  async upgradeCodeObject(
+    options: UpgradeCodeObjectOptions
+  ): Promise<CodeObjectInfo> {
+    if (this.mode === "fork") {
+      throw new Error(
+        "Harness.createFork is read-only; code-object upgrade requires Harness.createLocal or createLive."
+      );
+    }
+    return upgradeCodeObject(this.runtime, options);
   }
 
   /** @stub M2.3 */
