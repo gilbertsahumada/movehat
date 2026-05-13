@@ -9,8 +9,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as yaml from "js-yaml";
 import { CliExecutionError } from "../errors.js";
 import { initRuntime } from "../runtime.js";
+import { Publisher } from "../core/Publisher.js";
+import { AccountManager } from "../core/AccountManager.js";
+import { resolveNetworkConfig } from "../core/config.js";
 import type { ChildProcessAdapter, RunInput, RunResult } from "../utils/childProcessAdapter.js";
 
 /**
@@ -137,6 +141,110 @@ version = "0.0.1"
     // movement config file. If a future refactor breaks the finally, this
     // assertion fires before any real damage.
     expect(existsSync(join(tmpHome, ".aptos", "config.yaml"))).toBe(false);
+  });
+
+  it("two concurrent deploys do not corrupt ~/.aptos/config.yaml (#37)", async () => {
+    // Pre-fix #37: both deploys overwrote ~/.aptos/config.yaml with the
+    // SAME profile name ("default" by default), then both restored
+    // independently. The second deploy's restore would overwrite the
+    // first's profile mid-publish → potential cross-contamination of
+    // private keys / accounts. Post-fix: each deploy uses a unique
+    // movehat-deploy-<uuid> profile name and only deletes its own key
+    // on cleanup. The user's other profiles never get touched.
+    //
+    // The mutex is what makes this safe — without it, the
+    // read-modify-write cycles would race and silently drop a profile.
+
+    // Seed the yaml with an unrelated user profile that MUST survive.
+    const aptosDir = join(tmpHome, ".aptos");
+    mkdirSync(aptosDir, { recursive: true });
+    const preExisting = {
+      profiles: {
+        user_main: {
+          private_key: "0x" + "1".repeat(64),
+          public_key: "0x" + "2".repeat(64),
+          account: "0x" + "3".repeat(64),
+          rest_url: "https://example.invalid/v1",
+        },
+      },
+    };
+    const configPath = join(aptosDir, "config.yaml");
+    writeFileSync(configPath, yaml.dump(preExisting), { mode: 0o600 });
+
+    // Set up two Publisher instances with fake adapters that record their
+    // own --profile argument and inject a small delay on publish so the
+    // critical sections overlap.
+    function makeDelayedAdapter(label: string): {
+      adapter: ChildProcessAdapter;
+      captured: { publishCall?: RunInput };
+    } {
+      const captured: { publishCall?: RunInput } = {};
+      const adapter: ChildProcessAdapter = {
+        async run(input) {
+          if (input.args[1] === "build") {
+            return { exitCode: 0, stdout: `built ${label}`, stderr: "" };
+          }
+          if (input.args[1] === "publish") {
+            captured.publishCall = input;
+            // Hold the lock-protected critical section open long enough
+            // for the other deploy's addProfile to compete.
+            await new Promise((r) => setTimeout(r, 30));
+            return {
+              exitCode: 0,
+              stdout: `Transaction hash: 0x${"d".repeat(64)}`,
+              stderr: "",
+            };
+          }
+          throw new Error(`unexpected: ${input.args[1]}`);
+        },
+        spawn() {
+          throw new Error("spawn not used");
+        },
+      };
+      return { adapter, captured };
+    }
+
+    const a = makeDelayedAdapter("A");
+    const b = makeDelayedAdapter("B");
+
+    // Build a minimal config + account once via initRuntime, then call
+    // Publisher directly (bypasses the loadDeployment cache that would
+    // throw on the second deploy if both used moduleName "test").
+    const runtime = await initRuntime();
+    const { config, account } = runtime;
+
+    await Promise.all([
+      new Publisher({ adapter: a.adapter }).deploy({
+        moduleName: "concurrent_a",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+      }),
+      new Publisher({ adapter: b.adapter }).deploy({
+        moduleName: "concurrent_b",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+      }),
+    ]);
+
+    // Both publish calls captured distinct --profile args.
+    const argsA = a.captured.publishCall!.args;
+    const argsB = b.captured.publishCall!.args;
+    const profileArgA = argsA[argsA.indexOf("--profile") + 1];
+    const profileArgB = argsB[argsB.indexOf("--profile") + 1];
+    expect(profileArgA).toMatch(/^movehat-deploy-/);
+    expect(profileArgB).toMatch(/^movehat-deploy-/);
+    expect(profileArgA).not.toBe(profileArgB);
+
+    // After both deploys finish, ~/.aptos/config.yaml contains the
+    // user's original profile and zero movehat-deploy-* profiles.
+    const finalYaml: any = yaml.load(readFileSync(configPath, "utf8"));
+    expect(finalYaml.profiles).toBeDefined();
+    expect(Object.keys(finalYaml.profiles)).toEqual(["user_main"]);
+    expect(finalYaml.profiles.user_main.private_key).toBe(
+      preExisting.profiles.user_main.private_key
+    );
   });
 
   it("does not mutate Move.toml during deploy (#38)", async () => {

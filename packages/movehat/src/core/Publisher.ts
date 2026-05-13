@@ -1,7 +1,15 @@
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { readFile, unlink } from "fs/promises";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
+import { readFile } from "fs/promises";
 import { homedir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
+import { randomUUID } from "crypto";
 import * as yaml from "js-yaml";
 import { Account } from "@aptos-labs/ts-sdk";
 import { MovehatConfig } from "../types/config.js";
@@ -16,6 +24,93 @@ import { validatePathSafety, validateProfileSafety } from "./shell.js";
 import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
+
+/**
+ * In-process serializer for `~/.aptos/config.yaml` mutations. Without it,
+ * two concurrent `Publisher.deploy()` calls would race in the
+ * read-modify-write cycle and the second writer would silently drop the
+ * first deploy's profile. See #37.
+ */
+let yamlLock: Promise<unknown> = Promise.resolve();
+function withYamlLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = yamlLock;
+  // .then(success, failure) — continue even if the previous holder rejected,
+  // so a failure in one deploy doesn't poison the lock for the others.
+  const next = prev.then(
+    () => fn(),
+    () => fn()
+  );
+  yamlLock = next.catch(() => {}); // swallow on the shared chain; caller still gets the original
+  return next;
+}
+
+interface ProfileData {
+  private_key: string;
+  public_key: string;
+  account: string;
+  rest_url: string;
+}
+
+/**
+ * Atomic write: write payload to a temp sibling → chmod the temp to 0o600
+ * → rename over the target. The chmod-before-rename order eliminates a
+ * window where the target file could be observable with default umask
+ * perms (typically 0o644) while carrying the private key.
+ */
+function atomicWriteYaml(path: string, content: string): void {
+  const tmpPath = `${path}.tmp.${randomUUID().slice(0, 8)}`;
+  writeFileSync(tmpPath, content, { mode: 0o600 });
+  chmodSync(tmpPath, 0o600); // defense in depth in case umask filtered the open mode
+  renameSync(tmpPath, path);
+}
+
+/** Add the deploy's profile to ~/.aptos/config.yaml. Creates the file if absent. */
+async function addProfile(
+  configPath: string,
+  name: string,
+  data: ProfileData
+): Promise<void> {
+  const configDir = dirname(configPath);
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  }
+  let yamlObj: any = {};
+  if (existsSync(configPath)) {
+    const raw = await readFile(configPath, "utf-8");
+    yamlObj = (yaml.load(raw) as any) || {};
+  }
+  if (!yamlObj.profiles) yamlObj.profiles = {};
+  yamlObj.profiles[name] = data;
+  atomicWriteYaml(configPath, yaml.dump(yamlObj));
+}
+
+/**
+ * Remove the deploy's profile from ~/.aptos/config.yaml. Idempotent —
+ * a missing file or missing profile is a no-op. If removal leaves the
+ * yaml with only an empty `profiles:` block, the whole file is unlinked
+ * to preserve the "didn't exist before" semantic for the first-ever deploy.
+ */
+async function removeProfile(configPath: string, name: string): Promise<void> {
+  if (!existsSync(configPath)) return;
+  const raw = await readFile(configPath, "utf-8");
+  const yamlObj: any = (yaml.load(raw) as any) || {};
+  if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
+  delete yamlObj.profiles[name];
+
+  const profilesEmpty = Object.keys(yamlObj.profiles).length === 0;
+  const onlyProfilesKey =
+    Object.keys(yamlObj).length === 1 && "profiles" in yamlObj;
+  if (profilesEmpty && onlyProfilesKey) {
+    // We created this file fresh; remove it.
+    try {
+      unlinkSync(configPath);
+    } catch {
+      // best-effort
+    }
+    return;
+  }
+  atomicWriteYaml(configPath, yaml.dump(yamlObj));
+}
 
 /** @internal */
 export interface PublisherDeps {
@@ -97,7 +192,13 @@ export class Publisher {
     }
 
     const dir = input.packageDir || config.moveDir;
-    const profile = config.profile || "default";
+
+    // Bug #37: use a UUID-suffixed profile name per deploy so concurrent
+    // Publisher.deploy() calls in the same process don't fight over the
+    // same key in ~/.aptos/config.yaml. The previous code reused
+    // config.profile (default "default"), which meant two parallel
+    // deploys would clobber each other's profile data mid-publish.
+    const profile = `movehat-deploy-${randomUUID().slice(0, 8)}`;
 
     // Validate (no shell escape — runCli uses spawn, which takes args
     // verbatim and would treat the single-quote wrapping as part of the
@@ -158,47 +259,24 @@ export class Publisher {
       let publishOut = "";
       let publishErr = "";
 
-      // Setup Movement CLI config with private key securely
-      // Movement CLI uses .aptos config directory (not .movement)
-      const movementConfigDir = join(homedir(), ".aptos");
-      const movementConfigPath = join(movementConfigDir, "config.yaml");
-      let originalMovementConfig = "";
+      // Setup Movement CLI config with private key securely.
+      // Movement CLI uses .aptos config directory (not .movement).
+      const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
+
+      // Add our deploy profile under the unique key. The mutex serializes
+      // read-modify-write cycles so concurrent deploys in the same process
+      // can't drop each other's profiles. Other user profiles in the same
+      // file are preserved untouched.
+      await withYamlLock(() =>
+        addProfile(movementConfigPath, profile, {
+          private_key: cleanPrivateKey,
+          public_key: account.publicKey.toString(),
+          account: deployerAddress,
+          rest_url: config.rpc,
+        })
+      );
 
       try {
-        // Ensure .aptos directory exists
-        if (!existsSync(movementConfigDir)) {
-          mkdirSync(movementConfigDir, { recursive: true, mode: 0o700 });
-        }
-
-        // Backup original config if it exists
-        if (existsSync(movementConfigPath)) {
-          originalMovementConfig = await readFile(movementConfigPath, "utf-8");
-        }
-
-        // Create Movement config with private key
-        // Movement CLI reads from ~/.aptos/config.yaml
-        const movementConfig: any = originalMovementConfig
-          ? yaml.load(originalMovementConfig)
-          : {};
-
-        // Set profile with private key
-        // Use unescaped profile name as YAML key (YAML handles escaping automatically)
-        if (!movementConfig.profiles) {
-          movementConfig.profiles = {};
-        }
-        if (!movementConfig.profiles[profile]) {
-          movementConfig.profiles[profile] = {};
-        }
-
-        movementConfig.profiles[profile].private_key = cleanPrivateKey;
-        movementConfig.profiles[profile].public_key = account.publicKey.toString();
-        movementConfig.profiles[profile].account = deployerAddress;
-        movementConfig.profiles[profile].rest_url = config.rpc;
-
-        // Write config file with restrictive permissions
-        const configYaml = yaml.dump(movementConfig);
-        writeFileSync(movementConfigPath, configYaml, { mode: 0o600 });
-
         // Execute publish command without exposing private key in CLI.
         // Routed through runCli so stdout/stderr are redacted of any
         // `ed25519-priv-…` shape before reaching console.log/console.error
@@ -227,18 +305,11 @@ export class Publisher {
         if (publishOut) console.log(publishOut.trim());
         if (publishErr) console.error(publishErr.trim());
       } finally {
-        // Restore original Movement config
-        if (existsSync(movementConfigPath)) {
-          if (originalMovementConfig) {
-            // Restore original config
-            writeFileSync(movementConfigPath, originalMovementConfig, { mode: 0o600 });
-          } else {
-            // Remove config file if it didn't exist before
-            await unlink(movementConfigPath).catch(() => {});
-          }
-        }
-        // Note: Move.toml restoration removed — bug #38 fix means
-        // Move.toml is never mutated in the first place.
+        // Always remove our profile from the shared yaml — never restore
+        // a "snapshot" of the whole file (that's what the old code did,
+        // and that's the bug #37 race). Removing only our key leaves
+        // other concurrent deploys' profiles intact.
+        await withYamlLock(() => removeProfile(movementConfigPath, profile));
       }
 
       // Extract transaction hash from output
