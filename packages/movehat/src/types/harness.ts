@@ -12,12 +12,36 @@ import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
  */
 export interface DeployCodeObjectOptions {
   /**
-   * Logical module name. Used as the `--address-name` for `deploy-object`
-   * so the derived object address is bound to this name in the package's
-   * named-addresses at compile time. Also the key under which the
-   * deployment is persisted (`deployments/{network}/{moduleName}.json`).
+   * Logical module identifier (the `name` part of `module addr::name`).
+   * Used as the persistence key (`deployments/{network}/{moduleName}.json`)
+   * and as the `name` arg you'd pass to `runtime.getContract(addr, name)`
+   * after deployment.
+   *
+   * If `addressName` is omitted, `moduleName` is also used as the CLI's
+   * `--address-name` flag (correct when the Move.toml's named address
+   * matches the module identifier). For packages where they differ —
+   * e.g. `module hello_blockchain::counter` (named address
+   * `hello_blockchain`, module `counter`) — set `addressName` explicitly.
    */
   moduleName: string;
+
+  /**
+   * Move.toml named address that the derived object address binds to
+   * at compile time (the `--address-name` flag of `move deploy-object`).
+   *
+   * Defaults to `moduleName`. Set this when the Move.toml's named
+   * address differs from the on-chain module identifier:
+   *
+   * ```ts
+   * // Move source: `module hello_blockchain::counter`
+   * // Move.toml:   `[addresses] hello_blockchain = "_"`
+   * await harness.deployCodeObject({
+   *   moduleName: "counter",            // for getContract + save key
+   *   addressName: "hello_blockchain",  // for --address-name
+   * });
+   * ```
+   */
+  addressName?: string;
 
   /**
    * Extra named-address overrides merged on top of the addresses
