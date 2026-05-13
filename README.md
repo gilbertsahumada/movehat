@@ -34,7 +34,7 @@
 
 Before installing Movehat, make sure you have:
 
-- **Node.js** (v18 or later) - [Download](https://nodejs.org/)
+- **Node.js** (v20 or later) - [Download](https://nodejs.org/)
 - **Movement CLI** - **REQUIRED** for compiling and deploying Move contracts
 
   Install Movement CLI by following the official guide:
@@ -514,7 +514,7 @@ Write tests in TypeScript that run on a **real local Movement blockchain** (just
 // tests/Counter.test.ts
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Counter Contract", () => {
   let fixture: TestFixture<'counter'>;
@@ -599,8 +599,8 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node and clear account pool
-    await teardownTestFixture();
+    // Cleanup: Stop local node
+    await fixture.teardown();
   });
 });
 ```
@@ -863,7 +863,7 @@ main().catch(console.error);
 ### System Requirements
 
 **Required:**
-- Node.js v18+
+- Node.js v20+
 - Movement CLI (install from [Movement docs](https://docs.movementnetwork.xyz/devs/movementcli))
 - npm or pnpm
 
