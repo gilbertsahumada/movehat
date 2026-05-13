@@ -1,70 +1,77 @@
-import { setupTestFixture, type TestFixture } from "movehat/helpers";
+import { Harness, AccountManager } from "movehat";
+import type { MoveContract } from "movehat/helpers";
+import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
 
+/**
+ * Migrated to the M2 Harness API. Uses Harness.createLocal with
+ * autoDeploy — same Publisher-based publish path the previous
+ * setupTestFixture flow used. The sibling tests (greeting.test.ts,
+ * message.test.ts) stay on setupTestFixture to demonstrate that the
+ * older API continues to work side-by-side.
+ *
+ * For the new code-object deploy path (`harness.deployCodeObject`),
+ * see scripts/deploy-counter.ts in this directory.
+ */
 describe("Counter Contract", () => {
-  let fixture: TestFixture<'counter'>;
+  let harness: Harness;
+  let counter: MoveContract;
+  let counterAddr: string;
+  let deployer: Account, alice: Account;
 
   before(async function () {
-    this.timeout(60000); // Allow time for fork creation + deployment
+    this.timeout(60000); // Allow time for local node startup + autoDeploy
 
-    // Setup local testing environment with auto-deployment
-    // TypeScript will infer that fixture.contracts.counter exists!
-    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice", "bob"],
+      autoDeploy: ["counter"],
+    });
+
+    const labeled = AccountManager.getLabeledAccounts();
+    deployer = labeled.deployer!;
+    alice = labeled.alice!;
+
+    counterAddr = harness.runtime.getDeploymentAddress("counter")!;
+    counter = harness.runtime.getContract(counterAddr, "counter");
   });
 
-  it("should initialize with value 0", async () => {
-    const counter = fixture.contracts.counter; // ✅ No need for `!` anymore
-    const deployer = fixture.accounts.deployer;
-
-    // Read counter value (returns string from view function)
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
+  it("should initialize with value 0 (via harness.runViewFunction)", async () => {
+    // Demonstrate the new SDK-backed view path. Returns the raw
+    // unknown[] tuple from aptos.view — destructure for singletons.
+    const [value] = await harness.runViewFunction({
+      function: `${counterAddr}::counter::get`,
+      functionArguments: [deployer.accountAddress.toString()],
+    });
 
     console.log(`   Counter value: ${value}`);
-
-    // Assert the counter is 0 (note: values from view are strings)
-    expect(parseInt(value)).to.equal(0);
+    expect(parseInt(value as string)).to.equal(0);
   });
 
   it("should increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
-
-    // Increment the counter
     const tx = await counter.call(deployer, "increment", []);
     console.log(`   Transaction: ${tx.hash}`);
 
-    // Read new value
     const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
+      deployer.accountAddress.toString(),
     ]);
 
     console.log(`   New counter value: ${value}`);
-
-    // Should be 1 now
     expect(parseInt(value)).to.equal(1);
   });
 
   it("alice can also increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const alice = fixture.accounts.alice;
-
-    // Alice increments her own counter
     const tx = await counter.call(alice, "increment", []);
     console.log(`   Alice's transaction: ${tx.hash}`);
 
-    // Read counter value for Alice (each user has their own counter)
     const aliceValue = await counter.view<string>("get", [
-      alice.accountAddress.toString()
+      alice.accountAddress.toString(),
     ]);
 
     console.log(`   Alice's counter value: ${aliceValue}`);
     expect(parseInt(aliceValue)).to.equal(1);
 
-    // Deployer's counter should still be 1 (unchanged)
     const deployerValue = await counter.view<string>("get", [
-      fixture.accounts.deployer.accountAddress.toString()
+      deployer.accountAddress.toString(),
     ]);
 
     console.log(`   Deployer's counter value: ${deployerValue}`);
@@ -72,6 +79,6 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    await fixture.teardown();
+    await harness.cleanup();
   });
 });
