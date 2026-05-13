@@ -20,7 +20,7 @@ function buildProviderUrl(provider: 'chatgpt' | 'claude' | 'gemini', docUrl: str
 export function LLMActions({ slug }: { slug: string[] }) {
   const [copied, setCopied] = useState(false);
   const slugPath = slug.length === 0 ? '' : `/${slug.join('/')}`;
-  const rawUrl = `/docs${slugPath}/raw`;
+  const rawUrl = `/raw${slugPath}`;
   const docUrl = `${SITE_URL}/docs${slugPath}`;
 
   async function copy() {
