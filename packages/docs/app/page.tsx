@@ -5,8 +5,8 @@ export default function HomePage() {
     <main className="flex min-h-screen flex-col items-center justify-center text-center px-4">
       <h1 className="text-4xl font-bold mb-4 sm:text-5xl">Movehat</h1>
       <p className="text-fd-muted-foreground text-lg mb-8 max-w-2xl">
-        A Hardhat-like development framework for Movement L1 and Aptos Move
-        smart contracts. Write your tests and deployment scripts in TypeScript.
+        A Hardhat-like development framework for Movement L1 smart contracts.
+        Write your tests and deployment scripts in TypeScript.
       </p>
       <div className="flex gap-4 flex-wrap justify-center">
         <Link

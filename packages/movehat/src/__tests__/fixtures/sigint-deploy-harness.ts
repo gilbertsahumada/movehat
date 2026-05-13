@@ -30,7 +30,7 @@ import type {
 } from "../../utils/childProcessAdapter.js";
 import type { MovehatConfig } from "../../types/config.js";
 
-// Deterministic test key — must satisfy the Aptos SDK's Ed25519 parser.
+// Deterministic test key — must satisfy the Movement TypeScript SDK's Ed25519 parser.
 // Same key the testnet auto-config uses in `core/config.ts:147-155`.
 const TEST_PRIVATE_KEY =
   "0x0000000000000000000000000000000000000000000000000000000000000001";

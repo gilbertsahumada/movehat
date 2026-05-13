@@ -53,7 +53,7 @@ movehat fork list
 movehat fork serve --fork .movehat/forks/my-fork --port 8080
 ```
 
-This starts a local RPC server that serves the fork. Connect the Aptos/Movement SDK to `http://localhost:8080/v1`.
+This starts a local RPC server that serves the fork. Connect any Movement-compatible TypeScript SDK to `http://localhost:8080/v1`.
 
 **Supported endpoints:**
 - `GET /v1/` — Ledger info (chain ID, version, block height)
@@ -226,7 +226,7 @@ new ForkManager(forkPath: string)
 
 MoveHat uses JSON API instead of BCS:
 
-| Feature | MoveHat Forks | Aptos CLI Sim |
+| Feature | MoveHat Forks | Stock CLI Sim |
 |---------|---------------|---------------|
 | Works with Movement | Yes | BCS incompatible |
 | JSON-based | Yes | BCS only |

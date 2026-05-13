@@ -163,7 +163,7 @@ The MRE is the core of Movehat, similar to Hardhat's HRE. It provides a unified 
 
 - Loads `movehat.config.ts` automatically
 - Resolves network configuration
-- Initializes Aptos SDK client
+- Initializes the Movement TypeScript SDK client
 - Manages accounts
 - Provides helper functions
 
@@ -176,7 +176,7 @@ The MRE is the core of Movehat, similar to Hardhat's HRE. It provides a unified 
 {
   config: MovehatConfig;      // Resolved configuration
   network: NetworkInfo;       // Network details
-  aptos: Aptos;              // Aptos SDK client
+  aptos: Aptos;              // Movement TypeScript SDK client
   account: Account;          // Primary account
   accounts: Account[];       // All accounts
   getContract: Function;     // Contract helper

@@ -58,7 +58,7 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
     );
 
     if (exitCode !== 0) {
-      throw new Error(stderr || `aptos move sim init failed with exit code ${exitCode}`);
+      throw new Error(stderr || `fork snapshot init failed with exit code ${exitCode}`);
     }
 
     if (stderr && !stderr.includes('Success')) {
@@ -158,7 +158,7 @@ export async function viewForkResource(
 
     if (exitCode !== 0) {
       throw new Error(
-        stderr || `aptos move sim view-resource failed with exit code ${exitCode}`
+        stderr || `fork view-resource failed with exit code ${exitCode}`
       );
     }
 

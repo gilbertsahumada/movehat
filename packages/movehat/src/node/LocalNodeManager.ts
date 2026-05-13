@@ -267,7 +267,7 @@ export class LocalNodeManager {
       ? account
       : account.accountAddress.toString();
 
-    // Use query parameters for Aptos/Movement faucet
+    // Use query parameters for the Movement faucet
     const faucetUrl = `http://127.0.0.1:${this.options.faucetPort}/mint?amount=${amount}&address=${address}`;
 
     try {

@@ -1,6 +1,6 @@
 ---
 title: movehat fork
-description: Manage local forks of Movement/Aptos networks
+description: Manage local forks of Movement networks
 ---
 
 ## Usage
@@ -9,7 +9,7 @@ description: Manage local forks of Movement/Aptos networks
 movehat fork <command> [options]
 ```
 
-Manage local forks of Movement/Aptos networks.
+Manage local forks of Movement networks.
 
 ## Commands
 
@@ -72,7 +72,7 @@ movehat fork fund \
 
 ### `fork serve`
 
-Start a local RPC server serving fork data via the Movement/Aptos API.
+Start a local RPC server serving fork data via the Movement L1 API.
 
 ```bash
 movehat fork serve --fork .movehat/forks/my-fork --port 8080
@@ -89,7 +89,7 @@ movehat fork serve --fork .movehat/forks/my-fork --port 8080
 - `GET /v1/accounts/:address/resource/:type` — Specific resource
 - `GET /v1/accounts/:address/resources` — All resources
 
-**Connect with Aptos SDK:**
+**Connect with the TypeScript SDK:**
 
 ```typescript
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";

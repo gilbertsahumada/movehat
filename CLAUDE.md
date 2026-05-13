@@ -178,7 +178,7 @@ If step 1 is skipped, the merge violates this rule and a retroactive review must
 
 ## Project-Specific Context
 
-**What is Movehat?** A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts. Provides local blockchain testing, compilation, deployment, and testing utilities.
+**What is Movehat?** A Hardhat-like development framework for Movement L1 smart contracts. Provides local blockchain testing, compilation, deployment, and testing utilities.
 
 ### Package Structure
 ```

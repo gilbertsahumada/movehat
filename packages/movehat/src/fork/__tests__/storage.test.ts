@@ -258,7 +258,7 @@ describe('ForkStorage', () => {
       }).toThrow('Invalid address format');
     });
 
-    it('should reject addresses with more than 64 hex chars (Aptos/Movement cap)', () => {
+    it('should reject addresses with more than 64 hex chars (Movement cap)', () => {
       const storage = new ForkStorage(forkPath);
       const sixtyFiveHex = '0x' + 'a'.repeat(65);
 

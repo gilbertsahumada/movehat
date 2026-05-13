@@ -251,7 +251,7 @@ export class ForkManager {
    *
    * @param addresses Array of addresses to fund
    * @param amount Amount of coins per account
-   * @param coinType Coin type (defaults to AptosCoin)
+   * @param coinType Coin type (defaults to the chain's native coin)
    *
    * @example
    * await forkManager.fundMultipleAccounts(

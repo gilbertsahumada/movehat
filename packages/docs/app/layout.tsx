@@ -5,7 +5,7 @@ import './global.css';
 
 const siteUrl = 'https://movehat.dev';
 const description =
-  'A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts. Write tests and deployment scripts in TypeScript.';
+  'A Hardhat-like development framework for Movement L1 smart contracts. Write tests and deployment scripts in TypeScript.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

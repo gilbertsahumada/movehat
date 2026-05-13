@@ -118,7 +118,7 @@ program
 // Fork commands
 const fork = program
     .command('fork')
-    .description('Manage local forks of Movement/Aptos networks');
+    .description('Manage local forks of Movement networks');
 
 fork
     .command('create')

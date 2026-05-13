@@ -9,7 +9,7 @@ export function GET() {
   const body = [
     '# Movehat',
     '',
-    '> A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts. Write tests and deployment scripts in TypeScript.',
+    '> A Hardhat-like development framework for Movement L1 smart contracts. Write tests and deployment scripts in TypeScript.',
     '',
     '## Docs',
     '',

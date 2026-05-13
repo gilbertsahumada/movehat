@@ -21,7 +21,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 ## Decisions
 
 1. **`Harness` deprecates `mh()`.** Pre-1.0 (`0.0.0-dev`), no external consumers. The new `Harness` class becomes the primary public API. `mh()` is `@deprecated` from M2 and removed in M6 with the bump to 0.1.0.
-2. **Hardhat-style API.** Method names align with the broader Move/Aptos testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
+2. **Hardhat-style API.** Method names align with the broader Move testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
 3. **TypeDoc complements Fumadocs.** TypeDoc emits MDX into `packages/docs/content/docs/api/`; Fumadocs renders.
 4. **Unit ≠ integration tests.** Unit tests may mock `child_process` via an injectable adapter. The integration suite runs the real Movement CLI without mocks.
 5. **Big work is split into sub-issues.** Any milestone that needs more than one PR is broken into GitHub sub-issues, each with its own Definition of Done. The meta-issue closes only when every sub-issue closes. The sub-issue list lives inside each milestone section below.
