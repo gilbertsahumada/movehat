@@ -105,8 +105,8 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance (M2.1)
 - [x] `harness.deployCodeObject(options)` deploys a real Move package (M2.2 — wraps `movement move deploy-object`; reuses Publisher hardening via the extracted `core/movementProfile.ts` helpers; integration coverage in M4)
 - [x] `harness.upgradeCodeObject(options)` upgrades an existing code object (M2.2 — wraps `movement move upgrade-object`; same shared helpers)
-- [ ] `harness.runViewFunction(options)` executes a view function
-- [ ] `harness.runMoveScript(options)` compiles and executes a Move script
+- [x] `harness.runViewFunction(options)` executes a view function (M2.3 — delegates to `aptos.view`; returns raw `unknown[]`; works on all 3 harness modes including fork since views are read-only)
+- [x] `harness.runMoveScript(options)` compiles and executes a Move script (M2.3 — wraps `movement move run-script`; auto-detects `.move` vs `.mv` from extension; `parseTxHash` shared via `utils/parseCliOutput.ts`)
 - [x] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true` (M2.1 — idempotent; stops owned localNode / forkServer; tested)
 
 **Definition of Done — Use-after-cleanup safety**:

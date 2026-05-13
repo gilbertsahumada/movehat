@@ -23,6 +23,7 @@ import {
   ensureSignalHandler,
   cleanupCallbacks,
 } from "./movementProfile.js";
+import { parseTxHash } from "../utils/parseCliOutput.js";
 
 /** @internal */
 export interface PublisherDeps {
@@ -250,22 +251,10 @@ export class Publisher {
         cleanupCallbacks.delete(syncCleanup);
       }
 
-      // Extract transaction hash from output
-      // Look for patterns like "Transaction hash: 0x..." or "Txn: 0x..." or just a 64-char hex
-      // The regex tries to match with context first, then falls back to any 64-char hex
-      let txHash: string | undefined;
-      const txHashMatchWithContext = publishOut.match(
-        /(?:transaction\s*(?:hash)?|txn\s*(?:hash)?|hash):\s*(0x[a-fA-F0-9]{64})\b/i
-      );
-      if (txHashMatchWithContext) {
-        txHash = txHashMatchWithContext[1];
-      } else {
-        // Fallback: try to find any 64-char hex string (exactly, not more)
-        const txHashMatch = publishOut.match(/\b(0x[a-fA-F0-9]{64})\b/);
-        if (txHashMatch) {
-          txHash = txHashMatch[1];
-        }
-      }
+      // Extract transaction hash from output via the shared helper
+      // (`utils/parseCliOutput.ts`). Same regex pair as before; lifted
+      // for reuse by harness/codeObject.ts and harness/script.ts.
+      const txHash = parseTxHash(publishOut);
 
       logger.success("Module published successfully!");
 

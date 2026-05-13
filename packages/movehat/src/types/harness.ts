@@ -72,3 +72,87 @@ export interface UpgradeCodeObjectOptions extends DeployCodeObjectOptions {
  * without churning every callsite.
  */
 export type CodeObjectInfo = DeploymentInfo;
+
+/**
+ * Options for `harness.runViewFunction(options)`.
+ *
+ * Delegates to the Aptos SDK's `aptos.view(...)` — no CLI invocation,
+ * no profile management. Works on `createLocal`, `createFork`, and
+ * `createLive` harnesses (view functions are read-only).
+ */
+export interface RunViewFunctionOptions {
+  /**
+   * Fully qualified Move function id, e.g. `0xCAFE::counter::get`.
+   */
+  function: string;
+
+  /**
+   * Move type-tag arguments, e.g. `['0x1::aptos_coin::AptosCoin']`.
+   */
+  typeArguments?: string[];
+
+  /**
+   * Move function arguments. SDK-validated at the boundary; pass values
+   * matching the Move function signature (strings for `address`,
+   * numbers / bigints for `u8`-`u256`, booleans, etc.).
+   */
+  functionArguments?: unknown[];
+}
+
+/**
+ * Options for `harness.runMoveScript(options)`.
+ *
+ * Wraps `movement move run-script`. The CLI handles compilation
+ * inline when given a `.move` source; the user can also pass a
+ * pre-compiled `.mv` bytecode file.
+ *
+ * Not available on fork-mode harnesses (forks are read-only).
+ */
+export interface RunMoveScriptOptions {
+  /**
+   * Path to the Move script. Extension determines the CLI flag:
+   *   - `.move` → `--script-path` (CLI auto-compiles)
+   *   - `.mv` → `--compiled-script-path` (user pre-compiled)
+   * Other extensions throw synchronously before any CLI call.
+   */
+  scriptPath: string;
+
+  /**
+   * CLI-formatted typed arguments. Movement CLI expects each arg
+   * prefixed by its Move type, e.g. `'address:0x1'`, `'u8:42'`,
+   * `'bool:true'`, `'string:hello'`. See
+   * `movement move run-script --help` for the full grammar.
+   */
+  args?: string[];
+
+  /**
+   * Type-tag arguments for generic scripts, e.g.
+   * `['0x1::aptos_coin::AptosCoin']`.
+   */
+  typeArgs?: string[];
+
+  /**
+   * Optional working directory for compilation. Most callers leave
+   * this undefined — the CLI uses the script's parent directory.
+   */
+  packageDir?: string;
+
+  /**
+   * Test-only override for the child-process adapter.
+   * @internal
+   */
+  adapter?: ChildProcessAdapter;
+}
+
+/**
+ * Result of `harness.runMoveScript`.
+ *
+ * Always carries `txHash` (parser throws if it can't extract one).
+ * `success` and `vmStatus` are best-effort: parsed from the CLI's
+ * JSON `Result` block when present, `undefined` if the parser misses.
+ */
+export interface MoveScriptResult {
+  txHash: string;
+  success?: boolean;
+  vmStatus?: string;
+}
