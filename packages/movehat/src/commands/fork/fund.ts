@@ -1,5 +1,6 @@
 import { join } from 'path';
 import { ForkManager } from '../../fork/manager.js';
+import { logger } from '../../ui/index.js';
 
 interface ForkFundOptions {
   fork?: string;
@@ -30,11 +31,13 @@ export default async function forkFundCommand(options: ForkFundOptions) {
     const forkPath = options.fork || join(process.cwd(), '.movehat', 'forks', 'testnet-fork');
     const coinType = options.coinType || '0x1::aptos_coin::AptosCoin';
 
-    console.log(`\n💰 Funding account in fork`);
-    console.log(`   Fork: ${forkPath}`);
-    console.log(`   Account: ${options.account}`);
-    console.log(`   Amount: ${amount}`);
-    console.log(`   Coin Type: ${coinType}\n`);
+    logger.newline();
+    logger.step("Funding account in fork");
+    logger.plain(`   Fork: ${forkPath}`);
+    logger.plain(`   Account: ${options.account}`);
+    logger.plain(`   Amount: ${amount}`);
+    logger.plain(`   Coin Type: ${coinType}`);
+    logger.newline();
 
     // Load fork
     const forkManager = new ForkManager(forkPath);
@@ -47,11 +50,15 @@ export default async function forkFundCommand(options: ForkFundOptions) {
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
     const coinStore = await forkManager.getResource(options.account, resourceType);
 
-    console.log(`\n✅ Account funded successfully!`);
-    console.log(`   New balance: ${coinStore.coin.value}\n`);
+    logger.newline();
+    logger.success("Account funded successfully!");
+    logger.plain(`   New balance: ${coinStore.coin.value}`);
+    logger.newline();
 
-  } catch (error: any) {
-    console.error(`\n❌ Error: ${error.message}\n`);
+  } catch (error) {
+    logger.newline();
+    logger.error(error instanceof Error ? error.message : String(error));
+    logger.newline();
     process.exit(1);
   }
 }

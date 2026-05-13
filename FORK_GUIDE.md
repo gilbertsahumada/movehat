@@ -54,7 +54,7 @@ Shows all available forks with their metadata.
 movehat fork serve --fork .movehat/forks/my-fork --port 8080
 ```
 
-Start a local RPC server that serves the fork. Connect your Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork.
+Start a local RPC server that serves the fork. Connect any Movement-compatible TypeScript SDK to `http://localhost:8080/v1` to interact with the fork.
 
 ## CLI Commands
 
@@ -109,7 +109,7 @@ List all available forks with metadata.
 
 ### `movehat fork serve`
 
-Start a local RPC server that serves fork data via the Movement/Aptos API.
+Start a local RPC server that serves fork data via the Movement L1 API.
 
 **Options:**
 - `--fork <path>` - Path to the fork (default: `.movehat/forks/<network>-fork`)
@@ -120,7 +120,7 @@ Start a local RPC server that serves fork data via the Movement/Aptos API.
 movehat fork serve --fork .movehat/forks/my-fork --port 8080
 ```
 
-This starts an HTTP server that emulates a Movement L1 node using your fork's data. You can then connect the Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork state.
+This starts an HTTP server that emulates a Movement L1 node using your fork's data. You can then connect any Movement-compatible TypeScript SDK to `http://localhost:8080/v1` to interact with the fork state.
 
 **Supported Endpoints:**
 - `GET /v1/` - Ledger info (chain ID, version, block height)
@@ -172,7 +172,7 @@ The fork server returns JSON error responses with appropriate HTTP status codes 
 - Account addresses are validated to be between 1-64 hex characters
 - Internal error details are never exposed to clients
 
-**Usage with Aptos SDK:**
+**Usage with the TypeScript SDK:**
 ```typescript
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
@@ -430,15 +430,15 @@ This approach is efficient for testing where you only need a subset of blockchai
 MoveHat uses JSON API instead of BCS (Binary Canonical Serialization):
 
 **Why JSON?**
-- Movement L1's BCS format differs from Aptos
+- Movement L1's BCS format is not always portable across tooling
 - JSON is human-readable
 - Easy to inspect and debug
 - No binary parsing errors
 - Works consistently across networks
 
-### Comparison with Aptos CLI
+### Comparison with stock CLI sim
 
-| Feature | MoveHat Forks | Aptos CLI Sim |
+| Feature | MoveHat Forks | Stock CLI Sim |
 |---------|---------------|---------------|
 | Works with Movement | Yes | BCS incompatible |
 | JSON-based | Yes | BCS only |

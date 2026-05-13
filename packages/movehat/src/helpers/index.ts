@@ -26,16 +26,10 @@ export { AccountManager } from "../core/AccountManager.js";
 export type { StoredAccount } from "../core/AccountManager.js";
 export { LocalNodeManager } from "../node/LocalNodeManager.js";
 export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.js";
-export {
-  setupLocalTesting,
-  stopLocalTesting,
-  getCurrentForkManager,
-  getCurrentLocalNode,
-  resetForkState,
-} from "./setupLocalTesting.js";
+export { setupLocalTesting } from "./setupLocalTesting.js";
+export type { LocalTestingContext } from "./setupLocalTesting.js";
 export {
   setupTestFixture,
-  teardownTestFixture,
   setupMinimalFixture,
 } from "./testFixtures.js";
 export type { TestFixture } from "./testFixtures.js";

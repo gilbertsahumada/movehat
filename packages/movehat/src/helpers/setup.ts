@@ -8,6 +8,7 @@ import {
 import { loadUserConfig, resolveNetworkConfig } from "../core/config.js";
 import { MovehatConfig } from "../types/config.js";
 import { AccountManager } from "../core/AccountManager.js";
+import { logger } from "../ui/index.js";
 
 export interface TestEnvironment {
   aptos: Aptos;
@@ -33,10 +34,11 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
   // Load account using AccountManager
   const account = AccountManager.loadAccountFromPrivateKey(config.privateKey);
 
-  console.log(`✅ Test environment ready`);
-  console.log(`   Account: ${account.accountAddress.toString()}`);
-  console.log(`   Network: ${config.network}`);
-  console.log(`   RPC: ${config.rpc}\n`);
+  logger.success("Test environment ready");
+  logger.plain(`   Account: ${account.accountAddress.toString()}`);
+  logger.plain(`   Network: ${config.network}`);
+  logger.plain(`   RPC: ${config.rpc}`);
+  logger.newline();
 
   return {
     aptos,

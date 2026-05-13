@@ -2,6 +2,7 @@ import { MovementApiClient } from './api.js';
 import { ForkStorage } from './storage.js';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
+import { logger } from '../ui/index.js';
 
 /**
  * Manager for fork operations
@@ -124,8 +125,9 @@ export class ForkManager {
         // Cache it
         this.storage.saveResource(normalizedAddress, resourceType, resource);
         console.log(`  ✓ Cached resource ${resourceType}`);
-      } catch (error: any) {
-        if (error.message.includes('404')) {
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('404')) {
           throw new Error(`Resource ${resourceType} not found for account ${normalizedAddress}`);
         }
         throw error;
@@ -169,7 +171,7 @@ export class ForkManager {
   /**
    * Set a resource value (for testing/mocking)
    */
-  async setResource(address: string, resourceType: string, data: any): Promise<void> {
+  async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);
     console.log(`  ✓ Updated resource ${resourceType} for ${normalizedAddress}`);
@@ -182,13 +184,18 @@ export class ForkManager {
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
-    // Try to get existing coin store
+    // Try to get existing coin store. The coin store is a CoinStore<T>
+    // resource whose `data` is Movement-side untyped JSON; we shape it
+    // locally as a structural object with `coin.value: string`.
+    // any: full CoinStore schema lives at the Movement REST boundary —
+    // proper validation deferred to the boundary-validation follow-up of #57.
     let coinStore: any;
     try {
       coinStore = await this.getResource(normalizedAddress, resourceType);
-    } catch (error: any) {
+    } catch (error) {
       // Only catch "not found" errors, rethrow others (network, API, etc.)
-      if (!error.message || !error.message.includes('not found')) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!msg.includes('not found')) {
         throw error;
       }
 
@@ -250,7 +257,7 @@ export class ForkManager {
    *
    * @param addresses Array of addresses to fund
    * @param amount Amount of coins per account
-   * @param coinType Coin type (defaults to AptosCoin)
+   * @param coinType Coin type (defaults to the chain's native coin)
    *
    * @example
    * await forkManager.fundMultipleAccounts(
@@ -263,13 +270,15 @@ export class ForkManager {
     amount: number,
     coinType: string = '0x1::aptos_coin::AptosCoin'
   ): Promise<void> {
-    console.log(`\n💰 Funding ${addresses.length} accounts with ${amount} coins each...`);
+    logger.newline();
+    logger.step(`Funding ${addresses.length} accounts with ${amount} coins each...`);
 
     for (const address of addresses) {
       await this.fundAccount(address, amount, coinType);
     }
 
-    console.log(`✓ All accounts funded successfully\n`);
+    logger.success("All accounts funded successfully");
+    logger.newline();
   }
 
   /**
@@ -280,13 +289,15 @@ export class ForkManager {
    * await forkManager.resetState();
    */
   async resetState(): Promise<void> {
-    console.log(`\n🔄 Resetting fork state...`);
+    logger.newline();
+    logger.step("Resetting fork state...");
 
     // Clear all accounts and resources from storage
     this.storage.clearAccounts();
     this.storage.clearResources();
 
-    console.log(`✓ Fork state reset to initial snapshot\n`);
+    logger.success("Fork state reset to initial snapshot");
+    logger.newline();
   }
 
   /**

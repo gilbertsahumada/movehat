@@ -88,9 +88,10 @@ export default async function forkListCommand() {
     logger.item(formatCommand('movehat fork fund --fork <PATH> --account <ADDR> --amount <AMOUNT>'), 2);
     logger.newline();
 
-  } catch (error: any) {
+  } catch (error) {
     logger.newline();
-    logger.error(`Error: ${error.message}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error(`Error: ${msg}`);
     logger.newline();
     process.exit(1);
   }

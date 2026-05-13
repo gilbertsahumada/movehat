@@ -12,7 +12,7 @@ interface ForkCreateOptions {
 }
 
 /**
- * Create a local fork of a Movement/Aptos network
+ * Create a local fork of a Movement network
  *
  * This command:
  * - Connects to the specified network RPC endpoint
@@ -100,9 +100,10 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     logger.item(formatCommand('movehat fork list'), 2);
     logger.newline();
 
-  } catch (error: any) {
+  } catch (error) {
     logger.newline();
-    logger.error(`Error: ${error.message}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error(`Error: ${msg}`);
     logger.newline();
     process.exit(1);
   }

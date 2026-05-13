@@ -5,7 +5,7 @@ import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js'
 import { normalizeAddressShort } from '../utils/address.js';
 
 /**
- * Client for interacting with Movement/Aptos-compatible JSON API
+ * Client for interacting with Movement L1 JSON API
  */
 export class MovementApiClient {
   private nodeUrl: string;

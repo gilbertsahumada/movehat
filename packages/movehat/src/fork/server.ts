@@ -3,7 +3,7 @@ import { URL } from 'url';
 import { ForkManager } from './manager.js';
 
 /**
- * Fork Server - Serves fork data via Movement/Aptos RPC API
+ * Fork Server - Serves fork data via Movement L1 RPC API
  * Emulates a Movement L1 node using local fork storage
  */
 export class ForkServer {
@@ -59,6 +59,12 @@ export class ForkServer {
       });
     });
 
+    // Capture the just-assigned server into a non-null local so we don't
+    // have to repeatedly assert `this.server!` (which TS forces because
+    // `http.createServer` returns an unrelated narrow that the field
+    // declaration doesn't track).
+    const server = this.server;
+
     return new Promise((resolve, reject) => {
       // Handle server errors (port in use, permission denied, etc.)
       const onError = (error: NodeJS.ErrnoException) => {
@@ -72,11 +78,11 @@ export class ForkServer {
       };
 
       // Listen for errors during startup
-      this.server!.once('error', onError);
+      server.once('error', onError);
 
-      this.server!.listen(this.port, this.host, () => {
+      server.listen(this.port, this.host, () => {
         // Remove error listener after successful start
-        this.server!.removeListener('error', onError);
+        server.removeListener('error', onError);
 
         // IPv6 literals must be wrapped in brackets in URLs (RFC 3986).
         const isIpv6 = this.host.includes(':');
@@ -90,7 +96,7 @@ export class ForkServer {
         console.log(`  Bound interface: ${this.host}`);
         console.log(`  Ledger Info: http://${displayHost}:${this.port}/v1/`);
         if (this.host === '0.0.0.0') {
-          console.warn(`  ⚠️  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
+          console.warn(`  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
         }
         console.log(`\nPress Ctrl+C to stop`);
         resolve();
@@ -162,11 +168,15 @@ export class ForkServer {
         const resourceIndex = parts.indexOf('resource') + 1;
         const address = parts[accountIndex];
         const resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
+        if (!address) {
+          this.send404(res, 'Malformed resource path', 'malformed_path');
+          return;
+        }
         await this.handleGetResource(address, resourceType, res);
       } else {
         // Use regex capture for resources endpoint
         const resourcesMatch = pathname.match(/^\/v1\/accounts\/(0x[a-fA-F0-9]{1,64})\/resources$/);
-        if (resourcesMatch) {
+        if (resourcesMatch && resourcesMatch[1]) {
           const address = resourcesMatch[1];
           await this.handleGetResources(address, res);
         } else {
@@ -175,7 +185,7 @@ export class ForkServer {
           this.send404(res, `Endpoint not found: ${safePath}`, 'endpoint_not_found');
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       // Log full error server-side for diagnostics
       console.error('Error handling request:', error);
 
@@ -227,8 +237,9 @@ export class ForkServer {
         sequence_number: account.sequenceNumber,
         authentication_key: account.authenticationKey
       });
-    } catch (error: any) {
-      if (error.message.includes('not found')) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('not found')) {
         this.send404(res, `Account not found: ${address}`);
       } else {
         throw error;
@@ -251,8 +262,9 @@ export class ForkServer {
         type: resourceType,
         data: resource
       });
-    } catch (error: any) {
-      if (error.message.includes('not found')) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('not found')) {
         this.send404(res, `Resource not found: ${resourceType}`, 'resource_not_found');
       } else {
         throw error;
@@ -270,15 +282,16 @@ export class ForkServer {
     try {
       const resources = await this.forkManager.getAllResources(address);
 
-      // Convert to array format expected by Aptos API
+      // Convert to array format expected by the Movement L1 API
       const resourcesArray = Object.entries(resources).map(([type, data]) => ({
         type,
         data
       }));
 
       this.sendJSON(res, 200, resourcesArray);
-    } catch (error: any) {
-      if (error.message.includes('not found')) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('not found')) {
         this.send404(res, `Account not found: ${address}`);
       } else {
         throw error;
@@ -287,12 +300,14 @@ export class ForkServer {
   }
 
   /**
-   * Send JSON response
+   * Send JSON response.
+   * unknown: arbitrary JSON-serializable payload; structural shape varies by
+   * endpoint (account metadata, resource arrays, error envelopes).
    */
   private sendJSON(
     res: http.ServerResponse,
     status: number,
-    data: any,
+    data: unknown,
     extraHeaders: Record<string, string> = {}
   ): void {
     const body = JSON.stringify(data, null, 2);

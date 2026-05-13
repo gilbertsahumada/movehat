@@ -1,6 +1,7 @@
 ---
 title: Scripts
 description: Write and run TypeScript scripts with the Movehat Runtime Environment
+icon: FileCode
 ---
 
 ## Running Scripts
@@ -11,7 +12,7 @@ Execute TypeScript/JavaScript scripts with the Movehat Runtime:
 movehat run scripts/deploy-counter.ts --network testnet
 ```
 
-The `movehat run` command provides your script with access to the **Movehat Runtime Environment (MRE)**, which includes the Aptos SDK client, account management, contract helpers, and more.
+The `movehat run` command provides your script with access to the **Movehat Runtime Environment (MRE)**, which includes the Movement TypeScript SDK client, account management, contract helpers, and more.
 
 ## Writing Scripts
 
@@ -83,7 +84,7 @@ const mh = await getMovehat();
 // Core
 mh.config         // Resolved configuration
 mh.network        // Network info (name, chainId, rpc)
-mh.aptos          // Aptos SDK client
+mh.aptos          // Movement TypeScript SDK client
 mh.account        // Primary account
 mh.accounts       // All configured accounts
 

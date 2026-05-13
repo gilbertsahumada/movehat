@@ -3,7 +3,7 @@
 
   # Movehat
 
-  **A Hardhat-like development framework for Movement L1 and Aptos Move smart contracts**
+  **A Hardhat-like development framework for Movement L1 smart contracts**
 
   Write your tests and deployment scripts in TypeScript while building Move smart contracts.
 
@@ -34,7 +34,7 @@
 
 Before installing Movehat, make sure you have:
 
-- **Node.js** (v18 or later) - [Download](https://nodejs.org/)
+- **Node.js** (v20 or later) - [Download](https://nodejs.org/)
 - **Movement CLI** - **REQUIRED** for compiling and deploying Move contracts
 
   Install Movement CLI by following the official guide:
@@ -235,7 +235,7 @@ movehat fork list
 movehat fork serve --fork .movehat/forks/my-fork --port 8080
 ```
 
-This starts a local RPC server that emulates a Movement L1 node using your fork's data. You can connect the Aptos/Movement SDK to `http://localhost:8080/v1` to interact with the fork state.
+This starts a local RPC server that emulates a Movement L1 node using your fork's data. You can connect any Movement-compatible TypeScript SDK to `http://localhost:8080/v1` to interact with the fork state.
 
 **Use in tests (programmatic API):**
 ```typescript
@@ -430,7 +430,7 @@ const mh = await getMovehat();
 // Core
 mh.config         // Resolved configuration
 mh.network        // Network info (name, chainId, rpc)
-mh.aptos          // Aptos SDK client
+mh.aptos          // Movement TypeScript SDK client
 mh.account        // Primary account
 mh.accounts       // All configured accounts
 
@@ -514,7 +514,7 @@ Write tests in TypeScript that run on a **real local Movement blockchain** (just
 // tests/Counter.test.ts
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Counter Contract", () => {
   let fixture: TestFixture<'counter'>;
@@ -599,8 +599,8 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node and clear account pool
-    await teardownTestFixture();
+    // Cleanup: Stop local node
+    await fixture.teardown();
   });
 });
 ```
@@ -761,7 +761,7 @@ This command will:
 
 ### `movehat fork <command>`
 
-Manage local forks of Movement/Aptos networks. See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete documentation.
+Manage local forks of Movement networks. See [FORK_GUIDE.md](./FORK_GUIDE.md) for complete documentation.
 
 **Available commands:**
 - `fork create` - Create a new fork from a network
@@ -863,7 +863,7 @@ main().catch(console.error);
 ### System Requirements
 
 **Required:**
-- Node.js v18+
+- Node.js v20+
 - Movement CLI (install from [Movement docs](https://docs.movementnetwork.xyz/devs/movementcli))
 - npm or pnpm
 
@@ -891,7 +891,7 @@ MIT
 - [GitHub Repository](https://github.com/gilbertsahumada/movehat)
 - [NPM Package](https://www.npmjs.com/package/movehat)
 - [Movement Documentation](https://docs.movementlabs.xyz/)
-- [Aptos SDK](https://aptos.dev/sdks/ts-sdk/)
+- [Movement TypeScript SDK](https://docs.movementnetwork.xyz/)
 
 ## Author
 

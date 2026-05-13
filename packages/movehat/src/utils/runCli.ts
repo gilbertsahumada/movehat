@@ -13,9 +13,9 @@ const STDOUT_PREVIEW_CHARS = 2000;
 
 export interface RunCliOptions {
   /** Override the child-process adapter (defaults to spawn-based). */
-  adapter?: ChildProcessAdapter;
+  adapter?: ChildProcessAdapter | undefined;
   /** When true (default), throw `CliExecutionError` on non-zero exit. */
-  throwOnNonZeroExit?: boolean;
+  throwOnNonZeroExit?: boolean | undefined;
 }
 
 /**

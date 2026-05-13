@@ -1,6 +1,6 @@
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Greeting Contract", () => {
   let fixture: TestFixture<'greeting'>;
@@ -78,6 +78,6 @@ describe("Greeting Contract", () => {
 
   after(async () => {
     // Cleanup: Stop local node
-    await teardownTestFixture();
+    await fixture.teardown();
   });
 });

@@ -2,12 +2,22 @@
   "title": "Docs",
   "pages": [
     "---Getting Started---",
-    "getting-started",
+    "getting-started/installation",
+    "getting-started/quickstart",
+    "getting-started/configuration",
     "---Guides---",
-    "guides",
+    "guides/compilation",
+    "guides/testing",
+    "guides/deployment",
+    "guides/fork",
+    "guides/scripts",
     "---CLI Reference---",
-    "cli",
+    "cli/init",
+    "cli/compile",
+    "cli/test",
+    "cli/run",
+    "cli/fork",
     "---Community---",
-    "contributing"
+    "contributing/index"
   ]
 }

@@ -6,6 +6,7 @@ import {
   type ChildProcessAdapter,
   type SpawnedProcess,
 } from "../utils/childProcessAdapter.js";
+import { logger } from "../ui/index.js";
 
 export interface LocalNodeOptions {
   testDir?: string;           // Directory for node data (default: .movehat/local-node)
@@ -74,15 +75,17 @@ export class LocalNodeManager {
     this.starting = true;
 
     try {
-      console.log("\n🚀 Starting local Movement node...");
-      console.log(`   Test directory: ${this.options.testDir}`);
-      console.log(`   RPC port: ${this.options.apiPort}`);
-      console.log(`   Faucet port: ${this.options.faucetPort}`);
-      console.log(`   Ready port: ${this.options.readyPort}\n`);
+      logger.newline();
+      logger.step("Starting local Movement node...");
+      logger.plain(`   Test directory: ${this.options.testDir}`);
+      logger.plain(`   RPC port: ${this.options.apiPort}`);
+      logger.plain(`   Faucet port: ${this.options.faucetPort}`);
+      logger.plain(`   Ready port: ${this.options.readyPort}`);
+      logger.newline();
 
       // Clean state if force restart
       if (this.options.forceRestart && existsSync(this.options.testDir)) {
-        console.log("🧹 Cleaning previous node state...");
+        logger.step("Cleaning previous node state...");
         rmSync(this.options.testDir, { recursive: true, force: true });
       }
 
@@ -131,16 +134,17 @@ export class LocalNodeManager {
       // surface a detailed timeout-with-hints error if movement never starts.
       void this.spawned.exited.then(({ code }) => {
         if (code !== null && code !== 0) {
-          console.error(`\n❌ Local node exited with code ${code}`);
+          logger.error(`Local node exited with code ${code}`);
         }
         this.spawned = null;
       });
 
       // Wait for node to be ready
-      console.log("⏳ Waiting for node to be ready...");
+      logger.step("Waiting for node to be ready...");
       await this.waitForReady(60000); // 60 second timeout
 
-      console.log("✅ Local Movement node is ready!\n");
+      logger.success("Local Movement node is ready!");
+      logger.newline();
 
       this.starting = false;
       return this.getNodeInfo();
@@ -167,7 +171,8 @@ export class LocalNodeManager {
       return;
     }
 
-    console.log("\n🛑 Stopping local Movement node...");
+    logger.newline();
+    logger.step("Stopping local Movement node...");
 
     const spawned = this.spawned;
 
@@ -181,14 +186,15 @@ export class LocalNodeManager {
     // Force kill after 5 seconds if still running
     const forceTimer = setTimeout(() => {
       if (this.spawned === spawned) {
-        console.log("⚠️  Force killing node...");
+        logger.warning("Force killing node...");
         spawned.kill("SIGKILL");
       }
     }, 5000);
 
     try {
       await spawned.exited;
-      console.log("✅ Local node stopped\n");
+      logger.success("Local node stopped");
+      logger.newline();
     } finally {
       clearTimeout(forceTimer);
       if (this.spawned === spawned) {
@@ -261,7 +267,7 @@ export class LocalNodeManager {
       ? account
       : account.accountAddress.toString();
 
-    // Use query parameters for Aptos/Movement faucet
+    // Use query parameters for the Movement faucet
     const faucetUrl = `http://127.0.0.1:${this.options.faucetPort}/mint?amount=${amount}&address=${address}`;
 
     try {
@@ -275,11 +281,12 @@ export class LocalNodeManager {
       }
 
       const result = await response.json();
-      console.log(`  ✓ Funded ${address} with ${amount} octas`);
+      logger.success(`Funded ${address} with ${amount} octas`, 2);
 
       return result;
-    } catch (error: any) {
-      throw new Error(`Failed to fund account: ${error.message}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to fund account: ${msg}`);
     }
   }
 
@@ -287,13 +294,15 @@ export class LocalNodeManager {
    * Fund multiple accounts in batch
    */
   async fundAccounts(accounts: (Account | string)[], amount: number = 100_000_000): Promise<void> {
-    console.log(`\n💰 Funding ${accounts.length} accounts from local faucet...`);
+    logger.newline();
+    logger.step(`Funding ${accounts.length} accounts from local faucet...`);
 
     for (const account of accounts) {
       await this.fundAccount(account, amount);
     }
 
-    console.log(`✓ All accounts funded successfully\n`);
+    logger.success("All accounts funded successfully");
+    logger.newline();
   }
 
   /**
@@ -305,9 +314,9 @@ export class LocalNodeManager {
     }
 
     if (existsSync(this.options.testDir)) {
-      console.log(`🧹 Cleaning node data at ${this.options.testDir}...`);
+      logger.step(`Cleaning node data at ${this.options.testDir}...`);
       rmSync(this.options.testDir, { recursive: true, force: true });
-      console.log("✓ Node data cleaned");
+      logger.success("Node data cleaned");
     }
   }
 }

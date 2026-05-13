@@ -58,7 +58,7 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
     );
 
     if (exitCode !== 0) {
-      throw new Error(stderr || `aptos move sim init failed with exit code ${exitCode}`);
+      throw new Error(stderr || `fork snapshot init failed with exit code ${exitCode}`);
     }
 
     if (stderr && !stderr.includes('Success')) {
@@ -71,8 +71,9 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
 
     console.log(`   ✓ Snapshot created at ${snapshotPath}`);
     return snapshotPath;
-  } catch (error: any) {
-    throw new Error(`Failed to create snapshot: ${error.message}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to create snapshot: ${msg}`);
   }
 }
 
@@ -158,7 +159,7 @@ export async function viewForkResource(
 
     if (exitCode !== 0) {
       throw new Error(
-        stderr || `aptos move sim view-resource failed with exit code ${exitCode}`
+        stderr || `fork view-resource failed with exit code ${exitCode}`
       );
     }
 
@@ -169,8 +170,9 @@ export async function viewForkResource(
     }
 
     return result.Result;
-  } catch (error: any) {
-    throw new Error(`Failed to view resource: ${error.message}`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to view resource: ${msg}`);
   }
 }
 
@@ -188,8 +190,8 @@ export async function compareForkState(
   forkPath: string,
   account: string,
   resourceType: string,
-  currentValue: any
-): Promise<{ fork: any; current: any; changed: boolean }> {
+  currentValue: unknown
+): Promise<{ fork: unknown; current: unknown; changed: boolean }> {
   const forkValue = await viewForkResource(forkPath, account, resourceType);
 
   return {

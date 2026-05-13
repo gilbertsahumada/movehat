@@ -50,16 +50,13 @@ declare module 'movehat' {
     createAccount: () => Account;
     getAccount: (privateKey: string) => Account;
     getAccountByIndex: (index: number) => Account;
-    switchNetwork: (networkName: string) => Promise<void>;
+    switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
   }
 
+  // getMovehat is a thin alias of initRuntime as of M1.5 — each call
+  // constructs a fresh runtime. The previous cached behavior is gone.
   export function getMovehat(): Promise<MovehatRuntime>;
   export function initRuntime(configOverride?: Partial<MovehatConfig>): Promise<MovehatRuntime>;
-  export function getRuntime(): MovehatRuntime;
-
-  export const mh: {
-    readonly runtime: MovehatRuntime;
-  };
 }
 
 declare module 'movehat/helpers' {
@@ -68,12 +65,15 @@ declare module 'movehat/helpers' {
   export interface TestEnvironment {
     aptos: Aptos;
     account: Account;
-    config: any;
+    config: import('movehat').MovehatConfig;
   }
 
   export class MoveContract {
     constructor(aptos: Aptos, address: string, moduleName: string);
-    call(sender: Account, functionName: string, args: any[]): Promise<any>;
+    // args: any[] mirrors the runtime declaration — Move entry-function
+    // arguments are heterogeneous primitives validated by the Aptos SDK
+    // at submit time.
+    call(sender: Account, functionName: string, args: any[]): Promise<TransactionResult>;
     view<T>(functionName: string, args: any[]): Promise<T>;
   }
 

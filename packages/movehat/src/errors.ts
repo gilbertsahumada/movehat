@@ -21,6 +21,35 @@ export class ModuleAlreadyDeployedError extends Error {
 }
 
 import { redactSecrets } from './utils/redact.js';
+import type { DeploymentInfo } from './core/deployments.js';
+
+/**
+ * Thrown when the on-chain publish succeeded but a subsequent local
+ * step (saveDeployment, profile cleanup, etc.) failed.
+ *
+ * Distinct from `CliExecutionError`: by the time this error fires, the
+ * module IS deployed on-chain. Callers that want to recover can read
+ * `deployment` and re-attempt the local-side persistence manually
+ * (e.g. write the JSON to `deployments/{network}/{moduleName}.json`).
+ *
+ * Without this distinction, the same outer catch would surface a
+ * post-publish filesystem failure as "Failed to publish module",
+ * inviting an accidental redeploy that wastes gas.
+ */
+export class PostPublishError extends Error {
+  constructor(
+    message: string,
+    public readonly deployment: DeploymentInfo,
+    public readonly cause: Error
+  ) {
+    super(message);
+    this.name = 'PostPublishError';
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, PostPublishError);
+    }
+  }
+}
 
 /**
  * Thrown by runCli when a spawned process exits with a non-zero status.

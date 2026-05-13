@@ -142,5 +142,5 @@ module counter::counter {  // ← "counter" is auto-detected
 ## Learn More
 
 - [Movement Documentation](https://docs.movementnetwork.xyz)
-- [Aptos Move Book](https://move-language.github.io/move/)
+- [Move Language Book](https://move-language.github.io/move/)
 - [Movehat GitHub](https://github.com/gilbertsahumada/movehat)

@@ -21,7 +21,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 ## Decisions
 
 1. **`Harness` deprecates `mh()`.** Pre-1.0 (`0.0.0-dev`), no external consumers. The new `Harness` class becomes the primary public API. `mh()` is `@deprecated` from M2 and removed in M6 with the bump to 0.1.0.
-2. **Hardhat-style API.** Method names align with the broader Move/Aptos testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
+2. **Hardhat-style API.** Method names align with the broader Move testing ecosystem (`createLocal`, `createFork`, `createLive`, `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, `runMoveScript`). All code implemented from scratch under MIT.
 3. **TypeDoc complements Fumadocs.** TypeDoc emits MDX into `packages/docs/content/docs/api/`; Fumadocs renders.
 4. **Unit ≠ integration tests.** Unit tests may mock `child_process` via an injectable adapter. The integration suite runs the real Movement CLI without mocks.
 5. **Big work is split into sub-issues.** Any milestone that needs more than one PR is broken into GitHub sub-issues, each with its own Definition of Done. The meta-issue closes only when every sub-issue closes. The sub-issue list lives inside each milestone section below.
@@ -61,22 +61,25 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ✅ | M1.3a | [#88](https://github.com/gilbertsahumada/movehat/issues/88) (shipped in PR #89) | Extend `ChildProcessAdapter` with `spawn()` + `inheritStdio` (foundations for M1.3 migration) | foundations |
 | ✅ | M1.3b | [#90](https://github.com/gilbertsahumada/movehat/issues/90) (shipped in PR #92) | Migrate 6 simple callsites (`commands/{run,test,update,compile}`, `helpers/move-tests`, `fork/test`) to `runCli` | (partial of [#58](https://github.com/gilbertsahumada/movehat/issues/58)) |
 | ✅ | M1.3c | [#78](https://github.com/gilbertsahumada/movehat/issues/78) (shipped in PR #97) | Migrate `runtime.ts` publish + `node/LocalNodeManager.ts` daemon + stderr-redaction unit test | completes [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
-| ⏳ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy temp dir + SIGINT handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
-| ⏳ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
-| ⏳ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache + `switchNetwork` returns runtime | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
-| ⏳ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
+| ✅ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy unique profile + signal handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
+| ✅ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons; `switchNetwork` returns runtime (folded in from M1.6) | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
+| ✅ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache (the `switchNetwork`-returns-runtime piece shipped with M1.5) | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
+| ✅ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) (`any`-in-fork bullet only; boundary validation deferred to follow-up) |
 
 **Definition of Done** (rolled up from the sub-issues):
 - [x] `packages/movehat/src/utils/runCli.ts` exists (M1.1, #76) — replaces all direct `exec`/`spawn` callers (final 2 sites — `runtime.ts` + `LocalNodeManager.ts` — migrated in M1.3c)
 - [x] `packages/movehat/src/utils/childProcessAdapter.ts` exists with injectable interface (M1.1, #76) — extended with `spawn()` + `inheritStdio` in M1.3a (#89)
 - [x] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts` (M1.2, #87)
-- [ ] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it — pending M1.4 (#79)
-- [ ] `grep -R "cachedRuntime\|currentForkServer\|currentForkManager\|currentLocalNode" packages/movehat/src` returns **no matches** — pending M1.5 (#80)
-- [ ] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn) — pending M1.6 (#81)
-- [ ] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml` — pending M1.4 (#79)
-- [ ] SIGINT during deploy leaves no private key on disk — pending M1.4 (#79)
-- [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, and `deployContract` stderr redaction — `Publisher` tests pending M1.4 (currently **171/171** on develop)
+- [x] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it (17 lines on develop, M1.4)
+- [x] `grep -R "cachedRuntime\|currentForkServer\|currentForkManager\|currentLocalNode" packages/movehat/src` returns **no matches** (M1.5: 4 module-scoped singletons replaced with `LocalTestingContext` + `fixture.teardown()`; `switchNetwork` returns the new runtime; `mh` proxy + `getRuntime()` removed from public barrel)
+- [x] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn) (M1.6: module-level `Map<absPath, {mtimeMs, config}>`; `?t=Date.now()` cache-bust replaced with `?mtime=${mtimeMs}` so Node's loader cache grows by edit count, not call count — closes #62)
+- [x] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml` (M1.4: unique profile per deploy + Move.toml never mutated)
+- [x] SIGINT during deploy leaves no private key on disk (M1.4: process-level signal handler + sync profile cleanup)
+- [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `deployContract` stderr redaction, Move.toml integrity, parallel-deploy, signal-handler cleanup, and config-mtime cache (currently **189/189** on develop)
 - [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate **9/9 passing** as of PR closing #86 (`message.test.ts` rewritten to local-node, broken-scaffold `greeting-fork.test.ts` removed)
+- [x] M1.7 (#82): `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` enabled in `packages/movehat/tsconfig.json`; all 16 `catch (error: any)` sites migrated to `unknown`-typed catches; `fork/*` `any` audit closes the corresponding bullet of #57 — boundary validation (zod or guards for `fork/api.ts` parsed JSON) deferred to follow-up; `verbatimModuleSyntax` deliberately omitted (low-benefit/high-churn)
+
+**M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #110 (M1.7). Tier 3 verification `pnpm test:e2e` 32/32 passing (captured on the `develop → main` batch PR #106). Ready for `develop → main` batch.**
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 

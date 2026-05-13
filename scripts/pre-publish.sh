@@ -155,7 +155,7 @@ echo "----------------------------------------"
 
 # Check for dev dependencies that should be dependencies
 if node -p "Object.keys(require('./package.json').devDependencies || {}).filter(d => d.includes('@aptos-labs')).length" | grep -q "^[1-9]"; then
-    echo -e "${YELLOW}⚠${NC}  Aptos SDK in devDependencies - should be in dependencies?"
+    echo -e "${YELLOW}⚠${NC}  Movement TypeScript SDK in devDependencies - should be in dependencies?"
 fi
 
 # Check for outdated dependencies (optional)

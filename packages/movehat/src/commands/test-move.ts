@@ -16,10 +16,11 @@ export default async function testMoveCommand(options: TestMoveOptions = {}) {
     });
 
     process.exit(0);
-  } catch (err: any) {
+  } catch (err) {
     console.error("\n✗ Move tests failed");
-    if (err.message) {
-      console.error(`   ${err.message}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg) {
+      console.error(`   ${msg}`);
     }
     process.exit(1);
   }

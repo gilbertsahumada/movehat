@@ -86,8 +86,11 @@ export const applyGradient = (
   let result = '';
   for (let i = 0; i < text.length; i++) {
     const colorIndex = (i + offset) % palette.length;
-    const [r, g, b] = palette[colorIndex];
-    result += `${rgbToAnsi(r, g, b)}${text[i]}`;
+    const color = palette[colorIndex];
+    const ch = text[i];
+    if (!color || ch === undefined) continue;
+    const [r, g, b] = color;
+    result += `${rgbToAnsi(r, g, b)}${ch}`;
   }
   return result + '\x1b[0m';
 };

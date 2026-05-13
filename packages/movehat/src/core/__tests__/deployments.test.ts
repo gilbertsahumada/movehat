@@ -186,8 +186,8 @@ describe('getAllDeployments', () => {
     const deployments = getAllDeployments('testnet');
 
     expect(Object.keys(deployments)).toHaveLength(2);
-    expect(deployments['counter'].address).toBe('0x1');
-    expect(deployments['token'].address).toBe('0x2');
+    expect(deployments['counter']?.address).toBe('0x1');
+    expect(deployments['token']?.address).toBe('0x2');
   });
 
   it('should ignore non-JSON files', () => {

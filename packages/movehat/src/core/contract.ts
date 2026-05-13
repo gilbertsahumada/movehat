@@ -4,6 +4,7 @@ import {
   type InputViewFunctionData,
   type MoveFunctionId,
 } from "@aptos-labs/ts-sdk";
+import { logger } from "../ui/index.js";
 
 export interface TransactionResult {
   hash: string;
@@ -21,12 +22,17 @@ export class MoveContract {
   async call(
     signer: Account,
     functionName: string,
+    // any[]: Move entry-function arguments are heterogeneous primitives
+    // (u8/u64/string/bool/address/vector) passed through to the Aptos
+    // SDK's `functionArguments`, which validates at submit time. A
+    // narrower union here would force casts at every call site for
+    // little safety gain.
     args: any[] = [],
     typeArgs: string[] = []
   ): Promise<TransactionResult> {
     const functionFullName = `${this.moduleAddress}::${this.moduleName}::${functionName}`;
 
-    console.log(`📝 Calling ${functionFullName}...`);
+    logger.step(`Calling ${functionFullName}...`);
 
     const transaction = await this.aptos.transaction.build.simple({
       sender: signer.accountAddress,
@@ -51,9 +57,10 @@ export class MoveContract {
       transactionHash: committedTxn.hash,
     });
 
-    console.log(
-      `✅ Transaction ${committedTxn.hash} committed with status: ${response.vm_status}\n`
+    logger.success(
+      `Transaction ${committedTxn.hash} committed with status: ${response.vm_status}`
     );
+    logger.newline();
 
     return {
       hash: committedTxn.hash,
@@ -62,8 +69,10 @@ export class MoveContract {
     };
   }
 
-  async view<T = any>(
+  async view<T = unknown>(
     functionName: string,
+    // any[]: see `call()` above — Move view-function arguments share
+    // the same SDK-validated boundary semantics.
     args: any[] = [],
     typeArgs: string[] = []
   ): Promise<T> {

@@ -1,6 +1,6 @@
 # Movehat
 
-> Hardhat-like development framework for Movement L1 and Aptos Move smart contracts
+> Hardhat-like development framework for Movement L1 smart contracts
 
 [![npm version](https://badge.fury.io/js/movehat.svg)](https://www.npmjs.com/package/movehat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -357,5 +357,5 @@ MIT ©
 ## Links
 
 - [Movement Network](https://movementnetwork.xyz)
-- [Aptos Move Documentation](https://aptos.dev/move/move-on-aptos/)
+- [Move Language Book](https://move-language.github.io/move/)
 - [GitHub Issues](https://github.com/gilbertsahumada/movehat/issues)

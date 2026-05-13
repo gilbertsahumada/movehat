@@ -1,5 +1,5 @@
 /**
- * Patterns that match well-known secret shapes Movement / Aptos tools emit on
+ * Patterns that match well-known secret shapes Movement tools emit on
  * stderr / stdout / CLI arguments. Each match is replaced with
  * `***REDACTED***` by `redactSecrets`.
  *

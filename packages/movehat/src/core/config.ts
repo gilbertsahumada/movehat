@@ -1,12 +1,33 @@
 import { pathToFileURL } from "url";
 import { join } from "path";
-import { existsSync } from "fs";
+import { existsSync, statSync } from "fs";
 import { Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 
+interface ConfigCacheEntry {
+  mtimeMs: number;
+  config: MovehatUserConfig;
+}
+
+// Keyed by resolved absolute path. One entry per config file the process
+// has loaded. Closes #62 — the previous `?t=Date.now()` cache-bust
+// created a fresh Node loader module per call.
+//
+// Note on concurrency: two `loadUserConfig()` calls racing on a cold
+// cache may both invoke `import()`. Node's loader cache deduplicates by
+// URL so both resolve to the same module, and both writers store the
+// same value here. No corruption, no in-flight-promise memoization
+// needed.
+const configCache = new Map<string, ConfigCacheEntry>();
+
 /**
- * Loads the user's movehat.config.js from the current working directory.
- * 
+ * Loads the user's movehat.config.{ts,js} from the current working directory.
+ *
+ * Cached by `{ absPath, mtimeMs }`: a second call with no edit returns
+ * the parsed object directly and skips both the tsx loader register
+ * dance and the dynamic `import()`. Edits invalidate via the file's
+ * mtime.
+ *
  * @throws {Error} If the configuration file is not found or fails to load
  * @security This function loads and executes code from the current working directory.
  *           It should only be called from trusted project directories.
@@ -14,7 +35,6 @@ import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 export async function loadUserConfig(): Promise<MovehatUserConfig> {
   const cwd = process.cwd();
 
-  // Try to find config file (.ts first, then .js)
   const possiblePaths = [
     join(cwd, "movehat.config.ts"),
     join(cwd, "movehat.config.js"),
@@ -35,39 +55,54 @@ export async function loadUserConfig(): Promise<MovehatUserConfig> {
   }
 
   try {
+    const { mtimeMs } = statSync(configPath);
+
+    const cached = configCache.get(configPath);
+    if (cached && cached.mtimeMs === mtimeMs) {
+      return cached.config;
+    }
+
     let configModule;
 
     if (configPath.endsWith('.ts')) {
-      // For TypeScript files, we need to use tsx's import system
-      // Register tsx loader for .ts files
       const { register } = await import('tsx/esm/api');
       const unregister = register();
 
       try {
         const configUrl = pathToFileURL(configPath).href;
-        configModule = await import(configUrl + '?t=' + Date.now());
+        configModule = await import(configUrl + '?mtime=' + mtimeMs);
       } finally {
         unregister();
       }
     } else {
-      // For .js files, use standard import
       const configUrl = pathToFileURL(configPath).href;
-      configModule = await import(configUrl + '?t=' + Date.now());
+      configModule = await import(configUrl + '?mtime=' + mtimeMs);
     }
 
     const userConfig = configModule.default as MovehatUserConfig;
 
-    // Validate that networks are defined
     if (!userConfig.networks || Object.keys(userConfig.networks).length === 0) {
       throw new Error(
         "No networks defined in configuration. Add at least one network in the 'networks' field."
       );
     }
 
+    configCache.set(configPath, { mtimeMs, config: userConfig });
+
     return userConfig;
   } catch (error) {
     throw new Error(`Failed to load configuration file '${configPath}': ${error}`);
   }
+}
+
+/**
+ * Clear the in-memory config cache. Test-only escape hatch.
+ *
+ * @internal Not part of the public API surface. Imported via relative
+ *           path from `core/__tests__/config.test.ts` only.
+ */
+export function _resetConfigCache(): void {
+  configCache.clear();
 }
 
 /**
@@ -179,18 +214,27 @@ export async function resolveNetworkConfig(
     ...(networkConfig.namedAddresses || {}),
   };
 
+  // Capture the primary key after the L178 guard guaranteed it exists
+  // (either present from the start, or auto-assigned by the testnet/local
+  // branch; the else-branch throws). Pulling into a local lets TS see
+  // the non-undefined narrowing.
+  const primaryKey = accounts[0];
+  if (!primaryKey) {
+    throw new Error("invariant: accounts[0] must exist after the L178 guard");
+  }
+
   // Derive the deployer account address from the resolved private key.
   // Without this, consumers reading `config.account` got an empty string
   // (the previous "Will be derived from privateKey in runtime" TODO was
   // never wired). Falls back to "" on malformed keys so we don't break
   // existing callers that don't need the field.
-  const accountAddress = deriveAccountAddress(accounts[0]);
+  const accountAddress = deriveAccountAddress(primaryKey);
 
   // Build resolved config
   const resolvedConfig: MovehatConfig = {
     network: selectedNetwork,
     rpc: networkConfig.url,
-    privateKey: accounts[0],
+    privateKey: primaryKey,
     allAccounts: accounts,
     profile: networkConfig.profile || "default",
     moveDir: userConfig.moveDir || "./move",
