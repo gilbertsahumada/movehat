@@ -63,7 +63,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ✅ | M1.3c | [#78](https://github.com/gilbertsahumada/movehat/issues/78) (shipped in PR #97) | Migrate `runtime.ts` publish + `node/LocalNodeManager.ts` daemon + stderr-redaction unit test | completes [#58](https://github.com/gilbertsahumada/movehat/issues/58), completes [#43](https://github.com/gilbertsahumada/movehat/issues/43) |
 | ✅ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy unique profile + signal handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
 | ✅ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons; `switchNetwork` returns runtime (folded in from M1.6) | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
-| ⏳ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache (the `switchNetwork`-returns-runtime piece shipped with M1.5) | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
+| ✅ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache (the `switchNetwork`-returns-runtime piece shipped with M1.5) | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
 | ⏳ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
 
 **Definition of Done** (rolled up from the sub-issues):
@@ -72,10 +72,10 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `packages/movehat/src/utils/address.ts` exists; replaces ad-hoc normalization in `fork/manager.ts`, `fork/storage.ts`, `fork/api.ts` (M1.2, #87)
 - [x] `packages/movehat/src/core/Publisher.ts` exists; `runtime.deployContract` is a thin orchestrator over it (17 lines on develop, M1.4)
 - [x] `grep -R "cachedRuntime\|currentForkServer\|currentForkManager\|currentLocalNode" packages/movehat/src` returns **no matches** (M1.5: 4 module-scoped singletons replaced with `LocalTestingContext` + `fixture.teardown()`; `switchNetwork` returns the new runtime; `mh` proxy + `getRuntime()` removed from public barrel)
-- [ ] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn) — pending M1.6 (#81)
+- [x] `loadUserConfig` cache by `path + mtimeMs` (no per-call module loader churn) (M1.6: module-level `Map<absPath, {mtimeMs, config}>`; `?t=Date.now()` cache-bust replaced with `?mtime=${mtimeMs}` so Node's loader cache grows by edit count, not call count — closes #62)
 - [x] Two parallel `deployContract` calls do **not** corrupt `~/.aptos/config.yaml` or `Move.toml` (M1.4: unique profile per deploy + Move.toml never mutated)
 - [x] SIGINT during deploy leaves no private key on disk (M1.4: process-level signal handler + sync profile cleanup)
-- [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `deployContract` stderr redaction, Move.toml integrity, parallel-deploy, and signal-handler cleanup (currently **184/184** on develop)
+- [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `deployContract` stderr redaction, Move.toml integrity, parallel-deploy, signal-handler cleanup, and config-mtime cache (currently **189/189** on develop)
 - [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate **9/9 passing** as of PR closing #86 (`message.test.ts` rewritten to local-node, broken-scaffold `greeting-fork.test.ts` removed)
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
