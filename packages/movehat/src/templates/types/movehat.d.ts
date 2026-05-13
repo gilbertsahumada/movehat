@@ -50,16 +50,13 @@ declare module 'movehat' {
     createAccount: () => Account;
     getAccount: (privateKey: string) => Account;
     getAccountByIndex: (index: number) => Account;
-    switchNetwork: (networkName: string) => Promise<void>;
+    switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
   }
 
+  // getMovehat is a thin alias of initRuntime as of M1.5 — each call
+  // constructs a fresh runtime. The previous cached behavior is gone.
   export function getMovehat(): Promise<MovehatRuntime>;
   export function initRuntime(configOverride?: Partial<MovehatConfig>): Promise<MovehatRuntime>;
-  export function getRuntime(): MovehatRuntime;
-
-  export const mh: {
-    readonly runtime: MovehatRuntime;
-  };
 }
 
 declare module 'movehat/helpers' {

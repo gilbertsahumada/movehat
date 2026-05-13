@@ -19,8 +19,6 @@ import { AccountManager } from "./core/AccountManager.js";
 import { Publisher } from "./core/Publisher.js";
 import type { ChildProcessAdapter } from "./utils/childProcessAdapter.js";
 
-let cachedRuntime: MovehatRuntime | null = null;
-
 export interface InitRuntimeOptions {
   network?: string;
   accountIndex?: number;
@@ -123,10 +121,8 @@ export async function initRuntime(
     return accounts[index];
   };
 
-  const switchNetwork = async (networkName: string): Promise<void> => {
-    // Clear cache and reinitialize with new network
-    cachedRuntime = null;
-    await initRuntime({ ...options, network: networkName });
+  const switchNetwork = async (networkName: string): Promise<MovehatRuntime> => {
+    return initRuntime({ ...options, network: networkName });
   };
 
   // Build runtime object
@@ -147,37 +143,17 @@ export async function initRuntime(
     switchNetwork,
   };
 
-  cachedRuntime = runtime;
   return runtime;
 }
 
 /**
- * Get the current Movehat Runtime Environment
- * Throws error if runtime hasn't been initialized
- */
-export function getRuntime(): MovehatRuntime {
-  if (!cachedRuntime) {
-    throw new Error(
-      "Movehat Runtime not initialized. Call initRuntime() first or use getMovehat()."
-    );
-  }
-  return cachedRuntime;
-}
-
-/**
- * Get or initialize the Movehat Runtime Environment
- * This is a convenience function that initializes if needed
+ * Get the Movehat Runtime Environment.
+ *
+ * As of M1.5 this is a thin alias of {@link initRuntime} — each call
+ * constructs a fresh runtime. The previous module-cached behavior was
+ * removed because it leaked state between parallel tests and hid the
+ * runtime dependency from script signatures.
  */
 export async function getMovehat(): Promise<MovehatRuntime> {
-  if (cachedRuntime) {
-    return cachedRuntime;
-  }
   return initRuntime();
 }
-
-// Export a default instance getter for convenience
-export const mh = {
-  get runtime() {
-    return getRuntime();
-  },
-};

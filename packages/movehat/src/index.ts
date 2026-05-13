@@ -3,7 +3,7 @@ export * from "./helpers/index.js";
 export type { MovehatConfig } from "./types/config.js";
 
 // Export Movehat Runtime Environment
-export { initRuntime, getRuntime, getMovehat, mh } from "./runtime.js";
+export { initRuntime, getMovehat } from "./runtime.js";
 export type { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
 
 // Export Fork system
