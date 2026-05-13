@@ -1,10 +1,17 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { runCli } from '../utils/runCli.js';
+import type { ChildProcessAdapter } from '../utils/childProcessAdapter.js';
 
 export interface SnapshotOptions {
   path?: string;
   name?: string;
+  /**
+   * Override the child-process adapter. Test-only — production callers
+   * leave this undefined so the default spawn-based adapter is used.
+   * Mirrors the M1.3c pattern on `runtime.deployContract`.
+   */
+  adapter?: ChildProcessAdapter;
 }
 
 export interface ForkInfo {
@@ -39,15 +46,20 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
   try {
     // Initialize fork/snapshot using aptos CLI.
     // runCli uses spawn-with-args under the hood (no shell), preventing
-    // command injection. Pass throwOnNonZeroExit:false so we can keep the
-    // existing "stderr-without-Success → throw" check intact.
-    const { stdout, stderr } = await runCli(
+    // command injection. Pass throwOnNonZeroExit:false so the exitCode is
+    // observable below — the stderr/dir defenses are belt-and-suspenders
+    // on top of the exitCode check.
+    const { stdout, stderr, exitCode } = await runCli(
       {
         command: 'aptos',
         args: ['move', 'sim', 'init', '--path', snapshotPath],
       },
-      { throwOnNonZeroExit: false }
+      { throwOnNonZeroExit: false, adapter: options.adapter }
     );
+
+    if (exitCode !== 0) {
+      throw new Error(stderr || `aptos move sim init failed with exit code ${exitCode}`);
+    }
 
     if (stderr && !stderr.includes('Success')) {
       throw new Error(stderr);
@@ -121,11 +133,12 @@ export async function getForkInfo(path: string): Promise<ForkInfo> {
 export async function viewForkResource(
   sessionPath: string,
   account: string,
-  resourceType: string
+  resourceType: string,
+  options: { adapter?: ChildProcessAdapter } = {}
 ): Promise<any> {
   try {
     // runCli uses spawn-with-args (no shell) to prevent command injection.
-    const { stdout } = await runCli(
+    const { stdout, stderr, exitCode } = await runCli(
       {
         command: 'aptos',
         args: [
@@ -140,8 +153,14 @@ export async function viewForkResource(
           resourceType,
         ],
       },
-      { throwOnNonZeroExit: false }
+      { throwOnNonZeroExit: false, adapter: options.adapter }
     );
+
+    if (exitCode !== 0) {
+      throw new Error(
+        stderr || `aptos move sim view-resource failed with exit code ${exitCode}`
+      );
+    }
 
     const result = JSON.parse(stdout);
 

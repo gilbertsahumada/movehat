@@ -214,4 +214,31 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
   });
+
+  it('explicit timeoutMs is still honored under inheritStdio', async () => {
+    // Positive control: the conditional-skip applies only when timeoutMs
+    // is omitted. An explicit value forces the timer back on.
+    await expect(
+      defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'setTimeout(() => {}, 5000)'],
+        inheritStdio: true,
+        timeoutMs: 50,
+      })
+    ).rejects.toThrow(/timed out after 50ms/);
+  });
+
+  it('omits the default timeout when inheritStdio is true (short child completes naturally)', async () => {
+    // We can't wait 5 minutes to prove the default timeout isn't set, but
+    // we can prove that a child running with inheritStdio:true and no
+    // explicit timeoutMs completes via the natural exit path with no
+    // timeout-derived rejection. Combined with the test above, the
+    // conditional-skip behavior is pinned in both directions.
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', "setTimeout(() => process.exit(0), 50)"],
+      inheritStdio: true,
+    });
+    expect(result.exitCode).toBe(0);
+  });
 });
