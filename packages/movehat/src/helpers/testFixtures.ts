@@ -3,6 +3,7 @@ import type { MovehatRuntime } from "../types/runtime.js";
 import type { MoveContract } from "../core/contract.js";
 import { AccountManager } from "../core/AccountManager.js";
 import { setupLocalTesting, stopLocalTesting } from "./setupLocalTesting.js";
+import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
 
 /**
@@ -83,9 +84,11 @@ export async function setupTestFixture<TModules extends readonly string[]>(
   accountLabels: string[] = ["alice", "bob"],
   options: Partial<LocalTestOptions> = {}
 ): Promise<TestFixture<TModules[number]>> {
-  console.log(`\n🧪 Setting up test fixture...`);
-  console.log(`   Modules to deploy: ${modules.join(", ")}`);
-  console.log(`   Account labels: deployer, ${accountLabels.join(", ")}\n`);
+  logger.newline();
+  logger.step("Setting up test fixture...");
+  logger.plain(`   Modules to deploy: ${modules.join(", ")}`);
+  logger.plain(`   Account labels: deployer, ${accountLabels.join(", ")}`);
+  logger.newline();
 
   // Ensure 'deployer' is always in the account labels
   const allLabels = ["deployer", ...accountLabels.filter((l) => l !== "deployer")];
@@ -126,10 +129,12 @@ export async function setupTestFixture<TModules extends readonly string[]>(
     }
 
     contracts[moduleName as TModules[number]] = mh.getContract(deploymentAddress, moduleName);
-    console.log(`   ✓ Contract "${moduleName}" ready at ${deploymentAddress}`);
+    logger.success(`Contract "${moduleName}" ready at ${deploymentAddress}`, 2);
   }
 
-  console.log(`\n✅ Test fixture ready!\n`);
+  logger.newline();
+  logger.success("Test fixture ready!");
+  logger.newline();
 
   return {
     mh,
@@ -153,7 +158,8 @@ export async function setupTestFixture<TModules extends readonly string[]>(
  * ```
  */
 export async function teardownTestFixture(): Promise<void> {
-  console.log(`\n🧹 Tearing down test fixture...`);
+  logger.newline();
+  logger.step("Tearing down test fixture...");
 
   // Stop fork server
   await stopLocalTesting();
@@ -161,7 +167,8 @@ export async function teardownTestFixture(): Promise<void> {
   // Clear account pool for test isolation
   AccountManager.clearPool();
 
-  console.log(`✓ Teardown complete\n`);
+  logger.success("Teardown complete");
+  logger.newline();
 }
 
 /**
@@ -191,7 +198,8 @@ export async function setupMinimalFixture(
   accountLabels: string[] = ["alice", "bob"],
   options: Partial<LocalTestOptions> = {}
 ): Promise<Omit<TestFixture, "contracts">> {
-  console.log(`\n🧪 Setting up minimal test fixture (no auto-deploy)...`);
+  logger.newline();
+  logger.step("Setting up minimal test fixture (no auto-deploy)...");
 
   const allLabels = ["deployer", ...accountLabels.filter((l) => l !== "deployer")];
 
@@ -213,7 +221,9 @@ export async function setupMinimalFixture(
     accounts[label] = labeledAccounts[label] || AccountManager.getOrCreateLabeled(label);
   }
 
-  console.log(`\n✅ Minimal fixture ready!\n`);
+  logger.newline();
+  logger.success("Minimal fixture ready!");
+  logger.newline();
 
   return {
     mh,

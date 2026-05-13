@@ -4,6 +4,7 @@ import {
   type InputViewFunctionData,
   type MoveFunctionId,
 } from "@aptos-labs/ts-sdk";
+import { logger } from "../ui/index.js";
 
 export interface TransactionResult {
   hash: string;
@@ -26,7 +27,7 @@ export class MoveContract {
   ): Promise<TransactionResult> {
     const functionFullName = `${this.moduleAddress}::${this.moduleName}::${functionName}`;
 
-    console.log(`📝 Calling ${functionFullName}...`);
+    logger.step(`Calling ${functionFullName}...`);
 
     const transaction = await this.aptos.transaction.build.simple({
       sender: signer.accountAddress,
@@ -51,9 +52,10 @@ export class MoveContract {
       transactionHash: committedTxn.hash,
     });
 
-    console.log(
-      `✅ Transaction ${committedTxn.hash} committed with status: ${response.vm_status}\n`
+    logger.success(
+      `Transaction ${committedTxn.hash} committed with status: ${response.vm_status}`
     );
+    logger.newline();
 
     return {
       hash: committedTxn.hash,

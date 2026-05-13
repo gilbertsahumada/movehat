@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import { runCli } from "../utils/runCli.js";
+import { logger } from "../ui/index.js";
 import type { RunResult } from "../utils/childProcessAdapter.js";
 
 /**
@@ -28,9 +29,9 @@ export function propagateRunResultExit(result: RunResult): void {
 
 export default async function runCommand(scriptPath: string) {
   if (!scriptPath) {
-    console.error("❌ Error: No script path provided");
-    console.error("Usage: movehat run <script-path> [--network <name>]");
-    console.error("Example: movehat run scripts/deploy-counter.ts --network testnet");
+    logger.error("No script path provided");
+    logger.plain("Usage: movehat run <script-path> [--network <name>]");
+    logger.plain("Example: movehat run scripts/deploy-counter.ts --network testnet");
     process.exit(1);
   }
 
@@ -38,24 +39,24 @@ export default async function runCommand(scriptPath: string) {
 
   // Check if file exists
   if (!existsSync(fullPath)) {
-    console.error(`❌ Script not found: ${scriptPath}`);
+    logger.error(`Script not found: ${scriptPath}`);
     process.exit(1);
   }
 
   // Check if it's a TypeScript or JavaScript file
   const ext = extname(fullPath);
   if (![".ts", ".js", ".mjs"].includes(ext)) {
-    console.error(`❌ Unsupported file type: ${ext}`);
-    console.error("Supported extensions: .ts, .js, .mjs");
+    logger.error(`Unsupported file type: ${ext}`);
+    logger.plain("Supported extensions: .ts, .js, .mjs");
     process.exit(1);
   }
 
   const network = process.env.MH_CLI_NETWORK;
-  console.log(`🚀 Running script: ${scriptPath}`);
+  logger.step(`Running script: ${scriptPath}`);
   if (network) {
-    console.log(`   Network: ${network}`);
+    logger.plain(`   Network: ${network}`);
   }
-  console.log();
+  logger.newline();
 
   // Find tsx binary - try multiple locations for compatibility
   // Uses require.resolve for cross-platform compatibility (works on Windows, macOS, Linux)
@@ -94,9 +95,9 @@ export default async function runCommand(scriptPath: string) {
   }
 
   if (!tsxPath) {
-    console.error("❌ Error: tsx binary not found");
-    console.error("   Make sure 'tsx' is installed in your project:");
-    console.error("   npm install --save-dev tsx");
+    logger.error("tsx binary not found");
+    logger.plain("   Make sure 'tsx' is installed in your project:");
+    logger.plain("   npm install --save-dev tsx");
     process.exit(1);
   }
 
@@ -118,7 +119,7 @@ export default async function runCommand(scriptPath: string) {
 
     propagateRunResultExit(result);
   } catch (error) {
-    console.error(`❌ Failed to execute script: ${(error as Error).message}`);
+    logger.error(`Failed to execute script: ${(error as Error).message}`);
     process.exit(1);
   }
 }

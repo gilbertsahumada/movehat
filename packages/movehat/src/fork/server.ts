@@ -90,7 +90,7 @@ export class ForkServer {
         console.log(`  Bound interface: ${this.host}`);
         console.log(`  Ledger Info: http://${displayHost}:${this.port}/v1/`);
         if (this.host === '0.0.0.0') {
-          console.warn(`  ⚠️  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
+          console.warn(`  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
         }
         console.log(`\nPress Ctrl+C to stop`);
         resolve();

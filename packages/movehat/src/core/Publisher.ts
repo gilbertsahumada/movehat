@@ -24,6 +24,7 @@ import {
 import { validatePathSafety, validateProfileSafety } from "./shell.js";
 import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
+import { logger } from "../ui/index.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 
 /**
@@ -227,18 +228,18 @@ export class Publisher {
         .join("\n");
 
       // Log formatted error message for user
-      const formattedMessage = [
-        `\n❌ Module "${moduleName}" is already deployed on ${config.network}`,
-        `   Address: ${existingDeployment.address}`,
-        `   Deployed at: ${new Date(existingDeployment.timestamp).toLocaleString()}`,
-        existingDeployment.txHash ? `   Transaction: ${existingDeployment.txHash}` : null,
-        `\n💡 To redeploy, run with the --redeploy flag:`,
-        `   movehat run <script> --network ${config.network} --redeploy\n`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      console.error(formattedMessage);
+      logger.error(`Module "${moduleName}" is already deployed on ${config.network}`);
+      logger.plain(`   Address: ${existingDeployment.address}`);
+      logger.plain(
+        `   Deployed at: ${new Date(existingDeployment.timestamp).toLocaleString()}`
+      );
+      if (existingDeployment.txHash) {
+        logger.plain(`   Transaction: ${existingDeployment.txHash}`);
+      }
+      logger.newline();
+      logger.info("To redeploy, run with the --redeploy flag:");
+      logger.plain(`   movehat run <script> --network ${config.network} --redeploy`);
+      logger.newline();
 
       // Throw custom error with complete context for programmatic handling
       throw new ModuleAlreadyDeployedError(
@@ -252,7 +253,7 @@ export class Publisher {
     }
 
     if (forceRedeploy && existingDeployment) {
-      console.log(`🔄 Redeploying module "${moduleName}" on ${config.network}...`);
+      logger.info(`Redeploying module "${moduleName}" on ${config.network}...`);
     }
 
     const dir = input.packageDir || config.moveDir;
@@ -270,7 +271,7 @@ export class Publisher {
     const safeDir = validatePathSafety(dir, "package directory");
     const safeProfile = validateProfileSafety(profile);
 
-    console.log(`📦 Publishing module "${moduleName}" from ${dir}...`);
+    logger.step(`Publishing module "${moduleName}" from ${dir}...`);
 
     try {
       // Get the deployer address to use for named addresses
@@ -293,7 +294,7 @@ export class Publisher {
           : [];
 
       // Build first with named addresses
-      console.log("🔨 Building package...");
+      logger.step("Building package...");
       const buildResult = await runCli(
         {
           command: "movement",
@@ -305,7 +306,7 @@ export class Publisher {
       if (buildResult.stdout) console.log(buildResult.stdout.trim());
 
       // Publish using direct parameters (avoid config file issues)
-      console.log("📤 Publishing to blockchain...");
+      logger.step("Publishing to blockchain...");
 
       // Use parameters directly instead of relying on config file
       // Strip any ed25519-priv- prefix if present
@@ -406,7 +407,7 @@ export class Publisher {
         }
       }
 
-      console.log(`✅ Module published successfully!`);
+      logger.success("Module published successfully!");
 
       // Create deployment info
       const deployment: DeploymentInfo = {
@@ -427,7 +428,7 @@ export class Publisher {
         // stdout/stderr are already redacted by runCli before reaching here,
         // so this branch is safe to log verbatim.
         if (error.stdoutPreview) console.log(error.stdoutPreview);
-        console.error(`❌ Failed to publish module: ${error.message}\n${error.stderr}`);
+        logger.error(`Failed to publish module: ${error.message}\n${error.stderr}`);
       } else {
         // Preserve existing behaviour for non-CLI errors (filesystem write
         // failures from Move.toml / ~/.aptos/config.yaml, yaml parse errors,
@@ -435,7 +436,7 @@ export class Publisher {
         // is safe.
         const errorMsg = error.stderr ? `${error.message}\n${error.stderr}` : error.message;
         if (error.stdout) console.log(error.stdout);
-        console.error(`❌ Failed to publish module: ${errorMsg}`);
+        logger.error(`Failed to publish module: ${errorMsg}`);
       }
       throw error;
     }

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { logger } from "../ui/index.js";
 
 export interface DeploymentInfo {
   address: string;
@@ -90,8 +91,8 @@ export function saveDeployment(deployment: DeploymentInfo): void {
 
   try {
     writeFileSync(filePath, JSON.stringify(deployment, null, 2), "utf-8");
-    console.log(
-      `💾 Deployment saved: deployments/${deployment.network}/${deployment.moduleName}.json`
+    logger.success(
+      `Deployment saved: deployments/${deployment.network}/${deployment.moduleName}.json`
     );
   } catch (error) {
     console.error(
