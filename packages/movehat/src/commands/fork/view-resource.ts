@@ -42,9 +42,9 @@ export default async function forkViewResourceCommand(options: ForkViewResourceO
     console.log(JSON.stringify(resource, null, 2));
     console.log('');
 
-  } catch (error: any) {
+  } catch (error) {
     logger.newline();
-    logger.error(error.message);
+    logger.error(error instanceof Error ? error.message : String(error));
     logger.newline();
     process.exit(1);
   }

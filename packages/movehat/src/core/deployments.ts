@@ -8,8 +8,8 @@ export interface DeploymentInfo {
   network: string;
   deployer: string;
   timestamp: number;
-  txHash?: string;
-  blockNumber?: string;
+  txHash?: string | undefined;
+  blockNumber?: string | undefined;
 }
 
 /**

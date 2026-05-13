@@ -125,8 +125,9 @@ export class ForkManager {
         // Cache it
         this.storage.saveResource(normalizedAddress, resourceType, resource);
         console.log(`  ✓ Cached resource ${resourceType}`);
-      } catch (error: any) {
-        if (error.message.includes('404')) {
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "";
+        if (msg.includes('404')) {
           throw new Error(`Resource ${resourceType} not found for account ${normalizedAddress}`);
         }
         throw error;
@@ -170,7 +171,7 @@ export class ForkManager {
   /**
    * Set a resource value (for testing/mocking)
    */
-  async setResource(address: string, resourceType: string, data: any): Promise<void> {
+  async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);
     console.log(`  ✓ Updated resource ${resourceType} for ${normalizedAddress}`);
@@ -183,13 +184,18 @@ export class ForkManager {
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
-    // Try to get existing coin store
+    // Try to get existing coin store. The coin store is a CoinStore<T>
+    // resource whose `data` is Movement-side untyped JSON; we shape it
+    // locally as a structural object with `coin.value: string`.
+    // any: full CoinStore schema lives at the Movement REST boundary —
+    // proper validation deferred to the boundary-validation follow-up of #57.
     let coinStore: any;
     try {
       coinStore = await this.getResource(normalizedAddress, resourceType);
-    } catch (error: any) {
+    } catch (error) {
       // Only catch "not found" errors, rethrow others (network, API, etc.)
-      if (!error.message || !error.message.includes('not found')) {
+      const msg = error instanceof Error ? error.message : "";
+      if (!msg.includes('not found')) {
         throw error;
       }
 

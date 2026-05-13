@@ -22,6 +22,11 @@ export class MoveContract {
   async call(
     signer: Account,
     functionName: string,
+    // any[]: Move entry-function arguments are heterogeneous primitives
+    // (u8/u64/string/bool/address/vector) passed through to the Aptos
+    // SDK's `functionArguments`, which validates at submit time. A
+    // narrower union here would force casts at every call site for
+    // little safety gain.
     args: any[] = [],
     typeArgs: string[] = []
   ): Promise<TransactionResult> {
@@ -64,8 +69,10 @@ export class MoveContract {
     };
   }
 
-  async view<T = any>(
+  async view<T = unknown>(
     functionName: string,
+    // any[]: see `call()` above — Move view-function arguments share
+    // the same SDK-validated boundary semantics.
     args: any[] = [],
     typeArgs: string[] = []
   ): Promise<T> {

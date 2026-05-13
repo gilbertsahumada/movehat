@@ -10,7 +10,7 @@ import { MovehatConfig } from "../types/config.js";
  * Represents a stored account in the pool
  */
 export interface StoredAccount {
-  label?: string;
+  label?: string | undefined;
   privateKey: string;
   address: string;
   createdAt: number;
@@ -173,9 +173,10 @@ export class AccountManager {
       try {
         const account = this.loadAccountFromPrivateKey(privateKeyHex);
         accounts.push(account);
-      } catch (error: any) {
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         console.warn(
-          `Warning: Failed to load account from config: ${error.message}`
+          `Warning: Failed to load account from config: ${msg}`
         );
       }
     }
@@ -322,9 +323,10 @@ export class AccountManager {
 
       this.poolLoaded = true;
       return true;
-    } catch (error: any) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       console.warn(
-        `Warning: Failed to load account pool: ${error.message}`
+        `Warning: Failed to load account pool: ${msg}`
       );
       return false;
     }

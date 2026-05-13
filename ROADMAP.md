@@ -64,7 +64,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 | ✅ | M1.4 | [#79](https://github.com/gilbertsahumada/movehat/issues/79) | Extract `core/Publisher.ts` + per-deploy unique profile + signal handler | [#19](https://github.com/gilbertsahumada/movehat/issues/19), [#36](https://github.com/gilbertsahumada/movehat/issues/36), [#37](https://github.com/gilbertsahumada/movehat/issues/37), [#38](https://github.com/gilbertsahumada/movehat/issues/38), [#53](https://github.com/gilbertsahumada/movehat/issues/53) |
 | ✅ | M1.5 | [#80](https://github.com/gilbertsahumada/movehat/issues/80) | Remove `cachedRuntime` and the three `setupLocalTesting` singletons; `switchNetwork` returns runtime (folded in from M1.6) | [#21](https://github.com/gilbertsahumada/movehat/issues/21), [#55](https://github.com/gilbertsahumada/movehat/issues/55) |
 | ✅ | M1.6 | [#81](https://github.com/gilbertsahumada/movehat/issues/81) | `loadUserConfig` mtime cache (the `switchNetwork`-returns-runtime piece shipped with M1.5) | [#46](https://github.com/gilbertsahumada/movehat/issues/46), [#62](https://github.com/gilbertsahumada/movehat/issues/62) |
-| ⏳ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) |
+| ✅ | M1.7 | [#82](https://github.com/gilbertsahumada/movehat/issues/82) | Strict types audit (`any`, `!`, `noUncheckedIndexedAccess`) | [#57](https://github.com/gilbertsahumada/movehat/issues/57) (`any`-in-fork bullet only; boundary validation deferred to follow-up) |
 
 **Definition of Done** (rolled up from the sub-issues):
 - [x] `packages/movehat/src/utils/runCli.ts` exists (M1.1, #76) — replaces all direct `exec`/`spawn` callers (final 2 sites — `runtime.ts` + `LocalNodeManager.ts` — migrated in M1.3c)
@@ -77,6 +77,9 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] SIGINT during deploy leaves no private key on disk (M1.4: process-level signal handler + sync profile cleanup)
 - [x] All previously passing 119 tests still green; new unit tests for `runCli`, `address`, `deployContract` stderr redaction, Move.toml integrity, parallel-deploy, signal-handler cleanup, and config-mtime cache (currently **189/189** on develop)
 - [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate **9/9 passing** as of PR closing #86 (`message.test.ts` rewritten to local-node, broken-scaffold `greeting-fork.test.ts` removed)
+- [x] M1.7 (#82): `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` enabled in `packages/movehat/tsconfig.json`; all 16 `catch (error: any)` sites migrated to `unknown`-typed catches; `fork/*` `any` audit closes the corresponding bullet of #57 — boundary validation (zod or guards for `fork/api.ts` parsed JSON) deferred to follow-up; `verbatimModuleSyntax` deliberately omitted (low-benefit/high-churn)
+
+**M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #N (M1.7). Ready for `develop → main` batch.**
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 

@@ -29,9 +29,10 @@ export async function fetchLatestVersion(
       ? setTimeout(() => controller.abort(), timeout)
       : undefined;
 
-    const response = await fetch(`https://registry.npmjs.org/${packageName}`, {
-      signal: controller?.signal,
-    });
+    const response = await fetch(
+      `https://registry.npmjs.org/${packageName}`,
+      controller ? { signal: controller.signal } : {}
+    );
 
     if (timeoutId) clearTimeout(timeoutId);
 

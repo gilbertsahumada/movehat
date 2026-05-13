@@ -67,6 +67,11 @@ function atomicWriteYaml(path: string, content: string): void {
 }
 
 /** Add the deploy's profile to ~/.aptos/config.yaml. Creates the file if absent. */
+interface AptosConfigYaml {
+  profiles?: Record<string, ProfileData>;
+  [key: string]: unknown;
+}
+
 async function addProfile(
   configPath: string,
   name: string,
@@ -76,10 +81,10 @@ async function addProfile(
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
   }
-  let yamlObj: any = {};
+  let yamlObj: AptosConfigYaml = {};
   if (existsSync(configPath)) {
     const raw = await readFile(configPath, "utf-8");
-    yamlObj = (yaml.load(raw) as any) || {};
+    yamlObj = (yaml.load(raw) as AptosConfigYaml) || {};
   }
   if (!yamlObj.profiles) yamlObj.profiles = {};
   yamlObj.profiles[name] = data;
@@ -95,7 +100,7 @@ async function addProfile(
 async function removeProfile(configPath: string, name: string): Promise<void> {
   if (!existsSync(configPath)) return;
   const raw = await readFile(configPath, "utf-8");
-  const yamlObj: any = (yaml.load(raw) as any) || {};
+  const yamlObj: AptosConfigYaml = (yaml.load(raw) as AptosConfigYaml) || {};
   if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
   delete yamlObj.profiles[name];
 
@@ -125,7 +130,7 @@ function removeProfileSync(configPath: string, name: string): void {
   try {
     if (!existsSync(configPath)) return;
     const raw = readFileSync(configPath, "utf-8");
-    const yamlObj: any = (yaml.load(raw) as any) || {};
+    const yamlObj: AptosConfigYaml = (yaml.load(raw) as AptosConfigYaml) || {};
     if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
     delete yamlObj.profiles[name];
 
@@ -179,7 +184,7 @@ function ensureSignalHandler(): void {
 
 /** @internal */
 export interface PublisherDeps {
-  adapter?: ChildProcessAdapter;
+  adapter?: ChildProcessAdapter | undefined;
 }
 
 /** @internal */
@@ -187,7 +192,7 @@ export interface PublishInput {
   moduleName: string;
   config: MovehatConfig;
   account: Account;
-  packageDir?: string;
+  packageDir?: string | undefined;
 }
 
 /**
@@ -423,7 +428,7 @@ export class Publisher {
       saveDeployment(deployment);
 
       return deployment;
-    } catch (error: any) {
+    } catch (error) {
       if (error instanceof CliExecutionError) {
         // stdout/stderr are already redacted by runCli before reaching here,
         // so this branch is safe to log verbatim.
@@ -434,9 +439,8 @@ export class Publisher {
         // failures from Move.toml / ~/.aptos/config.yaml, yaml parse errors,
         // etc.). These paths can't carry private-key material so logging raw
         // is safe.
-        const errorMsg = error.stderr ? `${error.message}\n${error.stderr}` : error.message;
-        if (error.stdout) console.log(error.stdout);
-        logger.error(`Failed to publish module: ${errorMsg}`);
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error(`Failed to publish module: ${err.message}`);
       }
       throw error;
     }

@@ -4,9 +4,9 @@ import { loadUserConfig } from "../core/config.js";
 import { runCli } from "../utils/runCli.js";
 
 interface RunMoveTestsOptions {
-  filter?: string;
-  ignoreWarnings?: boolean;
-  skipIfMissing?: boolean; // If true, skip gracefully when Move dir missing (for orchestrated tests)
+  filter?: string | undefined;
+  ignoreWarnings?: boolean | undefined;
+  skipIfMissing?: boolean | undefined; // If true, skip gracefully when Move dir missing (for orchestrated tests)
 }
 
 /**

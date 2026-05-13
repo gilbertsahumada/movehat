@@ -100,7 +100,15 @@ export async function setupTestFixture<TModules extends readonly string[]>(
 
   const labeledAccounts = AccountManager.getLabeledAccounts();
 
+  // any: TestFixture.accounts has a structural shape with required
+  // `deployer/alice/bob` plus a `[key: string]: Account` index. The
+  // builder fills the index dynamically; typing this as the exact
+  // intersection would require a generic over `accountLabels` and
+  // produce noisy errors for the dynamic key assignment below.
   const accounts: any = {
+    // non-null: setupLocalTesting → setupWithLocalNode/Fork unconditionally
+    // funds the deployer account via accountLabels[0]; deployer is always
+    // first by construction at L93 above.
     deployer: labeledAccounts.deployer!,
   };
 
@@ -163,7 +171,9 @@ export async function setupMinimalFixture(
 
   const labeledAccounts = AccountManager.getLabeledAccounts();
 
+  // any: see setupTestFixture above — same dynamic-key builder pattern.
   const accounts: any = {
+    // non-null: deployer is unconditionally added to allLabels at L156 above.
     deployer: labeledAccounts.deployer!,
   };
 

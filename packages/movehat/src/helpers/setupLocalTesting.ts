@@ -192,8 +192,9 @@ async function setupWithLocalNode(
           logger.plain(`   Deploying ${moduleName}...`);
           await runtime.deployContract(moduleName);
           logger.success(`${moduleName} deployed`, 2);
-        } catch (error: any) {
-          logger.error(`Failed to deploy ${moduleName}: ${error.message}`, 2);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          logger.error(`Failed to deploy ${moduleName}: ${msg}`, 2);
           throw error;
         }
       }

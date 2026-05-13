@@ -55,9 +55,9 @@ export default async function forkFundCommand(options: ForkFundOptions) {
     logger.plain(`   New balance: ${coinStore.coin.value}`);
     logger.newline();
 
-  } catch (error: any) {
+  } catch (error) {
     logger.newline();
-    logger.error(error.message);
+    logger.error(error instanceof Error ? error.message : String(error));
     logger.newline();
     process.exit(1);
   }

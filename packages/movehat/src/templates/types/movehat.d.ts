@@ -65,12 +65,15 @@ declare module 'movehat/helpers' {
   export interface TestEnvironment {
     aptos: Aptos;
     account: Account;
-    config: any;
+    config: import('movehat').MovehatConfig;
   }
 
   export class MoveContract {
     constructor(aptos: Aptos, address: string, moduleName: string);
-    call(sender: Account, functionName: string, args: any[]): Promise<any>;
+    // args: any[] mirrors the runtime declaration — Move entry-function
+    // arguments are heterogeneous primitives validated by the Aptos SDK
+    // at submit time.
+    call(sender: Account, functionName: string, args: any[]): Promise<TransactionResult>;
     view<T>(functionName: string, args: any[]): Promise<T>;
   }
 
