@@ -72,8 +72,9 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
       process.removeListener('SIGTERM', sigtermHandler);
     }
 
-  } catch (error: any) {
-    console.error(`\nError starting fork server:`, error.message);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`\nError starting fork server:`, msg);
     process.exit(1);
   }
 }

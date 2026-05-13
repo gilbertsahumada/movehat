@@ -284,8 +284,9 @@ export class LocalNodeManager {
       logger.success(`Funded ${address} with ${amount} octas`, 2);
 
       return result;
-    } catch (error: any) {
-      throw new Error(`Failed to fund account: ${error.message}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to fund account: ${msg}`);
     }
   }
 

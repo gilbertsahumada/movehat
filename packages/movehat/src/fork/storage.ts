@@ -138,7 +138,7 @@ export class ForkStorage {
   /**
    * Get resource for an account
    */
-  getResource(address: string, resourceType: string): any | null {
+  getResource(address: string, resourceType: string): unknown | null {
     const resourceFilePath = this.getResourceFilePath(address);
 
     if (!existsSync(resourceFilePath)) {
@@ -152,7 +152,7 @@ export class ForkStorage {
   /**
    * Get all resources for an account
    */
-  getAllResources(address: string): Record<string, any> {
+  getAllResources(address: string): Record<string, unknown> {
     const resourceFilePath = this.getResourceFilePath(address);
 
     if (!existsSync(resourceFilePath)) {
@@ -165,7 +165,7 @@ export class ForkStorage {
   /**
    * Save resource for an account
    */
-  saveResource(address: string, resourceType: string, data: any): void {
+  saveResource(address: string, resourceType: string, data: unknown): void {
     const resourceFilePath = this.getResourceFilePath(address);
 
     // Ensure resources directory exists
@@ -174,7 +174,7 @@ export class ForkStorage {
       mkdirSync(resourcesDir, { recursive: true });
     }
 
-    let resources: Record<string, any> = {};
+    let resources: Record<string, unknown> = {};
     if (existsSync(resourceFilePath)) {
       resources = JSON.parse(readFileSync(resourceFilePath, 'utf-8'));
     }
@@ -186,7 +186,7 @@ export class ForkStorage {
   /**
    * Save all resources for an account
    */
-  saveAllResources(address: string, resources: Record<string, any>): void {
+  saveAllResources(address: string, resources: Record<string, unknown>): void {
     const resourceFilePath = this.getResourceFilePath(address);
 
     // Ensure resources directory exists

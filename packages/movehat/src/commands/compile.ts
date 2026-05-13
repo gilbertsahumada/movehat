@@ -306,8 +306,9 @@ export default async function compileCommand() {
     if (detectedAddresses.size > 0) {
       logger.kv('Detected addresses', Array.from(detectedAddresses).join(", "), 2);
     }
-    if (Object.keys(userConfig.namedAddresses ?? {}).length > 0) {
-      logger.kv('Configured addresses', Object.keys(userConfig.namedAddresses!).join(", "), 2);
+    const namedAddrs = userConfig.namedAddresses ?? {};
+    if (Object.keys(namedAddrs).length > 0) {
+      logger.kv('Configured addresses', Object.keys(namedAddrs).join(", "), 2);
     }
     if (autoAssignedAddresses.length > 0) {
       logger.kv('Auto-assigned (0xcafe)', autoAssignedAddresses.join(", "), 2);
@@ -319,9 +320,10 @@ export default async function compileCommand() {
     logger.newline();
     logger.success('Compilation finished successfully');
     logger.newline();
-  } catch (err: any) {
+  } catch (err) {
     logger.newline();
-    logger.error(`Compilation failed: ${err.message ?? err}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`Compilation failed: ${msg}`);
     logger.newline();
     process.exit(1);
   }

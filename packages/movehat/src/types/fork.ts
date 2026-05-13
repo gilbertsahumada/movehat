@@ -37,5 +37,11 @@ export interface AccountData {
 
 export interface AccountResource {
   type: string;
-  data: any;
+  /**
+   * Move resource payload — structurally a JSON-shaped object whose
+   * schema depends on the resource type (CoinStore, AggregatorSnapshot, etc).
+   * unknown forces callers to narrow before access; the boundary-validation
+   * follow-up of #57 will add per-resource type guards.
+   */
+  data: unknown;
 }
