@@ -89,20 +89,29 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **Goal**: Provide a Hardhat-style testing harness with explicit lifecycle and use-after-cleanup safety.
 
+**Sub-issues** (each is a separate PR. Execution order: M2.1 → M2.2 → M2.3 → M2.4 in serial — M2.2/M2.3 replace M2.1's method stubs and M2.4 migrates consumers, so each depends on the previous):
+
+| Status | Sub-PR | Issue | Focus | Closes |
+|---|---|---|---|---|
+|   | M2.1 | [#116](https://github.com/gilbertsahumada/movehat/issues/116) | Harness skeleton + 3 factories + Proxy poisoning + cleanup + HarnessDisposedError (4 methods stubbed) | foundations |
+|   | M2.2 | [#117](https://github.com/gilbertsahumada/movehat/issues/117) | `deployCodeObject` + `upgradeCodeObject` via `movement move deploy-object` / `upgrade-object` | (partial of #69) |
+|   | M2.3 | [#118](https://github.com/gilbertsahumada/movehat/issues/118) | `runViewFunction` + `runMoveScript` | (partial of #69) |
+|   | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) | Migrate `examples/counter-example/` + templates + 8 docs MDX; `@deprecated` JSDoc on `mh()` / `getMovehat` | closes #69 |
+
 **Definition of Done — API surface**:
 - [ ] `import { Harness } from 'movehat'` works from the built package
 - [ ] `Harness.createLocal()` returns a usable instance
 - [ ] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance
-- [ ] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance
+- [x] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance (M2.1)
 - [ ] `harness.deployCodeObject(options)` deploys a real Move package
 - [ ] `harness.upgradeCodeObject(options)` upgrades an existing code object
 - [ ] `harness.runViewFunction(options)` executes a view function
 - [ ] `harness.runMoveScript(options)` compiles and executes a Move script
-- [ ] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true`
+- [x] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true` (M2.1 — idempotent; stops owned localNode / forkServer; tested)
 
 **Definition of Done — Use-after-cleanup safety**:
-- [ ] Calling **any** method on a disposed harness (other than `cleanup`) throws `HarnessDisposedError` synchronously
-- [ ] `HarnessDisposedError` exported from the package
+- [x] Calling **any** method on a disposed harness (other than `cleanup`) throws `HarnessDisposedError` synchronously (M2.1 — Proxy `get` trap fires on property access before the awaited body)
+- [x] `HarnessDisposedError` exported from the package (M2.1)
 
 **Definition of Done — Migration**:
 - [ ] `examples/counter-example/` uses `Harness.createLocal()`

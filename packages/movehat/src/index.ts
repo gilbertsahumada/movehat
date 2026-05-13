@@ -15,3 +15,7 @@ export type { ForkMetadata, AccountState, LedgerInfo, AccountData, AccountResour
 
 // Export custom errors
 export { ModuleAlreadyDeployedError, PostPublishError } from "./errors.js";
+
+// Export Harness (Hardhat-style API — primary public surface from M2 onward)
+export { Harness, HarnessDisposedError } from "./harness/index.js";
+export type { HarnessMode } from "./harness/index.js";
