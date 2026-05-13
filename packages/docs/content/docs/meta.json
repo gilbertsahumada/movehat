@@ -17,6 +17,8 @@
     "cli/test",
     "cli/run",
     "cli/fork",
+    "---API Reference---",
+    "api/harness",
     "---Community---",
     "contributing/index"
   ]

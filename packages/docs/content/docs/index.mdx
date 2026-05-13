@@ -11,10 +11,12 @@ Write your tests and deployment scripts in TypeScript while building Move smart 
 
 ## Features
 
+- **Hardhat-style Harness API** - `Harness.createLocal()` / `createFork()` / `createLive()` with explicit lifecycle and use-after-cleanup safety
 - **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
 - **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
 - **Auto-Deploy in Tests** - Contracts deploy automatically when tests run — zero manual setup
-- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts
+- **Code-Object Deployment** - `harness.deployCodeObject()` wraps `movement move deploy-object` with security-hardened profile management
+- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts (alternative to Harness)
 - **Zero Setup Testing** - Auto-generated test accounts funded from local faucet
 - **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code
 - **Native Fork System** - Create local snapshots of Movement L1 with actual network state

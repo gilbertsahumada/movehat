@@ -104,13 +104,20 @@ PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
 // movehat.config.ts
 export default {
   accounts: [
-    process.env.PRIVATE_KEY,     // Primary (mh.account)
-    process.env.SECONDARY_KEY,   // mh.accounts[1]
+    process.env.PRIVATE_KEY,     // Primary (harness.runtime.account)
+    process.env.SECONDARY_KEY,   // harness.runtime.accounts[1]
   ].filter(Boolean),
 };
 
 // In your script
-const mh = await getMovehat();
-const primaryAccount = mh.account;               // accounts[0]
-const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
+import { Harness } from "movehat";
+
+const harness = await Harness.createLive("testnet");
+try {
+  const primaryAccount = harness.runtime.account;                  // accounts[0]
+  const secondaryAccount = harness.runtime.getAccountByIndex(1);   // accounts[1]
+  // ...
+} finally {
+  await harness.cleanup();
+}
 ```

@@ -43,8 +43,8 @@ my-project/
 ## What It Creates
 
 - **Counter.move** — A sample Move smart contract with increment/decrement functions and Move unit tests
-- **Counter.test.ts** — TypeScript integration test file using `setupTestFixture`
-- **deploy-counter.ts** — Deployment script using the Movehat Runtime Environment
+- **Counter.test.ts** — TypeScript integration test file using `Harness.createLocal`
+- **deploy-counter.ts** — Deployment script using `Harness.createLive` + `deployCodeObject`
 - **movehat.config.ts** — Network configuration (testnet, mainnet, local)
 - **package.json** — Dependencies including `movehat`
 - **.env.example** — Environment variable template

@@ -36,11 +36,11 @@ movehat run scripts/deploy-counter.ts --network testnet --redeploy
 
 ## How It Works
 
-1. Parses `--network` and `--redeploy` flags
+1. Parses `--network` and `--redeploy` flags (`--redeploy` sets `MH_CLI_REDEPLOY=true` for the spawned script)
 2. Spawns `tsx` with your script
-3. Your script calls `getMovehat()` to get the runtime
-4. The runtime loads configuration, connects to the network, and sets up accounts
-5. If `deployContract()` is called, deployment tracking checks/saves are performed
+3. Your script constructs a `Harness` via one of the `Harness.create*` factories
+4. The harness loads configuration, connects to the network, and sets up accounts
+5. If `harness.deployCodeObject()` is called, deployment tracking checks/saves are performed
 
 ## Deployment Tracking
 
@@ -53,15 +53,22 @@ When a script deploys a contract:
 ## Script Template
 
 ```typescript
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  try {
+    console.log("Network:", harness.runtime.network.name);
+    console.log("Account:", harness.runtime.account.accountAddress.toString());
 
-  console.log("Network:", mh.config.network);
-  console.log("Account:", mh.account.accountAddress.toString());
-
-  // Your deployment logic here
+    // Your deployment logic here, e.g.:
+    //   const deployment = await harness.deployCodeObject({ moduleName: "counter" });
+    //   const [value] = await harness.runViewFunction({ function: "..." });
+    //   const result = await harness.runMoveScript({ scriptPath: "scripts/init.move" });
+  } finally {
+    // cleanup() is idempotent and safe to always call.
+    await harness.cleanup();
+  }
 }
 
 main().catch((error) => {
