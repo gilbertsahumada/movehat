@@ -2,6 +2,7 @@ import { MovementApiClient } from './api.js';
 import { ForkStorage } from './storage.js';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
+import { logger } from '../ui/index.js';
 
 /**
  * Manager for fork operations
@@ -263,13 +264,15 @@ export class ForkManager {
     amount: number,
     coinType: string = '0x1::aptos_coin::AptosCoin'
   ): Promise<void> {
-    console.log(`\n💰 Funding ${addresses.length} accounts with ${amount} coins each...`);
+    logger.newline();
+    logger.step(`Funding ${addresses.length} accounts with ${amount} coins each...`);
 
     for (const address of addresses) {
       await this.fundAccount(address, amount, coinType);
     }
 
-    console.log(`✓ All accounts funded successfully\n`);
+    logger.success("All accounts funded successfully");
+    logger.newline();
   }
 
   /**
@@ -280,13 +283,15 @@ export class ForkManager {
    * await forkManager.resetState();
    */
   async resetState(): Promise<void> {
-    console.log(`\n🔄 Resetting fork state...`);
+    logger.newline();
+    logger.step("Resetting fork state...");
 
     // Clear all accounts and resources from storage
     this.storage.clearAccounts();
     this.storage.clearResources();
 
-    console.log(`✓ Fork state reset to initial snapshot\n`);
+    logger.success("Fork state reset to initial snapshot");
+    logger.newline();
   }
 
   /**

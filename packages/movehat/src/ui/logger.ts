@@ -120,6 +120,27 @@ export const warning = (message: string, indent: number = 0): void => {
 };
 
 /**
+ * Action / progress message (dim chevron prefix)
+ * Use for in-progress action lines like "Building package", "Publishing
+ * to blockchain" — anything that's a status update during a multi-step
+ * operation. Distinct from `info` (general updates) and `success`
+ * (completion).
+ *
+ * @param message - Message to log
+ * @param indent - Number of spaces to indent (default: 0)
+ *
+ * @example
+ * logger.step('Building package...');
+ * logger.step('Publishing to blockchain...');
+ * logger.success('Module published successfully!');
+ */
+export const step = (message: string, indent: number = 0): void => {
+  if (config.silent) return;
+  const formatted = formatMessage(message, indent);
+  console.log(`${colors.dim(symbols.step)} ${formatted}`);
+};
+
+/**
  * Plain message without symbol
  * Use for continuation lines or when symbol is not appropriate
  *
@@ -218,6 +239,7 @@ export const logger = {
   success,
   error,
   warning,
+  step,
   plain,
   newline,
   section,

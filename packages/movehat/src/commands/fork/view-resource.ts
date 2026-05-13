@@ -1,5 +1,6 @@
 import { join } from 'path';
 import { ForkManager } from '../../fork/manager.js';
+import { logger } from '../../ui/index.js';
 
 interface ForkViewResourceOptions {
   fork?: string;
@@ -23,10 +24,12 @@ export default async function forkViewResourceCommand(options: ForkViewResourceO
     // Determine fork path
     const forkPath = options.fork || join(process.cwd(), '.movehat', 'forks', 'testnet-fork');
 
-    console.log(`\n🔍 Viewing resource from fork`);
-    console.log(`   Fork: ${forkPath}`);
-    console.log(`   Account: ${options.account}`);
-    console.log(`   Resource: ${options.resource}\n`);
+    logger.newline();
+    logger.step("Viewing resource from fork");
+    logger.plain(`   Fork: ${forkPath}`);
+    logger.plain(`   Account: ${options.account}`);
+    logger.plain(`   Resource: ${options.resource}`);
+    logger.newline();
 
     // Load fork
     const forkManager = new ForkManager(forkPath);
@@ -40,7 +43,9 @@ export default async function forkViewResourceCommand(options: ForkViewResourceO
     console.log('');
 
   } catch (error: any) {
-    console.error(`\n❌ Error: ${error.message}\n`);
+    logger.newline();
+    logger.error(error.message);
+    logger.newline();
     process.exit(1);
   }
 }

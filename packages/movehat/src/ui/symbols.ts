@@ -16,7 +16,13 @@ export const symbols = {
   warning: figures.warning,       // ⚠ or ‼
   info: figures.info,             // ℹ or i
 
-  // Action symbols
+  // Action / progress symbols
+  step: '▸',                 // ▸  — used to prefix in-progress action lines
+                                  // (e.g. "▸ Building package"). Plain Unicode
+                                  // BLACK RIGHT-POINTING SMALL TRIANGLE, supported
+                                  // in every UTF-8 terminal. If a non-UTF-8
+                                  // environment ever surfaces, switch to
+                                  // figures.pointerSmall ('›' with ASCII fallback).
   pointer: figures.pointer,       // ❯ or >
   checkboxOn: figures.checkboxOn, // ☑ or [×]
   checkboxOff: figures.checkboxOff, // ☐ or [ ]

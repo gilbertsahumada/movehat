@@ -6,6 +6,7 @@ import { ForkManager } from "../fork/manager.js";
 import { ForkServer } from "../fork/server.js";
 import { LocalNodeManager } from "../node/LocalNodeManager.js";
 import { AccountManager } from "../core/AccountManager.js";
+import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
 
 let currentForkServer: ForkServer | null = null;
@@ -59,9 +60,11 @@ export async function setupLocalTesting(
   const defaultBalance = options.defaultBalance || 100_000_000; // 100 APT
   const accountLabels = options.accountLabels || ["deployer", "alice", "bob"];
 
-  console.log(`\n🔧 Setting up local testing environment...`);
-  console.log(`   Mode: ${mode}`);
-  console.log(`   Accounts: ${accountLabels.join(", ")}\n`);
+  logger.newline();
+  logger.step("Setting up local testing environment...");
+  logger.plain(`   Mode: ${mode}`);
+  logger.plain(`   Accounts: ${accountLabels.join(", ")}`);
+  logger.newline();
 
   if (mode === 'local-node') {
     return await setupWithLocalNode(options, accountLabels, autoFund, defaultBalance);
@@ -101,13 +104,13 @@ async function setupWithLocalNode(
   const nodeInfo = await localNode.start();
 
   // 2. Generate accounts with AccountManager
-  console.log(`👥 Generating ${accountLabels.length} test accounts...`);
+  logger.step(`Generating ${accountLabels.length} test accounts...`);
   const accounts = AccountManager.createBatch(accountLabels);
 
   for (const [label, account] of Object.entries(accounts)) {
-    console.log(`   ${label}: ${account.accountAddress.toString()}`);
+    logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
   }
-  console.log();
+  logger.newline();
 
   // 3. Fund accounts from local faucet
   if (autoFund) {
@@ -116,7 +119,7 @@ async function setupWithLocalNode(
   }
 
   // 4. Initialize runtime pointing to local node
-  console.log(`⚙️  Initializing runtime for local network...`);
+  logger.step("Initializing runtime for local network...");
 
   const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
 
@@ -137,11 +140,12 @@ async function setupWithLocalNode(
     },
   });
 
-  console.log(`✓ Runtime initialized\n`);
+  logger.success("Runtime initialized");
+  logger.newline();
 
   // 5. Auto-deploy modules if specified
   if (options.autoDeploy && options.autoDeploy.length > 0) {
-    console.log(`📦 Auto-deploying ${options.autoDeploy.length} module(s)...`);
+    logger.step(`Auto-deploying ${options.autoDeploy.length} module(s)...`);
 
     // Force redeploy in local-node mode (for testing)
     const previousRedeploy = process.env.MH_CLI_REDEPLOY;
@@ -150,11 +154,11 @@ async function setupWithLocalNode(
     try {
       for (const moduleName of options.autoDeploy) {
         try {
-          console.log(`   Deploying ${moduleName}...`);
+          logger.plain(`   Deploying ${moduleName}...`);
           await runtime.deployContract(moduleName);
-          console.log(`   ✓ ${moduleName} deployed`);
+          logger.success(`${moduleName} deployed`, 2);
         } catch (error: any) {
-          console.error(`   ✗ Failed to deploy ${moduleName}: ${error.message}`);
+          logger.error(`Failed to deploy ${moduleName}: ${error.message}`, 2);
           throw error;
         }
       }
@@ -167,15 +171,17 @@ async function setupWithLocalNode(
       }
     }
 
-    console.log();
+    logger.newline();
   }
 
-  console.log(`✅ Local testing environment ready!\n`);
-  console.log(`   Mode: local-node`);
-  console.log(`   RPC: ${nodeInfo.rpcUrl}/v1`);
-  console.log(`   Faucet: ${nodeInfo.faucetUrl}`);
-  console.log(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-  console.log(`   Balance per account: ${defaultBalance / 100_000_000} APT\n`);
+  logger.success("Local testing environment ready!");
+  logger.newline();
+  logger.plain(`   Mode: local-node`);
+  logger.plain(`   RPC: ${nodeInfo.rpcUrl}/v1`);
+  logger.plain(`   Faucet: ${nodeInfo.faucetUrl}`);
+  logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
+  logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+  logger.newline();
 
   return runtime;
 }
@@ -194,14 +200,16 @@ async function setupWithFork(
   const forkPort = options.forkPort || 8080;
   const forkResetState = options.forkResetState !== false; // default true
 
-  console.log(`   Fork network: ${forkNetwork}`);
-  console.log(`   Fork name: ${forkName}`);
-  console.log(`   Server port: ${forkPort}\n`);
+  logger.plain(`   Fork network: ${forkNetwork}`);
+  logger.plain(`   Fork name: ${forkName}`);
+  logger.plain(`   Server port: ${forkPort}`);
+  logger.newline();
 
   // Warn about auto-deploy in fork mode
   if (options.autoDeploy && options.autoDeploy.length > 0) {
-    console.warn(`⚠️  WARNING: Auto-deploy doesn't work in fork mode (read-only).`);
-    console.warn(`   Switch to 'local-node' mode for deployment support.\n`);
+    logger.warning("Auto-deploy doesn't work in fork mode (read-only).");
+    logger.plain("   Switch to 'local-node' mode for deployment support.");
+    logger.newline();
   }
 
   // 1. Setup fork
@@ -212,40 +220,42 @@ async function setupWithFork(
   const forkExists = existsSync(join(forkPath, "metadata.json"));
 
   if (!forkExists) {
-    console.log(`📸 Creating fork from ${forkNetwork}...`);
+    logger.step(`Creating fork from ${forkNetwork}...`);
     const testnetRpc = "https://testnet.movementnetwork.xyz/v1";
     await forkManager.initialize(testnetRpc, forkNetwork);
-    console.log(`✓ Fork created at ${forkPath}\n`);
+    logger.success(`Fork created at ${forkPath}`);
+    logger.newline();
   } else {
-    console.log(`✓ Loading existing fork from ${forkPath}`);
+    logger.success(`Loading existing fork from ${forkPath}`);
     forkManager.load();
 
     if (forkResetState) {
-      console.log(`🔄 Resetting fork state...`);
+      logger.step("Resetting fork state...");
       await forkManager.resetState();
     }
 
-    console.log();
+    logger.newline();
   }
 
   // 2. Start fork server
-  console.log(`🚀 Starting fork server on port ${forkPort}...`);
+  logger.step(`Starting fork server on port ${forkPort}...`);
   const forkServer = new ForkServer(forkPath, forkPort);
   currentForkServer = forkServer;
 
   await forkServer.start();
-  console.log(`✓ Fork server running at http://localhost:${forkPort}\n`);
+  logger.success(`Fork server running at http://localhost:${forkPort}`);
+  logger.newline();
 
   await new Promise((resolve) => setTimeout(resolve, 500));
 
   // 3. Generate accounts
-  console.log(`👥 Generating ${accountLabels.length} test accounts...`);
+  logger.step(`Generating ${accountLabels.length} test accounts...`);
   const accounts = AccountManager.createBatch(accountLabels);
 
   for (const [label, account] of Object.entries(accounts)) {
-    console.log(`   ${label}: ${account.accountAddress.toString()}`);
+    logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
   }
-  console.log();
+  logger.newline();
 
   // 4. Fund accounts in fork
   if (autoFund) {
@@ -256,7 +266,7 @@ async function setupWithFork(
   }
 
   // 5. Initialize runtime pointing to fork
-  console.log(`⚙️  Initializing runtime for local network...`);
+  logger.step("Initializing runtime for local network...");
 
   const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
 
@@ -277,12 +287,15 @@ async function setupWithFork(
     },
   });
 
-  console.log(`✓ Runtime initialized\n`);
-  console.log(`✅ Local testing environment ready!\n`);
-  console.log(`   Mode: fork (read-only)`);
-  console.log(`   RPC: http://localhost:${forkPort}/v1`);
-  console.log(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-  console.log(`   Balance per account: ${defaultBalance / 100_000_000} APT\n`);
+  logger.success("Runtime initialized");
+  logger.newline();
+  logger.success("Local testing environment ready!");
+  logger.newline();
+  logger.plain(`   Mode: fork (read-only)`);
+  logger.plain(`   RPC: http://localhost:${forkPort}/v1`);
+  logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
+  logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+  logger.newline();
 
   return runtime;
 }
@@ -291,7 +304,8 @@ async function setupWithFork(
  * Stop the local testing environment (cleanup)
  */
 export async function stopLocalTesting(): Promise<void> {
-  console.log(`\n🛑 Stopping local testing environment...`);
+  logger.newline();
+  logger.step("Stopping local testing environment...");
 
   // Stop local node if running
   if (currentLocalNode) {
@@ -306,7 +320,8 @@ export async function stopLocalTesting(): Promise<void> {
     currentForkManager = null;
   }
 
-  console.log(`✓ Environment stopped\n`);
+  logger.success("Environment stopped");
+  logger.newline();
 }
 
 /**
