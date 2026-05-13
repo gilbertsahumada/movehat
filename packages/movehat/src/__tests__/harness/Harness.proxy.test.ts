@@ -99,8 +99,12 @@ version = "0.0.1"
     expect(() =>
       harness.upgradeCodeObject({ moduleName: "x", objectAddress: "0x1" })
     ).toThrow(HarnessDisposedError);
-    expect(() => harness.runViewFunction({})).toThrow(HarnessDisposedError);
-    expect(() => harness.runMoveScript({})).toThrow(HarnessDisposedError);
+    expect(() =>
+      harness.runViewFunction({ function: "0x1::m::f" })
+    ).toThrow(HarnessDisposedError);
+    expect(() =>
+      harness.runMoveScript({ scriptPath: "irrelevant.move" })
+    ).toThrow(HarnessDisposedError);
   });
 
   it("HarnessDisposedError carries the offending method name", async () => {
@@ -127,18 +131,10 @@ version = "0.0.1"
     expect(harness.runtime).toBeDefined();
   });
 
-  it("before cleanup, the remaining M2.3 stub methods reject — but do NOT throw HarnessDisposedError", async () => {
-    // deployCodeObject + upgradeCodeObject got real bodies in M2.2; their
-    // behavior is covered by the codeObject test suite. The view + script
-    // stubs remain until M2.3.
-    const harness = await Harness.createLive("testnet");
-    try {
-      await expect(harness.runViewFunction({})).rejects.toThrow(/not yet implemented/);
-      await expect(harness.runMoveScript({})).rejects.toThrow(/not yet implemented/);
-    } finally {
-      await harness.cleanup();
-    }
-  });
+  // The M2.3-era "stubs reject" assertion was retired when M2.3 shipped
+  // real bodies for runViewFunction and runMoveScript. All four methods
+  // now have dedicated test suites (codeObject.deploy/upgrade.test.ts,
+  // view.test.ts, script.test.ts).
 
   it("await harness.someAsyncMethod() pattern: post-cleanup throw happens before await", async () => {
     const harness = await Harness.createLive("testnet");

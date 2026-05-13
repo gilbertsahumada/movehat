@@ -7,11 +7,16 @@ import type {
   DeployCodeObjectOptions,
   UpgradeCodeObjectOptions,
   CodeObjectInfo,
+  RunViewFunctionOptions,
+  RunMoveScriptOptions,
+  MoveScriptResult,
 } from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
 import { initRuntime } from "../runtime.js";
 import { createHarnessProxy } from "./proxy.js";
 import { deployCodeObject, upgradeCodeObject } from "./codeObject.js";
+import { runViewFunction } from "./view.js";
+import { runMoveScript } from "./script.js";
 
 export type HarnessMode = "local" | "fork" | "live";
 
@@ -185,13 +190,34 @@ export class Harness {
     return upgradeCodeObject(this.runtime, options);
   }
 
-  /** @stub M2.3 */
-  async runViewFunction(_options: unknown): Promise<unknown> {
-    throw new Error("Harness.runViewFunction is not yet implemented (M2.3).");
+  /**
+   * Execute a Move view function via the Aptos SDK.
+   *
+   * Returns the raw view-function result array. For single-value
+   * returns, destructure: `const [count] = await harness.runViewFunction(...)`.
+   *
+   * Works on all 3 harness modes (createLocal, createFork, createLive)
+   * — view functions are read-only.
+   */
+  async runViewFunction(options: RunViewFunctionOptions): Promise<unknown[]> {
+    return runViewFunction(this.runtime, options);
   }
 
-  /** @stub M2.3 */
-  async runMoveScript(_options: unknown): Promise<unknown> {
-    throw new Error("Harness.runMoveScript is not yet implemented (M2.3).");
+  /**
+   * Execute a Move script via `movement move run-script`.
+   *
+   * Accepts either a `.move` source path (CLI auto-compiles) or a
+   * pre-compiled `.mv` bytecode path. Other extensions throw
+   * synchronously.
+   *
+   * Not available on fork-mode harnesses (forks are read-only).
+   */
+  async runMoveScript(options: RunMoveScriptOptions): Promise<MoveScriptResult> {
+    if (this.mode === "fork") {
+      throw new Error(
+        "Harness.createFork is read-only; script execution requires Harness.createLocal or createLive."
+      );
+    }
+    return runMoveScript(this.runtime, options);
   }
 }
