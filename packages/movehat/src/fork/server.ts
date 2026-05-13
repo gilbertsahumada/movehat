@@ -3,7 +3,7 @@ import { URL } from 'url';
 import { ForkManager } from './manager.js';
 
 /**
- * Fork Server - Serves fork data via Movement/Aptos RPC API
+ * Fork Server - Serves fork data via Movement L1 RPC API
  * Emulates a Movement L1 node using local fork storage
  */
 export class ForkServer {
@@ -270,7 +270,7 @@ export class ForkServer {
     try {
       const resources = await this.forkManager.getAllResources(address);
 
-      // Convert to array format expected by Aptos API
+      // Convert to array format expected by the Movement L1 API
       const resourcesArray = Object.entries(resources).map(([type, data]) => ({
         type,
         data

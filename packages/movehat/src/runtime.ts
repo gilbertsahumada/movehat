@@ -43,7 +43,7 @@ export async function initRuntime(
   // Resolve configuration for selected network
   const config = await resolveNetworkConfig(mergedUserConfig, options.network);
 
-  // Setup Aptos client
+  // Setup Movement TypeScript SDK client
   // Movement Network uses custom chain IDs, so we need to use Network.CUSTOM
   // and let the SDK fetch the actual chainId from the node
   const aptosConfig = new AptosConfig({

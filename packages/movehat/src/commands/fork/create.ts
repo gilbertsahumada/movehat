@@ -12,7 +12,7 @@ interface ForkCreateOptions {
 }
 
 /**
- * Create a local fork of a Movement/Aptos network
+ * Create a local fork of a Movement network
  *
  * This command:
  * - Connects to the specified network RPC endpoint

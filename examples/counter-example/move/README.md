@@ -1,6 +1,6 @@
 # Pre-requisites 
 
-Init Movement and Aptos CLI
+Init Movement CLI
 
 ## Init Project
 

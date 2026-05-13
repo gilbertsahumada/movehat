@@ -17,7 +17,7 @@ export interface MovehatRuntime {
   // Network information
   network: NetworkInfo;
 
-  // Aptos client instance
+  // Movement TypeScript SDK client instance
   aptos: Aptos;
 
   // Default account from config (accounts[0])
