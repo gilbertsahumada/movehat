@@ -1,7 +1,7 @@
 // @ts-nocheck - This is a template file, dependencies are installed in user projects
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 
 describe("Counter Contract", () => {
   let fixture: TestFixture<'counter'>;
@@ -119,7 +119,7 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node and clear account pool
-    await teardownTestFixture();
+    // Cleanup: Stop local node
+    await fixture.teardown();
   });
 });

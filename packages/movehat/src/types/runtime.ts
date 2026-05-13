@@ -50,6 +50,8 @@ export interface MovehatRuntime {
   getAccount: (privateKey: string) => Account;
   getAccountByIndex: (index: number) => Account;
 
-  // Network switching
-  switchNetwork: (networkName: string) => Promise<void>;
+  // Network switching — returns a new runtime bound to the requested
+  // network. As of M1.5 there is no module-cached runtime, so callers
+  // must capture and use the returned instance.
+  switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
 }

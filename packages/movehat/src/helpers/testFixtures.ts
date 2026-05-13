@@ -2,7 +2,7 @@ import type { Account } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type { MoveContract } from "../core/contract.js";
 import { AccountManager } from "../core/AccountManager.js";
-import { setupLocalTesting, stopLocalTesting } from "./setupLocalTesting.js";
+import { setupLocalTesting } from "./setupLocalTesting.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
 
@@ -25,6 +25,16 @@ export interface TestFixture<TModules extends string = string> {
 
   /** Deployed contracts by module name - type-safe based on modules parameter */
   contracts: Record<TModules, MoveContract>;
+
+  /**
+   * Stop the local node / fork server this fixture started.
+   *
+   * Does **not** clear the shared `AccountManager` pool — clearing it
+   * would break parallel `setupTestFixture` invocations that share the
+   * pool. The pool grows for the lifetime of the process; the process
+   * exit reclaims it.
+   */
+  teardown: () => Promise<void>;
 }
 
 /**
@@ -39,42 +49,29 @@ export interface TestFixture<TModules extends string = string> {
  * @param modules Array of module names to auto-deploy
  * @param accountLabels Optional array of account labels (defaults to ['alice', 'bob'])
  * @param options Optional LocalTestOptions for advanced configuration
- * @returns TestFixture with runtime, accounts, and contracts
+ * @returns TestFixture with runtime, accounts, contracts, and a teardown closure
  *
  * @example
  * ```typescript
- * import { setupTestFixture } from "movehat/helpers";
+ * import { setupTestFixture, type TestFixture } from "movehat/helpers";
  *
  * describe("Counter Contract", () => {
- *   let fixture: TestFixture;
+ *   let fixture: TestFixture<"counter">;
  *
  *   before(async function () {
- *     this.timeout(60000); // Allow time for fork + deployment
- *
- *     fixture = await setupTestFixture(['counter'], ['alice', 'bob']);
- *   });
- *
- *   it("should initialize with value 0", async () => {
- *     const counter = fixture.contracts.counter;
- *     const value = await counter.view<number>("get", [
- *       fixture.accounts.deployer.accountAddress.toString()
- *     ]);
- *
- *     expect(value).to.equal(0);
- *   });
- *
- *   it("alice can increment counter", async () => {
- *     const tx = await fixture.contracts.counter.call(
- *       fixture.accounts.alice,
- *       "increment",
- *       []
- *     );
- *
- *     expect(tx.success).to.be.true;
+ *     this.timeout(60000);
+ *     fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
  *   });
  *
  *   after(async () => {
- *     await teardownTestFixture();
+ *     await fixture.teardown();
+ *   });
+ *
+ *   it("alice can increment", async () => {
+ *     const tx = await fixture.contracts.counter.call(
+ *       fixture.accounts.alice, "increment", []
+ *     );
+ *     expect(tx.success).to.be.true;
  *   });
  * });
  * ```
@@ -90,36 +87,30 @@ export async function setupTestFixture<TModules extends readonly string[]>(
   logger.plain(`   Account labels: deployer, ${accountLabels.join(", ")}`);
   logger.newline();
 
-  // Ensure 'deployer' is always in the account labels
   const allLabels = ["deployer", ...accountLabels.filter((l) => l !== "deployer")];
 
-  // Setup local testing environment with auto-deploy
   const setupOptions: LocalTestOptions = {
     ...options,
     accountLabels: allLabels,
-    autoDeploy: modules, // Auto-deploy specified modules
+    autoDeploy: modules,
   };
 
-  const mh = await setupLocalTesting(setupOptions);
+  const ctx = await setupLocalTesting(setupOptions);
+  const mh = ctx.runtime;
 
-  // Get all labeled accounts
   const labeledAccounts = AccountManager.getLabeledAccounts();
 
-  // Build accounts object with required accounts
   const accounts: any = {
     deployer: labeledAccounts.deployer!,
   };
 
-  // Add other labeled accounts
   for (const label of accountLabels) {
     accounts[label] = labeledAccounts[label] || AccountManager.getOrCreateLabeled(label);
   }
 
-  // Build contracts object - TypeScript will infer the correct type
   const contracts = {} as Record<TModules[number], MoveContract>;
 
   for (const moduleName of modules) {
-    // Get deployed contract instance
     const deploymentAddress = mh.getDeploymentAddress(moduleName);
 
     if (!deploymentAddress) {
@@ -140,35 +131,8 @@ export async function setupTestFixture<TModules extends readonly string[]>(
     mh,
     accounts,
     contracts,
+    teardown: ctx.teardown,
   } as TestFixture<TModules[number]>;
-}
-
-/**
- * Teardown test fixture and cleanup resources
- *
- * Call this in your test suite's `after` hook to properly cleanup:
- * - Stops fork server
- * - Clears account pool
- *
- * @example
- * ```typescript
- * after(async () => {
- *   await teardownTestFixture();
- * });
- * ```
- */
-export async function teardownTestFixture(): Promise<void> {
-  logger.newline();
-  logger.step("Tearing down test fixture...");
-
-  // Stop fork server
-  await stopLocalTesting();
-
-  // Clear account pool for test isolation
-  AccountManager.clearPool();
-
-  logger.success("Teardown complete");
-  logger.newline();
 }
 
 /**
@@ -177,22 +141,7 @@ export async function teardownTestFixture(): Promise<void> {
  *
  * @param accountLabels Account labels to create (defaults to ['alice', 'bob'])
  * @param options Optional LocalTestOptions
- * @returns Partial TestFixture (without contracts)
- *
- * @example
- * ```typescript
- * let fixture: Partial<TestFixture>;
- *
- * before(async function () {
- *   this.timeout(30000);
- *   fixture = await setupMinimalFixture(['alice', 'bob', 'charlie']);
- * });
- *
- * it("should deploy contract manually", async () => {
- *   await fixture.mh!.deployContract("counter");
- *   // ...
- * });
- * ```
+ * @returns Partial TestFixture (without contracts) plus a teardown closure
  */
 export async function setupMinimalFixture(
   accountLabels: string[] = ["alice", "bob"],
@@ -206,10 +155,11 @@ export async function setupMinimalFixture(
   const setupOptions: LocalTestOptions = {
     ...options,
     accountLabels: allLabels,
-    autoDeploy: [], // No auto-deploy
+    autoDeploy: [],
   };
 
-  const mh = await setupLocalTesting(setupOptions);
+  const ctx = await setupLocalTesting(setupOptions);
+  const mh = ctx.runtime;
 
   const labeledAccounts = AccountManager.getLabeledAccounts();
 
@@ -228,5 +178,6 @@ export async function setupMinimalFixture(
   return {
     mh,
     accounts,
+    teardown: ctx.teardown,
   };
 }
