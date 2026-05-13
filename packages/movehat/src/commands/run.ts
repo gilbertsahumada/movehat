@@ -3,6 +3,28 @@ import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import { runCli } from "../utils/runCli.js";
+import type { RunResult } from "../utils/childProcessAdapter.js";
+
+/**
+ * Apply the exit policy for a child whose output was inherited by the
+ * parent. When the child dies via signal, re-raise it on the parent so
+ * shells and wrappers see the standard 128+N exit convention. Otherwise
+ * forward the numeric exit code, clamping any unexpected -1 to 1 (a -1
+ * would mask to 255 on Unix and drop signal-context).
+ *
+ * Exported so the branch is testable in isolation (a unit test against
+ * the full runCommand requires mocking fs + tsx resolution + runCli, all
+ * for 4 lines of policy).
+ *
+ * @internal
+ */
+export function propagateRunResultExit(result: RunResult): void {
+  if (result.signal) {
+    process.kill(process.pid, result.signal);
+    return;
+  }
+  process.exit(result.exitCode >= 0 ? result.exitCode : 1);
+}
 
 export default async function runCommand(scriptPath: string) {
   if (!scriptPath) {
@@ -93,7 +115,8 @@ export default async function runCommand(scriptPath: string) {
       },
       { throwOnNonZeroExit: false }
     );
-    process.exit(result.exitCode || 0);
+
+    propagateRunResultExit(result);
   } catch (error) {
     console.error(`❌ Failed to execute script: ${(error as Error).message}`);
     process.exit(1);

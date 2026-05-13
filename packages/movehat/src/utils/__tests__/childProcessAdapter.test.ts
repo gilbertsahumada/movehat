@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { defaultChildProcessAdapter } from '../childProcessAdapter.js';
 
 const NODE = process.execPath;
@@ -213,5 +213,54 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
     expect(result.exitCode).toBe(42);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
+  });
+
+  it('explicit timeoutMs is still honored under inheritStdio', async () => {
+    // Positive control: the conditional-skip applies only when timeoutMs
+    // is omitted. An explicit value forces the timer back on.
+    await expect(
+      defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'setTimeout(() => {}, 5000)'],
+        inheritStdio: true,
+        timeoutMs: 50,
+      })
+    ).rejects.toThrow(/timed out after 50ms/);
+  });
+
+  it('omits the default timeout when inheritStdio is true (short child completes naturally)', async () => {
+    // We can't wait 5 minutes to prove the default timeout isn't set, but
+    // we can prove that a child running with inheritStdio:true and no
+    // explicit timeoutMs completes via the natural exit path with no
+    // timeout-derived rejection. Combined with the test above, the
+    // conditional-skip behavior is pinned in both directions.
+    const result = await defaultChildProcessAdapter.run({
+      command: NODE,
+      args: ['-e', "setTimeout(() => process.exit(0), 50)"],
+      inheritStdio: true,
+    });
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('does not schedule a setTimeout when inheritStdio is true and timeoutMs is omitted', async () => {
+    // Direct evidence (review follow-up): spy on globalThis.setTimeout and
+    // assert no timer scheduled with the DEFAULT_TIMEOUT_MS (300000ms) value.
+    // Short-running children may legitimately schedule small timers via
+    // their own logic, so we filter the spy calls to the default-timeout
+    // duration specifically — that's the value the regression repaired.
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      await defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'process.exit(0)'],
+        inheritStdio: true,
+      });
+      const defaultTimeoutCalls = setTimeoutSpy.mock.calls.filter(
+        (args) => args[1] === 5 * 60 * 1000
+      );
+      expect(defaultTimeoutCalls).toHaveLength(0);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 });
