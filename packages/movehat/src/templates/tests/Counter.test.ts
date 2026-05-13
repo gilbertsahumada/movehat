@@ -119,7 +119,7 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node and clear account pool
+    // Cleanup: Stop local node
     await fixture.teardown();
   });
 });
