@@ -115,10 +115,11 @@ export async function initRuntime(
   };
 
   const getAccountByIndex = (index: number): Account => {
-    if (index < 0 || index >= accounts.length) {
+    const acc = accounts[index];
+    if (!acc) {
       throw new Error(`Account index ${index} out of range. Available accounts: 0-${accounts.length - 1}`);
     }
-    return accounts[index];
+    return acc;
   };
 
   const switchNetwork = async (networkName: string): Promise<MovehatRuntime> => {

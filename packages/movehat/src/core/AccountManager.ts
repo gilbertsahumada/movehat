@@ -10,7 +10,7 @@ import { MovehatConfig } from "../types/config.js";
  * Represents a stored account in the pool
  */
 export interface StoredAccount {
-  label?: string;
+  label?: string | undefined;
   privateKey: string;
   address: string;
   createdAt: number;

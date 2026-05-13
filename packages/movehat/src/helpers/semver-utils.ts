@@ -4,9 +4,10 @@
  * Handles variable-length versions (1.2, 1.2.3, 1.2.3.4, etc.)
  */
 export function isNewerVersion(currentVersion: string, newVersion: string): boolean {
-  // Remove any pre-release tags (e.g., -alpha.0, -beta.1)
-  const cleanCurrent = currentVersion.split("-")[0];
-  const cleanNew = newVersion.split("-")[0];
+  // Remove any pre-release tags (e.g., -alpha.0, -beta.1).
+  // String.split always returns ≥1 element; `?? ""` is a no-op narrowing.
+  const cleanCurrent = currentVersion.split("-")[0] ?? "";
+  const cleanNew = newVersion.split("-")[0] ?? "";
 
   // Split and validate numeric parts
   const currentParts = cleanCurrent.split(".").map((part) => {

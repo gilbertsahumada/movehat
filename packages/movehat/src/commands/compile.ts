@@ -61,6 +61,7 @@ export function extractNamedAddresses(moveDir: string): Set<string> {
 
     while ((match = moduleRegex.exec(content)) !== null) {
       const address = match[1];
+      if (!address) continue;
       // Skip standard addresses
       if (address !== 'std' && address !== 'aptos_framework' && address !== 'aptos_std') {
         addresses.add(address);
@@ -102,24 +103,26 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   // Parse existing addresses from [addresses] section
   const existingAddresses = new Set<string>();
   const addressesMatch = content.match(/\[addresses\]([\s\S]*?)(?=\[|$)/);
-  if (addressesMatch) {
+  if (addressesMatch && addressesMatch[1]) {
     const addressesSection = addressesMatch[1];
     const addrRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/gm;
     let match;
     while ((match = addrRegex.exec(addressesSection)) !== null) {
-      existingAddresses.add(match[1]);
+      if (match[1]) existingAddresses.add(match[1]);
     }
   }
 
   // Parse existing dev-addresses
   const existingDevAddresses = new Map<string, string>();
   const devAddressesMatch = content.match(/\[dev-addresses\]([\s\S]*?)(?=\[|$)/);
-  if (devAddressesMatch) {
+  if (devAddressesMatch && devAddressesMatch[1]) {
     const devSection = devAddressesMatch[1];
     const devRegex = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"(0x[a-fA-F0-9]+)"/gm;
     let match;
     while ((match = devRegex.exec(devSection)) !== null) {
-      existingDevAddresses.set(match[1], match[2].toLowerCase());
+      const name = match[1];
+      const addr = match[2];
+      if (name && addr) existingDevAddresses.set(name, addr.toLowerCase());
     }
   }
 
@@ -144,13 +147,16 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   
   for (const addr of missingAddresses) {
     // Find next available dev address
-    while (devAddrIndex < DEV_ADDRESSES.length && usedDevAddresses.has(DEV_ADDRESSES[devAddrIndex])) {
+    while (devAddrIndex < DEV_ADDRESSES.length) {
+      const candidate = DEV_ADDRESSES[devAddrIndex];
+      if (candidate && !usedDevAddresses.has(candidate)) break;
       devAddrIndex++;
     }
-    
-    if (devAddrIndex < DEV_ADDRESSES.length) {
-      newDevAddresses.set(addr, DEV_ADDRESSES[devAddrIndex]);
-      usedDevAddresses.add(DEV_ADDRESSES[devAddrIndex]);
+
+    const devCandidate = DEV_ADDRESSES[devAddrIndex];
+    if (devCandidate) {
+      newDevAddresses.set(addr, devCandidate);
+      usedDevAddresses.add(devCandidate);
       devAddrIndex++;
     } else {
       // Generate a unique address if we run out of predefined ones
@@ -161,7 +167,7 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   }
 
   // Update [addresses] section
-  if (addressesMatch) {
+  if (addressesMatch && addressesMatch[1] !== undefined) {
     const addressesSection = addressesMatch[1];
     const newLines = missingAddresses.map(addr => `${addr} = "_"`).join("\n");
     const updatedSection = addressesSection.trimEnd() + "\n" + newLines + "\n";
@@ -170,7 +176,7 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
 
   // Update [dev-addresses] section
   const updatedDevMatch = content.match(/\[dev-addresses\]([\s\S]*?)(?=\[|$)/);
-  if (updatedDevMatch) {
+  if (updatedDevMatch && updatedDevMatch[1] !== undefined) {
     const devSection = updatedDevMatch[1];
     const newDevLines = missingAddresses.map(addr => `${addr} = "${newDevAddresses.get(addr)}"`).join("\n");
     // Remove trailing comments/whitespace before adding new lines

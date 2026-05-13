@@ -214,18 +214,27 @@ export async function resolveNetworkConfig(
     ...(networkConfig.namedAddresses || {}),
   };
 
+  // Capture the primary key after the L178 guard guaranteed it exists
+  // (either present from the start, or auto-assigned by the testnet/local
+  // branch; the else-branch throws). Pulling into a local lets TS see
+  // the non-undefined narrowing.
+  const primaryKey = accounts[0];
+  if (!primaryKey) {
+    throw new Error("invariant: accounts[0] must exist after the L178 guard");
+  }
+
   // Derive the deployer account address from the resolved private key.
   // Without this, consumers reading `config.account` got an empty string
   // (the previous "Will be derived from privateKey in runtime" TODO was
   // never wired). Falls back to "" on malformed keys so we don't break
   // existing callers that don't need the field.
-  const accountAddress = deriveAccountAddress(accounts[0]);
+  const accountAddress = deriveAccountAddress(primaryKey);
 
   // Build resolved config
   const resolvedConfig: MovehatConfig = {
     network: selectedNetwork,
     rpc: networkConfig.url,
-    privateKey: accounts[0],
+    privateKey: primaryKey,
     allAccounts: accounts,
     profile: networkConfig.profile || "default",
     moveDir: userConfig.moveDir || "./move",

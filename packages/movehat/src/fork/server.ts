@@ -162,11 +162,15 @@ export class ForkServer {
         const resourceIndex = parts.indexOf('resource') + 1;
         const address = parts[accountIndex];
         const resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
+        if (!address) {
+          this.send404(res, 'Malformed resource path', 'malformed_path');
+          return;
+        }
         await this.handleGetResource(address, resourceType, res);
       } else {
         // Use regex capture for resources endpoint
         const resourcesMatch = pathname.match(/^\/v1\/accounts\/(0x[a-fA-F0-9]{1,64})\/resources$/);
-        if (resourcesMatch) {
+        if (resourcesMatch && resourcesMatch[1]) {
           const address = resourcesMatch[1];
           await this.handleGetResources(address, res);
         } else {

@@ -179,7 +179,7 @@ function ensureSignalHandler(): void {
 
 /** @internal */
 export interface PublisherDeps {
-  adapter?: ChildProcessAdapter;
+  adapter?: ChildProcessAdapter | undefined;
 }
 
 /** @internal */
@@ -187,7 +187,7 @@ export interface PublishInput {
   moduleName: string;
   config: MovehatConfig;
   account: Account;
-  packageDir?: string;
+  packageDir?: string | undefined;
 }
 
 /**

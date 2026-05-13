@@ -133,10 +133,12 @@ version = "0.0.1"
     // A previous regression (shell-escape mismatch fixed in 511fd95) survived
     // unit tests because no assertion checked what landed in `args`.
     expect(calls).toHaveLength(2);
-    expect(calls[0].command).toBe("movement");
-    expect(calls[0].args.slice(0, 2)).toEqual(["move", "build"]);
-    expect(calls[1].args.slice(0, 2)).toEqual(["move", "publish"]);
-    for (const arg of [...calls[0].args, ...calls[1].args]) {
+    const [build, publish] = calls;
+    if (!build || !publish) throw new Error("expected 2 captured calls");
+    expect(build.command).toBe("movement");
+    expect(build.args.slice(0, 2)).toEqual(["move", "build"]);
+    expect(publish.args.slice(0, 2)).toEqual(["move", "publish"]);
+    for (const arg of [...build.args, ...publish.args]) {
       expect(arg.startsWith("'")).toBe(false);
       expect(arg.endsWith("'")).toBe(false);
     }
