@@ -2,6 +2,10 @@
 
 This roadmap organizes the next phase of Movehat development. Each milestone has explicit Definition of Done criteria and is tracked as a meta-issue on GitHub.
 
+## Reference documents
+
+- **`GRANT.pdf`** (local-only, gitignored) — underlying MOU that defines the deliverable KPIs this roadmap maps to. Kept out of the repo by the `*.pdf` rule in `.gitignore`. Milestone headers below carry `(KPI 1)` / `(KPI 2)` tags pointing at the relevant KPI section in `GRANT.pdf`. When in doubt about acceptance criteria, the MOU text is the source of truth.
+
 ## Current state
 
 - Documentation site shipped (Fumadocs + Next.js, static export)
@@ -33,7 +37,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 
 Each milestone below lists **explicit, mechanically verifiable** acceptance criteria. The criteria use exact file paths, command outputs, and CLI invocations so progress is unambiguous.
 
-### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75
+### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75 — (KPI 2)
 
 **Goal**: Bring the repo to standard open-source hygiene.
 
@@ -48,7 +52,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `git commit -m "test"` is **rejected** by the local hook; `git commit -m "chore: test"` is accepted
 - [N/A] CI green after PR lands — GitHub Actions paused by user; security checks (GitGuardian, Socket, CodeRabbit) green
 
-### M1 — Testability refactors (~5 days, issue #68)
+### M1 — Testability refactors (~5 days, issue #68) — ✅ shipped in PR #106 — (prerequisite for KPI 1)
 
 **Goal**: Refactor core modules so they can be unit-tested without spawning real processes or relying on global state.
 
@@ -81,7 +85,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #110 (M1.7). Tier 3 verification `pnpm test:e2e` 32/32 passing (captured on the `develop → main` batch PR #106). Ready for `develop → main` batch.**
 
-### M2 — Hardhat-style Harness API (~6 days, issue #69)
+### M2 — Hardhat-style Harness API (~6 days, issue #69) — (KPI 1)
 
 **Goal**: Provide a Hardhat-style testing harness with explicit lifecycle and use-after-cleanup safety.
 
@@ -108,7 +112,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] `mh()` still exported with `@deprecated` JSDoc tag
 - [ ] `pnpm test` green
 
-### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70)
+### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
 
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
 
@@ -138,7 +142,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Cache hit path skips the 66 MB tarball download
 - [ ] Visible runtime drop on cache hit vs miss in CI logs
 
-### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71)
+### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71) — (KPI 1)
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
@@ -156,7 +160,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Wall-clock for the E2E job is observed **<5 minutes** on cache hit
 - [ ] CI is green on `main` and on at least one non-`main` branch (e.g., a feature/security branch)
 
-### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72)
+### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
 
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
@@ -177,7 +181,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] At least 2 versions tested green
 - [ ] CI cache key references the pinned version(s)
 
-### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73)
+### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73) — (KPI 2)
 
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
@@ -195,7 +199,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] `npm view movehat@0.1.0` returns the new version after publish
 - [ ] `npm pack` output does not contain `mh` exports
 
-### M7 — Maintenance quota (continuous)
+### M7 — Maintenance quota (continuous) — (KPI 2)
 
 **Goal**: Address open audit issues throughout the roadmap.
 
