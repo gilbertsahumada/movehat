@@ -160,7 +160,7 @@ export async function initRuntime(
 /**
  * Get the Movehat Runtime Environment.
  *
- * @deprecated Since `0.0.0-dev`. Prefer the Hardhat-style `Harness`
+ * @deprecated since M2.4 (pre-1.0). Prefer the Hardhat-style `Harness`
  * factories (`Harness.createLocal` / `createFork` / `createLive`)
  * which carry explicit lifecycle (`harness.cleanup()`) and
  * use-after-cleanup safety. `getMovehat()` will be removed in
