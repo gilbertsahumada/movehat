@@ -79,7 +79,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `examples/counter-example/` keeps passing through every sub-PR (per Decision 6) — mechanical typecheck gate enforced by pre-push since PR #84; runtime gate **9/9 passing** as of PR closing #86 (`message.test.ts` rewritten to local-node, broken-scaffold `greeting-fork.test.ts` removed)
 - [x] M1.7 (#82): `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` enabled in `packages/movehat/tsconfig.json`; all 16 `catch (error: any)` sites migrated to `unknown`-typed catches; `fork/*` `any` audit closes the corresponding bullet of #57 — boundary validation (zod or guards for `fork/api.ts` parsed JSON) deferred to follow-up; `verbatimModuleSyntax` deliberately omitted (low-benefit/high-churn)
 
-**M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #N (M1.7). Ready for `develop → main` batch.**
+**M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #110 (M1.7). Tier 3 verification `pnpm test:e2e` 32/32 passing (captured on the `develop → main` batch PR #106). Ready for `develop → main` batch.**
 
 ### M2 — Hardhat-style Harness API (~6 days, issue #69)
 
