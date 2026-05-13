@@ -18,7 +18,7 @@ out/
 /tmp/
 .movehat/
 
-# Local reference / external repos cloned alongside (not part of movehat)
+# Local reference 
 /catapulta/
 
 # OS files
@@ -52,5 +52,4 @@ pnpm-debug.log*
 !BENCHMARKS.md
 !MOVEMENT_CLI_COMPAT.md
 !NOTICE.md
-!CLAUDE.md
 !.github/**/*.md
