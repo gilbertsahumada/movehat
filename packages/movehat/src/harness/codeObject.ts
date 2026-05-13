@@ -21,6 +21,7 @@ import {
   PostPublishError,
 } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
+import { parseTxHash } from "../utils/parseCliOutput.js";
 import { logger } from "../ui/index.js";
 import {
   withYamlLock,
@@ -377,18 +378,4 @@ function parseObjectAddress(stdout: string): string | undefined {
   if (jsonMatch?.[1]) return jsonMatch[1];
 
   return undefined;
-}
-
-/**
- * Extract a transaction hash from CLI stdout. Identical regex to
- * `core/Publisher.ts` (the publish success message uses the same
- * shape) — kept here to avoid coupling.
- */
-function parseTxHash(stdout: string): string | undefined {
-  const withContext = stdout.match(
-    /(?:transaction\s*(?:hash)?|txn\s*(?:hash)?|hash):\s*(0x[a-fA-F0-9]{64})\b/i
-  );
-  if (withContext?.[1]) return withContext[1];
-  const fallback = stdout.match(/\b(0x[a-fA-F0-9]{64})\b/);
-  return fallback?.[1];
 }
