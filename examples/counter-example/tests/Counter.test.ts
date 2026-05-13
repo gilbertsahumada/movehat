@@ -1,4 +1,4 @@
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { setupTestFixture, type TestFixture } from "movehat/helpers";
 import { expect } from "chai";
 
 describe("Counter Contract", () => {
@@ -72,6 +72,6 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    await teardownTestFixture();
+    await fixture.teardown();
   });
 });
