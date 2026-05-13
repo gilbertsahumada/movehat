@@ -2,7 +2,18 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 
 export const baseOptions: BaseLayoutProps = {
   nav: {
-    title: 'Movehat',
+    title: (
+      <>
+        <img
+          src="/movehat.png"
+          alt=""
+          width={24}
+          height={24}
+          style={{ borderRadius: 4 }}
+        />
+        <span>Movehat</span>
+      </>
+    ),
   },
   links: [
     {

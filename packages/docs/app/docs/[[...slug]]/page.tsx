@@ -8,6 +8,7 @@ import {
 import { notFound } from 'next/navigation';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
+import { LLMActions } from './_components/llm-actions';
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -23,6 +24,7 @@ export default async function Page(props: {
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
+        <LLMActions slug={params.slug ?? []} />
         <MDX components={{ ...defaultMdxComponents }} />
       </DocsBody>
     </DocsPage>
