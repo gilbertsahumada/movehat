@@ -36,15 +36,15 @@ export function LLMActions({ slug }: { slug: string[] }) {
   }
 
   return (
-    <div className="not-prose mb-6 flex items-center gap-2">
+    <div className="not-prose mb-4 flex items-center justify-end gap-1.5">
       <button
         type="button"
         onClick={copy}
-        className="inline-flex items-center gap-2 rounded-md border border-fd-border bg-fd-card px-3 py-1.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
+        className="inline-flex items-center gap-1.5 rounded-md border border-fd-border bg-fd-card px-2 py-1 text-xs font-medium text-fd-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
       >
         <svg
-          width="14"
-          height="14"
+          width="11"
+          height="11"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -60,11 +60,11 @@ export function LLMActions({ slug }: { slug: string[] }) {
       </button>
 
       <details className="relative">
-        <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-fd-border bg-fd-card px-2 py-1.5 text-sm text-fd-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-fd-border bg-fd-card px-2 py-1 text-xs text-fd-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground [&::-webkit-details-marker]:hidden">
           Open in
           <svg
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -76,12 +76,12 @@ export function LLMActions({ slug }: { slug: string[] }) {
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </summary>
-        <div className="absolute right-0 z-50 mt-1 min-w-[160px] overflow-hidden rounded-md border border-fd-border bg-fd-popover text-fd-popover-foreground shadow-lg">
+        <div className="absolute right-0 z-50 mt-1 min-w-[140px] overflow-hidden rounded-md border border-fd-border bg-fd-popover text-fd-popover-foreground shadow-lg">
           <a
             href={buildProviderUrl('chatgpt', docUrl)}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-2 text-sm hover:bg-fd-accent hover:text-fd-accent-foreground"
+            className="block px-3 py-1.5 text-xs hover:bg-fd-accent hover:text-fd-accent-foreground"
           >
             ChatGPT
           </a>
@@ -89,7 +89,7 @@ export function LLMActions({ slug }: { slug: string[] }) {
             href={buildProviderUrl('claude', docUrl)}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-2 text-sm hover:bg-fd-accent hover:text-fd-accent-foreground"
+            className="block px-3 py-1.5 text-xs hover:bg-fd-accent hover:text-fd-accent-foreground"
           >
             Claude
           </a>
@@ -97,7 +97,7 @@ export function LLMActions({ slug }: { slug: string[] }) {
             href={buildProviderUrl('gemini', docUrl)}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-2 text-sm hover:bg-fd-accent hover:text-fd-accent-foreground"
+            className="block px-3 py-1.5 text-xs hover:bg-fd-accent hover:text-fd-accent-foreground"
           >
             Gemini
           </a>
