@@ -103,8 +103,8 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] `Harness.createLocal()` returns a usable instance
 - [ ] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance
 - [x] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance (M2.1)
-- [ ] `harness.deployCodeObject(options)` deploys a real Move package
-- [ ] `harness.upgradeCodeObject(options)` upgrades an existing code object
+- [x] `harness.deployCodeObject(options)` deploys a real Move package (M2.2 — wraps `movement move deploy-object`; reuses Publisher hardening via the extracted `core/movementProfile.ts` helpers; integration coverage in M4)
+- [x] `harness.upgradeCodeObject(options)` upgrades an existing code object (M2.2 — wraps `movement move upgrade-object`; same shared helpers)
 - [ ] `harness.runViewFunction(options)` executes a view function
 - [ ] `harness.runMoveScript(options)` compiles and executes a Move script
 - [x] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true` (M2.1 — idempotent; stops owned localNode / forkServer; tested)
