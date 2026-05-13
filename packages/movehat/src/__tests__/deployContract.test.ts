@@ -8,14 +8,18 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import * as yaml from "js-yaml";
 import { CliExecutionError } from "../errors.js";
 import { initRuntime } from "../runtime.js";
 import { Publisher } from "../core/Publisher.js";
-import { AccountManager } from "../core/AccountManager.js";
-import { resolveNetworkConfig } from "../core/config.js";
 import type { ChildProcessAdapter, RunInput, RunResult } from "../utils/childProcessAdapter.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 /**
  * Guards against the bug-#43 leak path: when `movement move publish`
@@ -246,6 +250,109 @@ version = "0.0.1"
       preExisting.profiles.user_main.private_key
     );
   });
+
+  it("SIGINT mid-deploy cleans the profile from ~/.aptos/config.yaml (#36)", async () => {
+    // Pre-fix #36: between the yaml write (private key persisted) and the
+    // finally block, a SIGINT would skip cleanup and leave the user's
+    // private key sitting in ~/.aptos/config.yaml at mode 0o600.
+    // Post-fix: a sync signal handler runs synchronously before exit,
+    // removing the deploy's unique profile from the yaml.
+    //
+    // This test spawns a child process running a harness that drives
+    // Publisher.deploy() with a 3-second-delayed publish, then sends
+    // SIGINT mid-flight. Vitest's own process is unaffected because
+    // the SIGINT goes to the child.
+
+    // Seed an unrelated user profile that MUST survive.
+    const aptosDir = join(tmpHome, ".aptos");
+    mkdirSync(aptosDir, { recursive: true });
+    const configPath = join(aptosDir, "config.yaml");
+    writeFileSync(
+      configPath,
+      yaml.dump({
+        profiles: {
+          user_main: {
+            private_key: "0x" + "a".repeat(64),
+            public_key: "0x" + "b".repeat(64),
+            account: "0x" + "c".repeat(64),
+            rest_url: "https://example.invalid/v1",
+          },
+        },
+      }),
+      { mode: 0o600 }
+    );
+
+    const harnessPath = join(__dirname, "fixtures", "sigint-deploy-harness.ts");
+    // Resolve tsx's CLI binary by absolute path — the test's tmp cwd has
+    // no node_modules, so a bare `tsx` import would fail to resolve.
+    // `require.resolve("tsx")` returns the package's main (dist/loader.mjs);
+    // the binary is two levels up from there, in `<root>/dist/cli.mjs`
+    // (same trick `commands/run.ts:49-53` uses).
+    const tsxMain = require.resolve("tsx");
+    const tsxCliPath = join(dirname(dirname(tsxMain)), "dist", "cli.mjs");
+    const child = spawn(
+      process.execPath,
+      [tsxCliPath, harnessPath],
+      {
+        env: { ...process.env, HOME: tmpHome },
+        cwd: tmpCwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
+
+    // Wait for the harness to announce its unique profile name via stdout
+    // (it writes a JSON line `{"profile":"movehat-deploy-XXXX"}` just
+    // before entering the slow publish step).
+    let announced: string | undefined;
+    let stdoutBuf = "";
+    let stderrBuf = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdoutBuf += chunk.toString();
+      for (const line of stdoutBuf.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("{")) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (typeof parsed.profile === "string") announced = parsed.profile;
+        } catch {
+          /* not a JSON line we care about */
+        }
+      }
+    });
+    child.stderr?.on("data", (c: Buffer) => (stderrBuf += c.toString()));
+
+    // Poll until the harness has announced OR 8s timeout (the import +
+    // SDK initialization can take a few seconds in CI/cold-start).
+    const start = Date.now();
+    while (!announced && Date.now() - start < 8000) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    if (!announced) {
+      child.kill("SIGKILL");
+      throw new Error(
+        `harness never announced profile in 8s.\n` +
+          `stdout so far:\n${stdoutBuf}\n---\nstderr so far:\n${stderrBuf}`
+      );
+    }
+
+    expect(announced).toMatch(/^movehat-deploy-/);
+
+    // Deliver SIGINT mid-publish and wait for the harness to exit.
+    child.kill("SIGINT");
+    const exitCode = await new Promise<number | null>((resolve) => {
+      child.on("exit", (code) => resolve(code));
+    });
+    expect(exitCode).toBe(130);
+
+    // The yaml on disk contains the user's original profile and NO
+    // movehat-deploy-* leftovers.
+    expect(existsSync(configPath)).toBe(true);
+    const finalYaml: any = yaml.load(readFileSync(configPath, "utf8"));
+    expect(finalYaml.profiles).toBeDefined();
+    expect(Object.keys(finalYaml.profiles).sort()).toEqual(["user_main"]);
+    expect(finalYaml.profiles.user_main.private_key).toBe("0x" + "a".repeat(64));
+  }, 15000);
 
   it("does not mutate Move.toml during deploy (#38)", async () => {
     // Pre-fix #38: deployContract overwrote every entry under [addresses]

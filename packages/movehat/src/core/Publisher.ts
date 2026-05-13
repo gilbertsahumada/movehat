@@ -2,6 +2,7 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -110,6 +111,69 @@ async function removeProfile(configPath: string, name: string): Promise<void> {
     return;
   }
   atomicWriteYaml(configPath, yaml.dump(yamlObj));
+}
+
+/**
+ * Synchronous twin of `removeProfile` for the SIGINT/SIGTERM handler.
+ * The event loop is dead by the time the handler runs — we cannot
+ * await. Bypasses the async mutex because signal handlers are
+ * sequential by construction; the operation is idempotent so a
+ * benign double-delete (handler then finally, or vice versa) is fine.
+ */
+function removeProfileSync(configPath: string, name: string): void {
+  try {
+    if (!existsSync(configPath)) return;
+    const raw = readFileSync(configPath, "utf-8");
+    const yamlObj: any = (yaml.load(raw) as any) || {};
+    if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
+    delete yamlObj.profiles[name];
+
+    const profilesEmpty = Object.keys(yamlObj.profiles).length === 0;
+    const onlyProfilesKey =
+      Object.keys(yamlObj).length === 1 && "profiles" in yamlObj;
+    if (profilesEmpty && onlyProfilesKey) {
+      unlinkSync(configPath);
+      return;
+    }
+    atomicWriteYaml(configPath, yaml.dump(yamlObj));
+  } catch {
+    // Signal handlers should never throw — swallow and exit. Better to
+    // leave a stale profile (recoverable by re-running the deploy) than
+    // to crash the parent process mid-shutdown.
+  }
+}
+
+/**
+ * Process-level signal handling. A single registered handler iterates
+ * the per-deploy cleanup callbacks. Install-once because multiple
+ * concurrent deploys share the same parent process — installing per
+ * deploy would re-add the listener and exceed Node's max-listeners
+ * warning threshold under heavy parallelism.
+ */
+const cleanupCallbacks = new Set<() => void>();
+let signalHandlerInstalled = false;
+
+function ensureSignalHandler(): void {
+  if (signalHandlerInstalled) return;
+  signalHandlerInstalled = true;
+  const handler = (sig: NodeJS.Signals) => {
+    // Synchronous cleanup of every active deploy's profile entry.
+    for (const cb of [...cleanupCallbacks]) {
+      try {
+        cb();
+      } catch {
+        /* sync best-effort */
+      }
+    }
+    // Defer the actual exit one tick so other listeners (vitest's own
+    // SIGINT handler, app-level shutdown hooks) still get to run.
+    // Without this we'd stomp on vitest's afterEach if a dev Ctrl+C'd
+    // a test run mid-suite.
+    const code = sig === "SIGTERM" ? 143 : 130;
+    setImmediate(() => process.exit(code));
+  };
+  process.on("SIGINT", handler);
+  process.on("SIGTERM", handler);
 }
 
 /** @internal */
@@ -263,6 +327,16 @@ export class Publisher {
       // Movement CLI uses .aptos config directory (not .movement).
       const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
 
+      // Register a sync cleanup hook BEFORE writing the private key.
+      // If the user Ctrl+C's (or the process is SIGTERM'd) between the
+      // yaml write and our async finally, the SIGINT handler iterates
+      // every registered callback and removes this deploy's profile
+      // synchronously — closes bug #36 (private key persisting on disk
+      // after abnormal exit).
+      ensureSignalHandler();
+      const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
+      cleanupCallbacks.add(syncCleanup);
+
       // Add our deploy profile under the unique key. The mutex serializes
       // read-modify-write cycles so concurrent deploys in the same process
       // can't drop each other's profiles. Other user profiles in the same
@@ -310,6 +384,9 @@ export class Publisher {
         // and that's the bug #37 race). Removing only our key leaves
         // other concurrent deploys' profiles intact.
         await withYamlLock(() => removeProfile(movementConfigPath, profile));
+        // Unregister the sync cleanup hook — normal path. (The signal
+        // handler stays installed for the process lifetime; cheap.)
+        cleanupCallbacks.delete(syncCleanup);
       }
 
       // Extract transaction hash from output
