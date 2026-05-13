@@ -2,7 +2,11 @@
 export * from "./helpers/index.js";
 export type { MovehatConfig } from "./types/config.js";
 
-// Export Movehat Runtime Environment
+// Export Movehat Runtime Environment.
+// `getMovehat` is @deprecated as of M2.4 — see runtime.ts JSDoc. Use
+// the Harness.create* factories below for new code.
+// `initRuntime` stays as a public utility but external callers should
+// prefer Harness; it's the construction primitive Harness.createLive uses.
 export { initRuntime, getMovehat } from "./runtime.js";
 export type { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
 

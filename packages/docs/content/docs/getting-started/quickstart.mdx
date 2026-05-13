@@ -75,39 +75,47 @@ Run with: `movehat test --move` (ultra-fast, milliseconds)
 
 ### TypeScript Integration Tests (Local Node)
 
-Tests written in TypeScript that run on a **local Movement blockchain**:
+Tests written in TypeScript that run on a **local Movement blockchain** using the Hardhat-style `Harness` API:
 
 ```typescript
-import { setupTestFixture, teardownTestFixture } from "movehat/helpers";
+import { Harness, AccountManager } from "movehat";
 
 describe("Counter Contract", () => {
-  let fixture;
+  let harness;
+  let counter, deployer;
 
   before(async function () {
     this.timeout(60000);
-    // Starts local node, funds accounts, deploys contracts
-    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+    // Starts local node, funds accounts, deploys the named module(s)
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice", "bob"],
+      autoDeploy: ["counter"],
+    });
+    deployer = AccountManager.getLabeledAccounts().deployer;
+    const addr = harness.runtime.getDeploymentAddress("counter");
+    counter = harness.runtime.getContract(addr, "counter");
   });
 
   it("should increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
-
-    // Real transaction on local blockchain
     await counter.call(deployer, "increment", []);
 
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
+    const [value] = await harness.runViewFunction({
+      function: `${counter.moduleAddress}::counter::get`,
+      functionArguments: [deployer.accountAddress.toString()],
+    });
 
     expect(parseInt(value)).to.equal(1);
   });
 
   after(async () => {
-    await teardownTestFixture();
+    // Stops the local node and poisons the harness — any further
+    // method call (other than cleanup) throws HarnessDisposedError.
+    await harness.cleanup();
   });
 });
 ```
+
+> **Looking for the older API?** `setupTestFixture` / `teardownTestFixture` still works (see `movehat/helpers`); use whichever style fits your codebase. `Harness` is the new primary surface since M2.
 
 Run with: `movehat test --ts` (starts local node)
 

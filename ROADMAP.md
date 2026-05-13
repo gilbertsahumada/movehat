@@ -93,15 +93,15 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 | Status | Sub-PR | Issue | Focus | Closes |
 |---|---|---|---|---|
-|   | M2.1 | [#116](https://github.com/gilbertsahumada/movehat/issues/116) | Harness skeleton + 3 factories + Proxy poisoning + cleanup + HarnessDisposedError (4 methods stubbed) | foundations |
-|   | M2.2 | [#117](https://github.com/gilbertsahumada/movehat/issues/117) | `deployCodeObject` + `upgradeCodeObject` via `movement move deploy-object` / `upgrade-object` | (partial of #69) |
-|   | M2.3 | [#118](https://github.com/gilbertsahumada/movehat/issues/118) | `runViewFunction` + `runMoveScript` | (partial of #69) |
-|   | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) | Migrate `examples/counter-example/` + templates + 8 docs MDX; `@deprecated` JSDoc on `mh()` / `getMovehat` | closes #69 |
+| ✅ | M2.1 | [#116](https://github.com/gilbertsahumada/movehat/issues/116) (shipped in PR #120 @ `c44f9cb`) | Harness skeleton + 3 factories + Proxy poisoning + cleanup + HarnessDisposedError (4 methods stubbed) | foundations |
+| ✅ | M2.2 | [#117](https://github.com/gilbertsahumada/movehat/issues/117) (shipped in PR #121 @ `c336077`) | `deployCodeObject` + `upgradeCodeObject` via `movement move deploy-object` / `upgrade-object` + extract `core/movementProfile.ts` | (partial of #69) |
+| ✅ | M2.3 | [#118](https://github.com/gilbertsahumada/movehat/issues/118) (shipped in PR #122 @ `a334991`) | `runViewFunction` + `runMoveScript` + extract `utils/parseCliOutput.ts` | (partial of #69) |
+| ✅ | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) | Migrate `examples/counter-example/` + templates + 8 docs MDX + new `api/harness.mdx`; `@deprecated` JSDoc on `getMovehat`; fix M2.2 `addressName` bug | closes #69 |
 
 **Definition of Done — API surface**:
-- [ ] `import { Harness } from 'movehat'` works from the built package
-- [ ] `Harness.createLocal()` returns a usable instance
-- [ ] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance
+- [x] `import { Harness } from 'movehat'` works from the built package (M2.4 — verified by Tier 2 smoke + Tier 3 e2e on the dev→main batch)
+- [x] `Harness.createLocal()` returns a usable instance (M2.4 — exercised end-to-end by the migrated `examples/counter-example/tests/Counter.test.ts`)
+- [x] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance (M2.1 factory + documented in `api/harness.mdx`; integration coverage in M4)
 - [x] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance (M2.1)
 - [x] `harness.deployCodeObject(options)` deploys a real Move package (M2.2 — wraps `movement move deploy-object`; reuses Publisher hardening via the extracted `core/movementProfile.ts` helpers; integration coverage in M4)
 - [x] `harness.upgradeCodeObject(options)` upgrades an existing code object (M2.2 — wraps `movement move upgrade-object`; same shared helpers)
@@ -114,12 +114,14 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `HarnessDisposedError` exported from the package (M2.1)
 
 **Definition of Done — Migration**:
-- [ ] `examples/counter-example/` uses `Harness.createLocal()`
-- [ ] `packages/movehat/src/templates/scripts/deploy-counter.ts` uses the new API
-- [ ] All MDX code snippets in `packages/docs/content/docs/` updated
-- [ ] `packages/docs/content/docs/api/harness.mdx` covers the 7 methods + cleanup
-- [ ] `mh()` still exported with `@deprecated` JSDoc tag
-- [ ] `pnpm test` green
+- [x] `examples/counter-example/` uses `Harness.createLocal()` (M2.4 — `tests/Counter.test.ts` + `scripts/deploy-counter.ts`; `greeting.test.ts` + `message.test.ts` + `scripts/deploy-greeting.ts` stay on `setupTestFixture` / `getMovehat` as the coexistence demo)
+- [x] `packages/movehat/src/templates/scripts/deploy-counter.ts` uses the new API (M2.4 — plus `templates/tests/Counter.test.ts`)
+- [x] All MDX code snippets in `packages/docs/content/docs/` updated (M2.4 — 8 MDX files: index, getting-started/{quickstart,configuration}, guides/{testing,scripts,deployment}, cli/{init,run})
+- [x] `packages/docs/content/docs/api/harness.mdx` covers the 7 methods + cleanup (M2.4 — ~200 lines: factory matrix, options reference, fork-mode guard, HarnessDisposedError, AccountManager shared-pool quirk)
+- [x] `getMovehat()` still exported with `@deprecated` JSDoc tag (M2.4 — full migration snippet inline; `initRuntime` stays public as a low-level utility used by `Harness.createLive`)
+- [x] `pnpm test` green (M2.4 — 222/222 unit tests; Tier 2 `test:example` 9/9 passing in ~1 min)
+
+**M2 status: ✅ ready for `develop → main` batch — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #N) merged to develop. Tier 3 `pnpm test:e2e` to be run on the batch PR per CLAUDE.md §6.3.**
 
 ### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
 

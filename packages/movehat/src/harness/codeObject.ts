@@ -55,6 +55,7 @@ export async function deployCodeObject(
   return executeMovementMoveObject({
     runtime,
     moduleName: options.moduleName,
+    addressName: options.addressName,
     packageDir: options.packageDir,
     namedAddresses: options.namedAddresses,
     includedArtifacts: options.includedArtifacts,
@@ -87,6 +88,7 @@ export async function upgradeCodeObject(
   return executeMovementMoveObject({
     runtime,
     moduleName: options.moduleName,
+    addressName: options.addressName,
     packageDir: options.packageDir,
     namedAddresses: options.namedAddresses,
     includedArtifacts: options.includedArtifacts,
@@ -101,6 +103,11 @@ export async function upgradeCodeObject(
 interface ExecuteOptions {
   runtime: MovehatRuntime;
   moduleName: string;
+  /**
+   * Move.toml named address for the `--address-name` CLI flag.
+   * Defaults to `moduleName` when undefined.
+   */
+  addressName?: string | undefined;
   packageDir?: string | undefined;
   namedAddresses?: Record<string, string> | undefined;
   includedArtifacts?: "none" | "sparse" | "all" | undefined;
@@ -246,7 +253,7 @@ async function executeMovementMoveObject(
             "move",
             subcommand,
             "--address-name",
-            moduleName,
+            opts.addressName ?? moduleName,
             "--package-dir",
             safeDir,
             "--url",

@@ -43,67 +43,79 @@ movehat test:move
 
 ## TypeScript Integration Tests (Local Blockchain)
 
-Write tests in TypeScript that run on a **real local Movement blockchain** (just like Hardhat!):
+Write tests in TypeScript that run on a **real local Movement blockchain** using the Hardhat-style `Harness` API:
 
 ```typescript
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { Harness, AccountManager } from "movehat";
+import type { MoveContract } from "movehat/helpers";
+import type { Account } from "@aptos-labs/ts-sdk";
 
 describe("Counter Contract", () => {
-  let fixture: TestFixture<'counter'>;
+  let harness: Harness;
+  let counter: MoveContract;
+  let deployer: Account, alice: Account;
 
   before(async function () {
     this.timeout(60000);
-    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice", "bob"],
+      autoDeploy: ["counter"],
+    });
+
+    const labeled = AccountManager.getLabeledAccounts();
+    deployer = labeled.deployer!;
+    alice = labeled.alice!;
+
+    const addr = harness.runtime.getDeploymentAddress("counter")!;
+    counter = harness.runtime.getContract(addr, "counter");
 
     console.log(`\nTesting on local blockchain`);
-    console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
-    console.log(`   Alice: ${fixture.accounts.alice.accountAddress.toString()}`);
+    console.log(`   Deployer: ${deployer.accountAddress.toString()}`);
+    console.log(`   Alice: ${alice.accountAddress.toString()}`);
   });
 
-  it("should initialize with value 0", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
+  it("should initialize with value 0 (via harness.runViewFunction)", async () => {
+    // runViewFunction returns the raw unknown[] tuple from aptos.view —
+    // destructure for singletons.
+    const [value] = await harness.runViewFunction({
+      function: `${counter.moduleAddress}::counter::get`,
+      functionArguments: [deployer.accountAddress.toString()],
+    });
 
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
-
-    expect(parseInt(value)).to.equal(0);
+    expect(parseInt(value as string)).to.equal(0);
   });
 
   it("should increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
-
     const tx = await counter.call(deployer, "increment", []);
     console.log(`   Transaction: ${tx.hash}`);
 
     const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
+      deployer.accountAddress.toString(),
     ]);
 
     expect(parseInt(value)).to.equal(1);
   });
 
   it("alice can also increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const alice = fixture.accounts.alice;
-
     await counter.call(alice, "increment", []);
 
     const aliceValue = await counter.view<string>("get", [
-      alice.accountAddress.toString()
+      alice.accountAddress.toString(),
     ]);
     expect(parseInt(aliceValue)).to.equal(1);
   });
 
   after(async () => {
-    await teardownTestFixture();
+    // cleanup() is idempotent and poisons the harness so any further
+    // method call (other than cleanup) throws HarnessDisposedError.
+    await harness.cleanup();
   });
 });
 ```
+
+> **Looking for the older API?** `setupTestFixture` from `movehat/helpers` is still supported — see [`movehat/helpers`](../api/harness) for details on coexistence.
 
 **When to use TypeScript tests:**
 - Testing real transaction flows with actual state changes

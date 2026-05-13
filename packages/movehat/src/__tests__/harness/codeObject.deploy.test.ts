@@ -303,6 +303,59 @@ version = "0.0.1"
     }
   });
 
+  it("addressName override is used in --address-name CLI flag; moduleName remains the save-record key", async () => {
+    // Example use case: Move source `module hello_blockchain::counter`
+    // with Move.toml `[addresses] hello_blockchain = "_"`. The CLI's
+    // --address-name must match the Move.toml entry (`hello_blockchain`)
+    // while the on-chain module identifier + the save key + the
+    // getContract argument stay `counter`.
+    const { adapter, calls } = makeAdapter({
+      build: { exitCode: 0, stdout: "build ok", stderr: "" },
+      deploy: { exitCode: 0, stdout: successStdout(), stderr: "" },
+    });
+
+    const harness = await Harness.createLive("testnet");
+    try {
+      const result = await harness.deployCodeObject({
+        moduleName: "counter",
+        addressName: "hello_blockchain",
+        adapter,
+      });
+
+      // Save record + return value use moduleName (not addressName).
+      expect(result.moduleName).toBe("counter");
+      const deploymentPath = join(tmpCwd, "deployments", "testnet", "counter.json");
+      expect(existsSync(deploymentPath)).toBe(true);
+      const saved = JSON.parse(readFileSync(deploymentPath, "utf-8"));
+      expect(saved.moduleName).toBe("counter");
+
+      // CLI flag was the overridden addressName.
+      const deployCall = calls.find((c) => c.args[1] === "deploy-object")!;
+      const addressNameIdx = deployCall.args.indexOf("--address-name");
+      expect(addressNameIdx).toBeGreaterThanOrEqual(0);
+      expect(deployCall.args[addressNameIdx + 1]).toBe("hello_blockchain");
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  it("addressName defaults to moduleName when omitted (back-compat for template case)", async () => {
+    const { adapter, calls } = makeAdapter({
+      build: { exitCode: 0, stdout: "build ok", stderr: "" },
+      deploy: { exitCode: 0, stdout: successStdout(), stderr: "" },
+    });
+
+    const harness = await Harness.createLive("testnet");
+    try {
+      await harness.deployCodeObject({ moduleName: "counter", adapter });
+      const deployCall = calls.find((c) => c.args[1] === "deploy-object")!;
+      const addressNameIdx = deployCall.args.indexOf("--address-name");
+      expect(deployCall.args[addressNameIdx + 1]).toBe("counter");
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
   it("fork-mode harness throws synchronously before any CLI call (covered separately for createLocal/createFork in M4 integration suite)", async () => {
     // This case can't be tested with a real createFork (it spawns a fork
     // server). Instead, prove that the disposed-instance path also fires
