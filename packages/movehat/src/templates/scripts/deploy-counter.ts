@@ -1,48 +1,56 @@
-import { getMovehat, ModuleAlreadyDeployedError } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
 
-  // Get the Movehat Runtime Environment
-  const mh = await getMovehat();
+  // Hardhat-style Harness — primary public API since M2.
+  // createLive binds to a real running network (testnet / mainnet / a
+  // custom one defined in movehat.config.ts). No local process spawned.
+  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const harness = await Harness.createLive(network);
+  try {
+    console.log(`✅ Runtime initialized on ${harness.runtime.network.name}`);
+    console.log(`   Account: ${harness.runtime.account.accountAddress.toString()}`);
+    console.log(`   RPC: ${harness.runtime.network.rpc}\n`);
 
-  console.log(`✅ Runtime initialized`);
-  console.log(`   Account: ${mh.account.accountAddress.toString()}`);
-  console.log(`   Network: ${mh.network.name}`);
-  console.log(`   RPC: ${mh.network.rpc}\n`);
+    // Deploy as a code object via `movement move deploy-object`. If the
+    // Move.toml's named address differs from the module identifier
+    // (e.g. `module my_pkg::counter` with `[addresses] my_pkg = "_"`),
+    // pass `addressName: "my_pkg"` in addition to `moduleName: "counter"`.
+    //
+    // To redeploy an existing record, set MH_CLI_REDEPLOY=true.
+    const deployment = await harness.deployCodeObject({
+      moduleName: "counter",
+    });
 
-  // Deploy (publish) the module
-  // Automatically checks if already deployed and suggests --redeploy if needed
-  const deployment = await mh.deployContract("counter");
+    console.log(`\n✅ Module deployed at: ${deployment.address}::counter`);
+    if (deployment.txHash) {
+      console.log(`   Transaction: ${deployment.txHash}`);
+    }
 
-  console.log(`\n✅ Module deployed at: ${deployment.address}::counter`);
-  if (deployment.txHash) {
-    console.log(`   Transaction: ${deployment.txHash}`);
+    // Interact with the freshly deployed module via the runtime helper.
+    const counter = harness.runtime.getContract(deployment.address, "counter");
+
+    console.log("\n📝 Incrementing counter...");
+    const txResult = await counter.call(harness.runtime.account, "increment", []);
+    console.log(`✅ Transaction hash: ${txResult.hash}`);
+
+    // Use harness.runViewFunction directly when you have a fully
+    // qualified function id; counter.view<T>(...) is the shorter form.
+    const [value] = await harness.runViewFunction({
+      function: `${deployment.address}::counter::get`,
+      functionArguments: [harness.runtime.account.accountAddress.toString()],
+    });
+    console.log(`\n📊 Counter value: ${value}`);
+  } finally {
+    // Always release the Harness — cleanup() is idempotent and safe to
+    // call on a `createLive` instance even though no local process was
+    // spawned (it just flips the use-after-cleanup poison flag).
+    await harness.cleanup();
   }
-
-  // Get contract instance
-  const counter = mh.getContract(deployment.address, "counter");
-
-  // Initialize the counter
-  console.log("\n📝 Initializing counter...");
-  const txResult = await counter.call(mh.account, "init", []);
-
-  console.log(`✅ Transaction hash: ${txResult.hash}`);
-  console.log(`✅ Counter initialized successfully!`);
-
-  // Verify
-  const value = await counter.view<number>("get", [
-    mh.account.accountAddress.toString()
-  ]);
-
-  console.log(`\n📊 Initial counter value: ${value}`);
 }
 
 main().catch((error) => {
-  // ModuleAlreadyDeployedError is already logged with full details by deployContract()
-  // For other errors, show the message
-  if (!(error instanceof ModuleAlreadyDeployedError)) {
-    console.error("❌ Deployment failed:", error?.message || error);
-  }
+  console.error("❌ Deployment failed:", error?.message || error);
   process.exit(1);
 });

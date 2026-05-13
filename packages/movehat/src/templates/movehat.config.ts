@@ -1,3 +1,14 @@
+// Movehat configuration.
+//
+// Movehat's primary public API is the Hardhat-style `Harness` class
+// (see scripts/deploy-counter.ts and tests/Counter.test.ts in this
+// template). The `Harness.create*` factories read this file via
+// `loadUserConfig` to resolve the active network + accounts.
+//
+// The older `getMovehat()` / `setupTestFixture()` helpers also read
+// the same shape and are still supported (marked `@deprecated` from
+// M2; removal is M6 / 0.1.0).
+
 import dotenv from "dotenv";
 dotenv.config();
 
