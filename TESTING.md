@@ -15,10 +15,11 @@ Complete testing and validation guide before publishing.
 
 ## Testing Levels
 
-### 1. **Unit Tests** (Future)
-- Individual function testing
-- Mock dependencies
-- Fast execution (<1s)
+### 1. **Unit Tests** (~2 seconds)
+- 35 test files, 397 tests across `packages/movehat/src/**/__tests__/`
+- Vitest with v8 coverage; per-file ≥80% gates on 16 critical modules (M3.5 ratchet), global ≥70% floor
+- Run via `pnpm --filter movehat test` (no Movement node required)
+- Coverage gate enforced in CI via `Check coverage threshold` step in `.github/workflows/ci.yml`
 
 ### 2. **Smoke Tests** (~30 seconds)
 - Critical path validation
