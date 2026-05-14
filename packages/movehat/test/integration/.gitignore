@@ -1,3 +1,9 @@
 build/
 deployments/
 .movehat/
+# Move.lock files are emitted by `movement move compile` per-package
+# (pinning AptosFramework's git ref). The integration fixtures use a
+# moving `rev = "movement"` ref intentionally so the upstream framework
+# version is whatever the runner has cached. Committing the lock would
+# trap an arbitrary version.
+Move.lock
