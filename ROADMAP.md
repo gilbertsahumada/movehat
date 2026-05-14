@@ -208,8 +208,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 | Sub | Description | Status |
 |---|---|---|
 | M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | ✅ shipped in PR #160 |
-| M5.2 | `perf(fork): benchmarks + fundAccount auth_key fix` (issue #157, closes #63) | 🔄 in-flight |
-| M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | ⏳ |
+| M5.2 | `perf(fork): benchmarks + fundAccount auth_key fix` (issue #157, closes #63) | ✅ shipped in PR #161 |
+| M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | 🔄 in-flight |
 
 **Definition of Done — Auto-generated docs**:
 - [x] `typedoc` + `typedoc-plugin-markdown` installed (M5.1)
@@ -224,9 +224,11 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [N/A] At least 1–2 optimization wins applied — **deliberately not applied**. Each candidate from the M5 plan (parallelize `getAllResources`, cache `getLedgerInfo`, reduce `runViewFunction` overhead) was inspected and rejected: the dominant costs are external (Movement CLI startup, testnet RPC latency) and the Movehat-side surface area is already tight. Rationale captured in `BENCHMARKS.md` "Optimization wins applied" section. The plan explicitly anticipated this outcome: "If <5% improvement, document the negative result in BENCHMARKS.md and don't claim the win."
 
 **Definition of Done — Compatibility matrix**:
-- [ ] `MOVEMENT_CLI_COMPAT.md` at repo root listing tested Movement CLI versions
-- [ ] At least 2 versions tested green
-- [ ] CI cache key references the pinned version(s)
+- [x] `MOVEMENT_CLI_COMPAT.md` at repo root listing tested Movement CLI revisions (M5.3 — single row pinned by SHA256, with documented rationale for why "≥2 versions" doesn't fit upstream's release model)
+- [N/A] At least 2 versions tested green — upstream `homebrew-movement-cli` publishes a **single moving tag** (`bypass-homebrew`); the `movement` main repo's versioned releases have zero binary assets. Older binaries are not retrievable after upstream replaces them. The SHA256 lock implemented in M5.3 is the version-pin equivalent: upstream re-uploads fail the CI's `sha256sum -c` step, surfacing rotation for explicit maintainer review. Full rationale in `MOVEMENT_CLI_COMPAT.md` "Why a single row" section.
+- [x] CI cache key references the pinned SHA256 (M5.3 — `movement-cli-${runner.os}-${runner.arch}-f2bdf3fa` short prefix; cache busts automatically on intentional pin rotation)
+- [x] Closes #140 (artifact integrity verification — `sha256sum -c` BEFORE `chmod +x`/`sudo mv`, fails the job on mismatch) (M5.3)
+- [x] Documents #146 reproduction + hypotheses in `MOVEMENT_CLI_COMPAT.md` "Known issues" section (M5.3)
 
 ### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73) — (KPI 2)
 
