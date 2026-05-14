@@ -373,7 +373,7 @@ movehat update
 # Should check for updates
 ```
 
-#### 7. Test Help Commands
+#### 8. Test Help Commands
 
 ```bash
 movehat --help
@@ -382,7 +382,7 @@ movehat test --help
 movehat fork --help
 ```
 
-#### 8. Test on Different Systems (if possible)
+#### 9. Test on Different Systems (if possible)
 
 - [ ] macOS (Intel)
 - [ ] macOS (Apple Silicon)
