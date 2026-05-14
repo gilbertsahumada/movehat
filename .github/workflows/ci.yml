@@ -84,9 +84,12 @@ jobs:
           fi
           LINES=$(jq '.total.lines.pct' coverage/coverage-summary.json)
           echo "Line coverage: $LINES%"
-          # Fail if coverage is below 15% (baseline; raise as tests grow)
-          if (( $(echo "$LINES < 15" | bc -l) )); then
-            echo "Coverage is below 15% threshold!"
+          # M3.5 raised the floor from 15% to 70%. Per-file thresholds for
+          # the 16 M3 target files (≥80%) are enforced by vitest itself
+          # via coverage.thresholds in vitest.config.ts — this gate is
+          # the global safety net for helper/UI modules outside that list.
+          if (( $(echo "$LINES < 70" | bc -l) )); then
+            echo "Coverage is below 70% threshold!"
             exit 1
           fi
 
@@ -163,15 +166,37 @@ jobs:
           name: build-artifacts
           path: packages/movehat/dist/
 
+      - name: Cache Movement CLI binary
+        id: cache-movement-cli
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/movement
+          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-bypass-homebrew-l1
+          restore-keys: |
+            movement-cli-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Install Movement CLI
+        if: steps.cache-movement-cli.outputs.cache-hit != 'true'
         run: |
-          curl -fLO https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/movement-cli-l1-linux-x86_64.tar.gz
+          # Map runner.arch to the artifact suffix the upstream release uses.
+          # The cache key (above) already includes runner.arch, so the
+          # download URL must follow the same arch dimension or a cache hit
+          # on the wrong architecture would install an unusable binary.
+          case "${{ runner.arch }}" in
+            X64)   CLI_ARCH="x86_64" ;;
+            ARM64) CLI_ARCH="aarch64" ;;
+            *)     echo "::error::Unsupported runner.arch: ${{ runner.arch }}"; exit 1 ;;
+          esac
+          ARTIFACT="movement-cli-l1-linux-${CLI_ARCH}.tar.gz"
+          curl -fLO "https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/${ARTIFACT}"
           mkdir -p temp_extract
-          tar -xzf movement-cli-l1-linux-x86_64.tar.gz -C temp_extract
+          tar -xzf "${ARTIFACT}" -C temp_extract
           chmod +x temp_extract/movement
           sudo mv temp_extract/movement /usr/local/bin/movement
-          rm -rf temp_extract movement-cli-l1-linux-x86_64.tar.gz
-          movement --version
+          rm -rf temp_extract "${ARTIFACT}"
+
+      - name: Verify Movement CLI
+        run: movement --version
 
       - name: Run E2E tests
         run: pnpm test:e2e:quick

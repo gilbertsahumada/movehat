@@ -38,7 +38,13 @@ const GeminiIcon = () => (
 export function LLMActions({ slug }: { slug: string[] }) {
   const [copied, setCopied] = useState(false);
   const slugPath = slug.length === 0 ? '' : `/${slug.join('/')}`;
-  const rawUrl = `/raw${slugPath}`;
+  // The /raw/ route family is split: empty-slug → /raw/index (static
+  // handler), deep slugs → /raw/<slug>/... (catch-all). The empty-slug
+  // case can't live at /raw alone because Next.js static export
+  // collides `out/raw` (file) with `out/raw/` (directory of deep
+  // matches). See packages/docs/app/raw/index/route.ts for the full
+  // EISDIR explanation.
+  const rawUrl = slug.length === 0 ? '/raw/index' : `/raw${slugPath}`;
   const docUrl = `${SITE_URL}/docs${slugPath}`;
 
   async function copy() {

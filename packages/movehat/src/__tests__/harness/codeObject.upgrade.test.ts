@@ -1,29 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Harness } from "../../harness/index.js";
-import { _resetConfigCache } from "../../core/config.js";
 import { CliExecutionError } from "../../errors.js";
 import type {
   ChildProcessAdapter,
   RunInput,
   RunResult,
 } from "../../utils/childProcessAdapter.js";
+import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 describe("Harness.upgradeCodeObject", () => {
-  let tmpHome: string;
-  let tmpCwd: string;
-  let origHome: string | undefined;
-  let origCwd: string;
+  let fixture: HarnessTestFixture;
 
   const EXISTING_OBJECT =
     "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
@@ -31,52 +20,11 @@ describe("Harness.upgradeCodeObject", () => {
     "0x2222222222222222222222222222222222222222222222222222222222222222";
 
   beforeEach(() => {
-    tmpHome = mkdtempSync(join(tmpdir(), "movehat-codeobj-upg-home-"));
-    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-codeobj-upg-cwd-"));
-
-    writeFileSync(
-      join(tmpCwd, "movehat.config.js"),
-      `export default {
-  defaultNetwork: "testnet",
-  networks: {
-    testnet: {
-      url: "https://testnet.movementnetwork.xyz/v1",
-      chainId: "testnet"
-    }
-  }
-};
-`
-    );
-    const moveDir = join(tmpCwd, "move");
-    mkdirSync(join(moveDir, "sources"), { recursive: true });
-    writeFileSync(
-      join(moveDir, "Move.toml"),
-      `[package]
-name = "dummy"
-version = "0.0.1"
-
-[addresses]
-`
-    );
-    writeFileSync(join(moveDir, "sources", "dummy.move"), "// empty\n");
-
-    origHome = process.env.HOME;
-    process.env.HOME = tmpHome;
-    origCwd = process.cwd();
-    process.chdir(tmpCwd);
-    _resetConfigCache();
+    fixture = setupHarnessTestFixture({ withTmpHome: true });
   });
 
   afterEach(() => {
-    try {
-      process.chdir(origCwd);
-    } finally {
-      if (origHome === undefined) delete process.env.HOME;
-      else process.env.HOME = origHome;
-      if (existsSync(tmpHome)) rmSync(tmpHome, { recursive: true, force: true });
-      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
-      _resetConfigCache();
-    }
+    fixture.teardown();
   });
 
   function makeAdapter(steps: { build: RunResult; upgrade: RunResult }): {
@@ -126,7 +74,7 @@ version = "0.0.1"
       expect(result.moduleName).toBe("counter");
 
       // Saved deployment record reflects the new state.
-      const deploymentPath = join(tmpCwd, "deployments", "testnet", "counter.json");
+      const deploymentPath = join(fixture.tmpCwd, "deployments", "testnet", "counter.json");
       expect(existsSync(deploymentPath)).toBe(true);
       const saved = JSON.parse(readFileSync(deploymentPath, "utf-8"));
       expect(saved.address).toBe(EXISTING_OBJECT);
@@ -200,7 +148,7 @@ version = "0.0.1"
       }
       expect(caught).toBeInstanceOf(CliExecutionError);
       // Temp profile cleaned up in finally.
-      expect(existsSync(join(tmpHome, ".aptos", "config.yaml"))).toBe(false);
+      expect(existsSync(join(fixture.tmpHome!, ".aptos", "config.yaml"))).toBe(false);
     } finally {
       await harness.cleanup();
     }
