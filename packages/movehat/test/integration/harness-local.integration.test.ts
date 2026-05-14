@@ -28,7 +28,17 @@ const integrationDir = dirname(fileURLToPath(import.meta.url));
  * so `borrow_global<Counter>(@integration_counter)` always targets
  * the object, regardless of who signs the increment.
  */
-describe('Harness.createLocal — full lifecycle', () => {
+// `movement node run-local-testnet` (the binary backing
+// `LocalNodeManager.start`) fails during genesis on Linux x86_64
+// CI runners with `MintFunder` → `ENOT_APTOS_FRAMEWORK_ADDRESS`.
+// Tracked upstream in #149. macOS Darwin runs the same suite green.
+// Until #149 is resolved, CI sets `MOVEHAT_SKIP_LOCAL_NODE=true` so
+// the harness-fork tests + grep guard still gate while local-mode
+// stays a developer-validation step. Removing the skip is one env-
+// var deletion in `.github/workflows/ci.yml` once #149 lands.
+const SKIP_LOCAL = process.env.MOVEHAT_SKIP_LOCAL_NODE === 'true';
+
+describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
   let harness: Harness;
   let codeObjectAddr: string;
   let originalCwd: string;

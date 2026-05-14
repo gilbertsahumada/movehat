@@ -177,7 +177,9 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 | M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 |
 | M4.2 | CI: E2E on every push under 5-min SLO | #144 | _this PR_ |
 
-Follow-ups filed during M4: #146 (`upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions — needs upstream Movement CLI / SDK diagnosis).
+Follow-ups filed during M4:
+- #146 — `upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions (upstream Movement CLI / SDK).
+- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort). Forces the integration suite's local-mode path to skip in CI via `MOVEHAT_SKIP_LOCAL_NODE=true`; fork-mode path + grep guard still gate. Local developers run the full suite green on macOS.
 
 **Definition of Done — Integration suite**:
 - [x] `packages/movehat/test/integration/` directory exists (M4.1)
@@ -190,7 +192,7 @@ Follow-ups filed during M4: #146 (`upgradeCodeObject` reports success but on-cha
 **Definition of Done — CI policy**:
 - [x] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main` (M4.2 — dropped the `if: github.event_name == 'pull_request' && github.base_ref == 'main'` gate from the `e2e-tests` job; `on: push` block at lines 3-7 already targets `main`/`develop`/`feature/*`)
 - [x] `timeout-minutes: 5` set per job (M4.2 — applied uniformly to all 6 jobs: `build`, `unit-tests`, `test-matrix`, `e2e-tests`, `quality`, `security`)
-- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — _observed wall-clock pending first Actions run; will be updated in this PR_)
+- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — first all-jobs run on PR #147 completed in **3m21s total** with e2e-tests at **2m14s** before #149 forced a skip; backfilled with the post-skip number after the re-run)
 - [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
 ### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)

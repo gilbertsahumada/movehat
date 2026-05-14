@@ -210,6 +210,13 @@ jobs:
         run: pnpm test:integration
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+          # See #149 — `movement node run-local-testnet` fails during
+          # MintFunder setup on Linux x86_64 (Move abort:
+          # ENOT_APTOS_FRAMEWORK_ADDRESS during delegate-mint). Until
+          # upstream lands a fix, skip the harness-local lifecycle in
+          # CI; the harness-fork tests + grep-guard step below still
+          # gate, and macOS / WSL developers run the full suite locally.
+          MOVEHAT_SKIP_LOCAL_NODE: 'true'
 
       - name: Guard — no vi.mock in integration suite
         # Belt-and-suspenders defense against a future PR that adds
