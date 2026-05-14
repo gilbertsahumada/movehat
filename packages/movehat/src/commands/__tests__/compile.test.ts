@@ -9,8 +9,24 @@ vi.mock('fs', () => {
   };
 });
 
-// Import after mock is set up
-const { extractNamedAddresses, updateMoveToml } = await import('../compile.js');
+// Mock runCli so the compileCommand orchestrator tests below never hit
+// the real `movement` binary.
+const runCliMock = vi.fn();
+vi.mock('../../utils/runCli.js', () => ({
+  runCli: runCliMock,
+}));
+
+// Mock loadUserConfig so we don't need a real movehat.config.ts on disk
+// (memfs replaces fs but not the dynamic-import path inside loadUserConfig).
+const loadUserConfigMock = vi.fn();
+vi.mock('../../core/config.js', () => ({
+  loadUserConfig: loadUserConfigMock,
+}));
+
+// Import after mocks are set up
+const compileModule = await import('../compile.js');
+const { extractNamedAddresses, updateMoveToml } = compileModule;
+const compileCommand = compileModule.default;
 
 describe('extractNamedAddresses', () => {
   beforeEach(() => {
@@ -259,5 +275,133 @@ existing = "0xcafe"
     const content = vol.readFileSync('/move/Move.toml', 'utf-8') as string;
     // new_one should get 0xbeef since 0xcafe is taken
     expect(content).toContain('new_one = "0xbeef"');
+  });
+});
+
+describe('compileCommand — orchestrator', () => {
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vol.reset();
+    runCliMock.mockReset();
+    loadUserConfigMock.mockReset();
+    exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(((code?: number) => {
+        throw new Error(`__test_exit_${code ?? 0}__`);
+      }) as never);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vol.reset();
+    vi.restoreAllMocks();
+  });
+
+  it('happy path: detects named addresses, invokes movement build, finishes', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: {},
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml': `[package]
+name = "proj"
+
+[addresses]
+counter = "_"
+
+[dev-addresses]
+counter = "0xcafe"
+
+[dependencies]
+`,
+      '/proj/move/sources/counter.move': 'module counter::lib {}',
+    });
+    runCliMock.mockResolvedValueOnce({ exitCode: 0, stdout: 'ok', stderr: '' });
+
+    await compileCommand();
+
+    expect(runCliMock).toHaveBeenCalledTimes(1);
+    const call = runCliMock.mock.calls[0]!;
+    expect(call[0].command).toBe('movement');
+    expect(call[0].args.slice(0, 2)).toEqual(['move', 'build']);
+  });
+
+  it('exits 1 with a clear error when moveDir is missing', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/nonexistent',
+      namedAddresses: {},
+    });
+
+    await expect(compileCommand()).rejects.toThrow('__test_exit_1__');
+    expect(runCliMock).not.toHaveBeenCalled();
+  });
+
+  it('exits 1 when the build step returns non-zero', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: {},
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml': '[package]\nname="x"\n[addresses]\n',
+      '/proj/move/sources/x.move': 'module x::lib {}',
+    });
+    runCliMock.mockResolvedValueOnce({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'compile error',
+    });
+
+    await expect(compileCommand()).rejects.toThrow('__test_exit_1__');
+  });
+
+  it('merges user-configured namedAddresses over auto-assigned dev addresses', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: { counter: '0xabc' },
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml':
+        '[package]\nname="x"\n[addresses]\ncounter = "_"\n[dev-addresses]\n',
+      '/proj/move/sources/counter.move': 'module counter::lib {}',
+    });
+    runCliMock.mockResolvedValueOnce({ exitCode: 0, stdout: '', stderr: '' });
+
+    await compileCommand();
+
+    const args = runCliMock.mock.calls[0]![0].args;
+    const namedIdx = args.indexOf('--named-addresses');
+    expect(namedIdx).toBeGreaterThanOrEqual(0);
+    // User-configured override (0xabc) wins over auto-assigned (0xcafe).
+    expect(args[namedIdx + 1]).toContain('counter=0xabc');
+  });
+
+  it('rejects an invalid named-address key', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: { 'bad-name-with-dash': '0x1' },
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml': '[package]\nname="x"\n[addresses]\n',
+      '/proj/move/sources/x.move': 'module x::lib {}',
+    });
+
+    await expect(compileCommand()).rejects.toThrow('__test_exit_1__');
+    expect(runCliMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid address value (non-hex)', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: { counter: 'not-hex' },
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml': '[package]\nname="x"\n[addresses]\n',
+      '/proj/move/sources/x.move': 'module counter::lib {}',
+    });
+
+    await expect(compileCommand()).rejects.toThrow('__test_exit_1__');
+    expect(runCliMock).not.toHaveBeenCalled();
   });
 });
