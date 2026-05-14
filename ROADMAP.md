@@ -203,11 +203,19 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
+**Sub-PRs**:
+
+| Sub | Description | Status |
+|---|---|---|
+| M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | 🔄 in-flight |
+| M5.2 | `perf(fork): benchmarks + parallelization + fundAccount auth_key fix` (issue #157, closes #63) | ⏳ |
+| M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | ⏳ |
+
 **Definition of Done — Auto-generated docs**:
-- [ ] `typedoc` + `typedoc-plugin-markdown` installed
-- [ ] `pnpm docs:api` script generates MDX into `packages/docs/content/docs/api/`
-- [ ] `packages/docs/package.json` `prebuild` runs the generation step
-- [ ] `/api/Harness` (or equivalent) route renders the generated content on the docs site
+- [x] `typedoc` + `typedoc-plugin-markdown` installed (M5.1)
+- [x] `pnpm docs:api` script generates MDX into `packages/docs/content/docs/api/reference/` (M5.1)
+- [x] `packages/docs/package.json` `prebuild` runs the generation step (M5.1)
+- [x] `/api/reference/classes/Harness` (and 50 sibling pages) renders the generated content on the docs site (M5.1 — `pnpm build:docs` green with 51 MDX files + narrative `/api/harness` unchanged)
 
 **Definition of Done — Benchmarks**:
 - [ ] `packages/movehat/bench/fork.bench.ts` exists (using `vitest bench` or `tinybench`)

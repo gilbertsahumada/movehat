@@ -25,6 +25,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "docs:api": "typedoc && node scripts/postprocess-typedoc.mjs",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -73,6 +74,8 @@
     "@types/prompts": "^2.4.9",
     "@vitest/coverage-v8": "^4.0.16",
     "memfs": "^4.51.1",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }
