@@ -254,17 +254,12 @@ jobs:
         run: pnpm install
 
       - name: Check package.json
-        run: |
-          cd packages/movehat
-          node -e "
-            const pkg = require('./package.json');
-            const required = ['name', 'version', 'description', 'author', 'license', 'repository', 'bin'];
-            const missing = required.filter(f => !pkg[f]);
-            if (missing.length) {
-              console.error('Missing required fields:', missing);
-              process.exit(1);
-            }
-          "
+        # Validation logic lives in packages/movehat/scripts/check-package-json.js
+        # (ESM, uses `readFileSync` + `JSON.parse`). Extracted from an inline
+        # CommonJS `node -e` block per M4 self-review (#147 Major 3) — the
+        # inline form tripped the workflow validation hook on every ci.yml
+        # edit during the M4.2 cycle.
+        run: node packages/movehat/scripts/check-package-json.js
 
       - name: Check for TODO/FIXME comments
         run: |
