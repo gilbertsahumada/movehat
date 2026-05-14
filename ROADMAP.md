@@ -128,9 +128,9 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
 
 **Definition of Done — Coverage thresholds (each ≥80% statements)**:
-- [ ] `packages/movehat/src/runtime.ts`
-- [ ] `packages/movehat/src/core/config.ts`
-- [ ] `packages/movehat/src/core/AccountManager.ts`
+- [x] `packages/movehat/src/runtime.ts` (M3.2 — 100% stmts via `src/__tests__/runtime.test.ts`, 13 cases)
+- [x] `packages/movehat/src/core/config.ts` (M3.2 — 88.7% stmts; +20 cases on resolveNetworkConfig)
+- [x] `packages/movehat/src/core/AccountManager.ts` (M3.2 — 97.4% stmts; +23 cases across create/lookup/load/export)
 - [ ] `packages/movehat/src/fork/manager.ts`
 - [ ] `packages/movehat/src/node/LocalNodeManager.ts`
 - [ ] `packages/movehat/src/commands/compile.ts`

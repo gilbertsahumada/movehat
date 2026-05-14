@@ -18,12 +18,17 @@ export default defineConfig({
         'src/cli.ts',
         'src/types/**',
       ],
-      // Aligned with CI gate (.github/workflows/ci.yml). Raise as tests grow.
+      // Global floor stays at 15 until M3.5 flips it to 80. Per-target
+      // entries below ratchet specific files to ≥80% as M3 sub-PRs land
+      // (M3.2 = runtime + config + AccountManager).
       thresholds: {
         lines: 15,
         functions: 15,
         branches: 10,
         statements: 15,
+        "src/runtime.ts":             { lines: 80, statements: 80, functions: 70, branches: 65 },
+        "src/core/config.ts":         { lines: 80, statements: 80, functions: 80, branches: 70 },
+        "src/core/AccountManager.ts": { lines: 80, statements: 80, functions: 80, branches: 65 },
       },
     },
     testTimeout: 10000,
