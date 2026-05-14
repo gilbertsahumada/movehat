@@ -7,8 +7,8 @@ export const dynamic = 'force-static';
 /**
  * Deep-path handler — required catch-all (`[...slug]`, not optional
  * `[[...slug]]`) so the empty-slug case is delegated to the sibling
- * `app/raw/route.ts` static handler. See that file for the rationale
- * (EISDIR collision during `output: 'export'`).
+ * `app/raw/index/route.ts` static handler. See that file for the
+ * rationale (EISDIR collision during `output: 'export'`).
  */
 export function generateStaticParams() {
   return source.generateParams().filter((p) => p.slug.length > 0);

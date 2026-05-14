@@ -149,7 +149,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `coverage-summary.json` produced and uploaded as CI artifact (already satisfied — vitest emits `json-summary` per existing config; `.github/workflows/ci.yml:71-76` uploads the `coverage-report` artifact bundle)
 
 **Definition of Done — CI cache**:
-- [x] `actions/cache@v4` step in the E2E job, keyed by Movement CLI tarball SHA / release URL hash (M3.1 — key `movement-cli-${{ runner.os }}-${{ runner.arch }}-bypass-homebrew-l1`)
+- [x] `actions/cache@v4` step in the E2E job, keyed by runner OS + arch + release tag (M3.1 — key `movement-cli-${{ runner.os }}-${{ runner.arch }}-bypass-homebrew-l1`; the upstream `bypass-homebrew` tag is included so key rotates if the published artifact changes)
 - [x] Cache hit path skips the 66 MB tarball download (M3.1 — Install step wrapped in `if: steps.cache-movement-cli.outputs.cache-hit != 'true'`)
 - [ ] Visible runtime drop on cache hit vs miss in CI logs — pending first CI re-run; numbers to be reported in PR #130 comment
 
