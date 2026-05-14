@@ -266,11 +266,17 @@ async function setupWithFork(
   if (!forkExists) {
     logger.step(`Creating fork from ${forkNetwork}...`);
     const testnetRpc = "https://testnet.movementnetwork.xyz/v1";
-    await forkManager.initialize(testnetRpc, forkNetwork);
+    await forkManager.initialize(testnetRpc, forkNetwork, options.forkApiKey);
     logger.success(`Fork created at ${forkPath}`);
     logger.newline();
   } else {
     logger.success(`Loading existing fork from ${forkPath}`);
+    // setApiKey BEFORE load() so the reconstructed MovementApiClient
+    // picks up the header. load() rebuilds the client using current
+    // apiKey state.
+    if (options.forkApiKey !== undefined) {
+      forkManager.setApiKey(options.forkApiKey);
+    }
     forkManager.load();
 
     if (forkResetState) {

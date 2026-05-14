@@ -94,19 +94,24 @@ export class Harness {
   /**
    * Create a fork-mode Harness reading from a snapshot of `network`.
    *
-   * Fork mode is read-only: `deployCodeObject`, `upgradeCodeObject`, and
-   * `runMoveScript` will throw with a message pointing at `createLocal`
-   * once their real bodies land in M2.2/M2.3. `runViewFunction` works.
+   * Fork mode is read-only: `deployCodeObject`, `upgradeCodeObject`,
+   * and `runMoveScript` throw with a message pointing at `createLocal`.
+   * `runViewFunction` works (read-only path).
    *
    * @param network - Network to fork (e.g. `"testnet"`).
-   * @param _apiKey - Reserved for M2.2; if non-undefined a TODO will fire.
+   * @param apiKey - Optional Movement API key. When set, every upstream
+   *   request from the fork's `MovementApiClient` carries
+   *   `Authorization: Bearer <apiKey>`. Use for rate-limited public
+   *   endpoints or auth-gated nodes. The key stays in process memory
+   *   (not persisted to the fork's on-disk metadata).
    */
-  static async createFork(network: string, _apiKey?: string): Promise<Harness> {
-    if (_apiKey !== undefined) {
-      // TODO(M2.2): plumb into MovementApiClient headers when the
-      // fork manager needs authenticated upstream reads.
-    }
-    const ctx = await setupLocalTesting({ mode: "fork", forkNetwork: network });
+  static async createFork(network: string, apiKey?: string): Promise<Harness> {
+    const setupOpts: import("../types/config.js").LocalTestOptions = {
+      mode: "fork",
+      forkNetwork: network,
+    };
+    if (apiKey !== undefined) setupOpts.forkApiKey = apiKey;
+    const ctx = await setupLocalTesting(setupOpts);
     const init: HarnessInit = {
       mode: "fork",
       runtime: ctx.runtime,
