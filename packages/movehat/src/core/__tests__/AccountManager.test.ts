@@ -121,11 +121,14 @@ describe("AccountManager — create / lookup / label", () => {
   it("getAllAccounts returns every account in insertion order", () => {
     const a = AccountManager.createAccount("alice");
     const b = AccountManager.createAccount("bob");
-    const all = AccountManager.getAllAccounts();
-    expect(all).toHaveLength(2);
-    const addrs = all.map((acc) => acc.accountAddress.toString());
-    expect(addrs).toContain(a.accountAddress.toString());
-    expect(addrs).toContain(b.accountAddress.toString());
+    const addrs = AccountManager.getAllAccounts().map((acc) =>
+      acc.accountAddress.toString()
+    );
+    // Insertion order is preserved by the underlying Map iteration.
+    expect(addrs).toEqual([
+      a.accountAddress.toString(),
+      b.accountAddress.toString(),
+    ]);
   });
 
   it("clearPool resets pool, label map, and poolLoaded flag", () => {
