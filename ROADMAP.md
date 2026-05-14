@@ -170,13 +170,20 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
+**Sub-PRs**:
+
+| Sub | Description | Issue | PR |
+|---|---|---|---|
+| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | _pending_ |
+| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _pending_ |
+
 **Definition of Done — Integration suite**:
-- [ ] `packages/movehat/test/integration/` directory exists
-- [ ] Suite drives the full Harness flow: `createLocal` → `deployCodeObject` → `runViewFunction` → `upgradeCodeObject` → `runMoveScript` → `cleanup`
-- [ ] At least one test path uses `createFork`
-- [ ] `grep -r "vi\.mock" packages/movehat/test/integration/` returns **no matches**
-- [ ] Suite runs via a separate `vitest.integration.config.ts`
-- [ ] `TESTING.md` documents how to run the suite locally and the Docker fallback
+- [x] `packages/movehat/test/integration/` directory exists (M4.1)
+- [x] Suite drives the full Harness flow: `createLocal` → `deployCodeObject` → `runViewFunction` → `upgradeCodeObject` → `runMoveScript` → `cleanup` (M4.1 — `harness-local.integration.test.ts`, 7 cases sharing one lifecycle)
+- [x] At least one test path uses `createFork` (M4.1 — `harness-fork.integration.test.ts`; `skipIf` guards both cases on `MOVEMENT_RPC_URL` so the local suite stays self-contained)
+- [x] `grep -r "vi\.mock" packages/movehat/test/integration/` returns **no matches** (M4.1 — verified during Tier 1; M4.2 wires a CI grep guard step)
+- [x] Suite runs via a separate `vitest.integration.config.ts` (M4.1 — `pool: 'forks'` + `singleFork: true` for port/state sanity; no coverage block — unit suite owns thresholds)
+- [x] `TESTING.md` documents how to run the suite locally and the Docker fallback (M4.1 — new "Integration Suite (zero-mock)" section under "Full E2E Test")
 
 **Definition of Done — CI policy**:
 - [ ] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main`

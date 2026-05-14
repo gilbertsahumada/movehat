@@ -1,0 +1,11 @@
+[package]
+name = "integration_counter"
+version = "1.0.0"
+
+[addresses]
+integration_counter = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "movement"
+subdir = "aptos-move/framework/aptos-framework"
