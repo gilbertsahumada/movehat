@@ -1,16 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { Harness } from "../../harness/index.js";
-import { _resetConfigCache } from "../../core/config.js";
+import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 /**
  * Tests for `Harness.runViewFunction` — the SDK delegation path.
@@ -21,44 +12,14 @@ import { _resetConfigCache } from "../../core/config.js";
  * that only forwards options.
  */
 describe("Harness.runViewFunction", () => {
-  let tmpCwd: string;
-  let origCwd: string;
+  let fixture: HarnessTestFixture;
 
   beforeEach(() => {
-    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-view-"));
-    writeFileSync(
-      join(tmpCwd, "movehat.config.js"),
-      `export default {
-  defaultNetwork: "testnet",
-  networks: {
-    testnet: {
-      url: "https://testnet.movementnetwork.xyz/v1",
-      chainId: "testnet"
-    }
-  }
-};
-`
-    );
-    const moveDir = join(tmpCwd, "move");
-    mkdirSync(join(moveDir, "sources"), { recursive: true });
-    writeFileSync(
-      join(moveDir, "Move.toml"),
-      `[package]\nname = "dummy"\nversion = "0.0.1"\n\n[addresses]\n`
-    );
-    writeFileSync(join(moveDir, "sources", "dummy.move"), "// empty\n");
-
-    origCwd = process.cwd();
-    process.chdir(tmpCwd);
-    _resetConfigCache();
+    fixture = setupHarnessTestFixture();
   });
 
   afterEach(() => {
-    try {
-      process.chdir(origCwd);
-    } finally {
-      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
-      _resetConfigCache();
-    }
+    fixture.teardown();
   });
 
   it("happy path: forwards correct payload to aptos.view and returns the raw result array", async () => {
