@@ -1,8 +1,24 @@
+import { createHash } from 'node:crypto';
 import { MovementApiClient } from './api.js';
 import { ForkStorage } from './storage.js';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
+
+/**
+ * Derive a deterministic 32-byte hex placeholder for the `authentication_key`
+ * of a fork-funded account. The real auth_key is `sha3_256(public_key || 0x00)`
+ * for Ed25519; the fork has no public key material, so we hash the address
+ * itself. This is NOT a real auth key — downstream code must not treat it as
+ * trustworthy key material. Distinguishable from the address by construction
+ * (#63 — prior code used `address.padEnd(66, '0')` which was a no-op since
+ * normalized addresses are already 66 chars).
+ */
+function forkAuthKeyPlaceholder(normalizedAddress: string): string {
+  const stripped = normalizedAddress.startsWith('0x') ? normalizedAddress.slice(2) : normalizedAddress;
+  const digest = createHash('sha3-256').update(stripped, 'hex').digest('hex');
+  return `0x${digest}`;
+}
 
 /**
  * Manager for fork operations
@@ -272,7 +288,7 @@ export class ForkManager {
     if (!account) {
       account = {
         sequenceNumber: '0',
-        authenticationKey: normalizedAddress.padEnd(66, '0'),
+        authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
       };
       this.storage.saveAccount(normalizedAddress, account);
     }
@@ -355,7 +371,7 @@ export class ForkManager {
       // If account doesn't exist, create a minimal one
       const newAccount: AccountState = {
         sequenceNumber: '0',
-        authenticationKey: normalizedAddress.padEnd(66, '0'),
+        authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
       };
 
       this.storage.saveAccount(normalizedAddress, newAccount);

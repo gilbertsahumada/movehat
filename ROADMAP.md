@@ -207,8 +207,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 | Sub | Description | Status |
 |---|---|---|
-| M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | 🔄 in-flight |
-| M5.2 | `perf(fork): benchmarks + parallelization + fundAccount auth_key fix` (issue #157, closes #63) | ⏳ |
+| M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | ✅ shipped in PR #160 |
+| M5.2 | `perf(fork): benchmarks + fundAccount auth_key fix` (issue #157, closes #63) | 🔄 in-flight |
 | M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | ⏳ |
 
 **Definition of Done — Auto-generated docs**:
@@ -218,10 +218,10 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] `/api/reference/classes/Harness` (and 50 sibling pages) renders the generated content on the docs site (M5.1 — `pnpm build:docs` green with 51 MDX files + narrative `/api/harness` unchanged)
 
 **Definition of Done — Benchmarks**:
-- [ ] `packages/movehat/bench/fork.bench.ts` exists (using `vitest bench` or `tinybench`)
-- [ ] Measures cold-start, fork hydrate, RPC round-trip
-- [ ] `BENCHMARKS.md` at repo root with baseline numbers
-- [ ] At least 1–2 optimization wins applied (e.g., parallel resource fetch); before/after numbers in the same file
+- [x] `packages/movehat/bench/fork.bench.ts` exists (plain tsx + `performance.now()` — vitest bench's per-iter model doesn't fit `createLocal`/`createFork` heavy lifecycle ops; rationale documented in `BENCHMARKS.md`) (M5.2)
+- [x] Measures cold-start, fork hydrate, RPC round-trip (M5.2)
+- [x] `BENCHMARKS.md` at repo root with baseline numbers (M5.2 — Darwin arm64 baseline captured; CI variance disclaimed)
+- [N/A] At least 1–2 optimization wins applied — **deliberately not applied**. Each candidate from the M5 plan (parallelize `getAllResources`, cache `getLedgerInfo`, reduce `runViewFunction` overhead) was inspected and rejected: the dominant costs are external (Movement CLI startup, testnet RPC latency) and the Movehat-side surface area is already tight. Rationale captured in `BENCHMARKS.md` "Optimization wins applied" section. The plan explicitly anticipated this outcome: "If <5% improvement, document the negative result in BENCHMARKS.md and don't claim the win."
 
 **Definition of Done — Compatibility matrix**:
 - [ ] `MOVEMENT_CLI_COMPAT.md` at repo root listing tested Movement CLI versions

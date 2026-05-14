@@ -26,6 +26,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "docs:api": "typedoc && node scripts/postprocess-typedoc.mjs",
+    "bench": "cd ../../examples/counter-example && tsx ../../packages/movehat/bench/fork.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "files": [
