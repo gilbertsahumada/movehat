@@ -166,20 +166,24 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 - [x] Cache hit path skips the 66 MB tarball download (M3.1 — Install step wrapped in `if: steps.cache-movement-cli.outputs.cache-hit != 'true'`)
 - [ ] Visible runtime drop on cache hit vs miss in CI logs — pending first CI re-run; numbers to be reported in PR #130 comment
 
-### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71) — (KPI 1)
+### M4 — ✅ shipped in PR #148 (develop → main batch) — Zero-mock integration suite + E2E SLO (issue #71) — (KPI 1)
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
 **Sub-PRs**:
 
-| Sub | Description | Issue | PR |
-|---|---|---|---|
-| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 |
-| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _this PR_ |
+| Sub | Description | Issue | PR | Commit |
+|---|---|---|---|---|
+| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 | `fc0ef71` |
+| M4.2 | CI: E2E on every push under 5-min SLO | #144 | #147 | `a165c01` |
+| M4-CR | CodeRabbit batch review fix (env restore in afterAll) | — | #150 | `62ea644` |
 
-Follow-ups filed during M4:
-- #146 — `upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions (upstream Movement CLI / SDK).
-- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort). Forces the integration suite's local-mode path to skip in CI via `MOVEHAT_SKIP_LOCAL_NODE=true`; fork-mode path + grep guard still gate. Local developers run the full suite green on macOS.
+Batch merge commit: `e1dde96` (`develop → main` via PR #148, merged `2026-05-14T14:49:13Z`).
+
+Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M5 compat-matrix work):
+- #146 — `upgradeCodeObject` reports `Result: Success` but on-chain ABI doesn't expose v2 functions. Needs upstream Movement CLI / Aptos SDK diagnosis.
+- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort: `ENOT_APTOS_FRAMEWORK_ADDRESS`). M4.2 mitigates by env-gated `harness-local` skip in CI; macOS local dev runs the full suite. Likely M5 alignment.
+- #140 — Movement CLI artifact integrity verification (deferred from M3.1).
 
 **Definition of Done — Integration suite**:
 - [x] `packages/movehat/test/integration/` directory exists (M4.1)
