@@ -1,0 +1,209 @@
+---
+title: Harness
+description: Hardhat-style harness API — factories, deployment, view + script execution, cleanup
+icon: Wrench
+---
+
+The `Harness` class is the primary public API of Movehat since M2 (KPI 1). It wraps the Movement TypeScript SDK + Movement CLI behind a Hardhat-style lifecycle: a static factory constructs the instance, methods do the work, and `cleanup()` releases resources + poisons the instance so any further method call throws `HarnessDisposedError` synchronously.
+
+## Quick Start
+
+```typescript
+import { Harness } from "movehat";
+
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice", "bob"],
+  autoDeploy: ["counter"],
+});
+try {
+  const addr = harness.runtime.getDeploymentAddress("counter");
+  const counter = harness.runtime.getContract(addr, "counter");
+  await counter.call(harness.runtime.account, "increment", []);
+  const [value] = await harness.runViewFunction({
+    function: `${addr}::counter::get`,
+    functionArguments: [harness.runtime.account.accountAddress.toString()],
+  });
+  console.log("counter:", value);
+} finally {
+  await harness.cleanup();
+}
+```
+
+## Factory Methods
+
+Three static factories cover the three execution modes. Each returns a `Harness` instance whose `mode` field reflects the chosen path.
+
+| Factory | Mode | What it spawns | When to use |
+|---|---|---|---|
+| `Harness.createLocal(options?)` | `'local'` | Movement local node (real blockchain on `localhost:8080`) | Unit + integration tests that need real transaction flow |
+| `Harness.createFork(network, apiKey?)` | `'fork'` | Movement fork server (read-only snapshot of `network`) | View-only tests against real network state, no writes |
+| `Harness.createLive(network, faucetUrl?)` | `'live'` | Nothing — binds to a real RPC (testnet / mainnet / custom) | Deployment scripts, real-network interactions |
+
+### `Harness.createLocal(options?: LocalTestOptions)`
+
+Spins up a Movement local node (`movement node run-localnet`), generates and funds the named accounts from the local faucet, and (when `autoDeploy` is set) publishes the named modules via the existing Publisher path.
+
+```typescript
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice", "bob"],
+  autoDeploy: ["counter"],
+  // mode is forced to 'local-node'; other LocalTestOptions pass through
+});
+```
+
+`LocalTestOptions` (see `movehat/helpers`) supports `nodeApiPort`, `nodeFaucetPort`, `accountLabels`, `autoDeploy`, `autoFund`, `defaultBalance`, and more.
+
+### `Harness.createFork(network: string, apiKey?: string)`
+
+Read-only path. `network` is `'testnet'`, `'mainnet'`, or any custom name resolvable by `loadUserConfig`. Spawns a `ForkServer` reading from the upstream JSON-RPC endpoint and caching responses on disk.
+
+```typescript
+const harness = await Harness.createFork("testnet");
+// harness.runViewFunction works
+// harness.deployCodeObject / upgradeCodeObject / runMoveScript throw a clear error
+```
+
+> The `apiKey` parameter is reserved — wiring into the `MovementApiClient` Authorization header is a TODO for an upcoming sub-PR. Passing it today is a silent no-op.
+
+### `Harness.createLive(network: string, faucetUrl?: string)`
+
+Binds to a real running network. No local process is spawned; transactions hit the configured RPC. Use for testnet / mainnet deployments and real-network reads/writes.
+
+```typescript
+const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+```
+
+## Methods
+
+### `harness.deployCodeObject(options)`
+
+Wraps `movement move deploy-object`. The derived object address is bound to a Move.toml named address at compile time and returned as `DeploymentInfo.address`.
+
+```typescript
+const deployment = await harness.deployCodeObject({
+  moduleName: "counter",     // persistence key + getContract argument
+  addressName: "my_pkg",     // optional — Move.toml named address (defaults to moduleName)
+  packageDir: "./move",      // optional — defaults to config.moveDir
+  namedAddresses: { extra: "0x..." }, // optional overrides
+});
+```
+
+| Option | Description |
+|---|---|
+| `moduleName` | The on-chain module identifier (the `name` part of `module addr::name`). Used as the deployments registry key (`deployments/{network}/{moduleName}.json`) and as the `name` argument you pass to `runtime.getContract(addr, name)`. |
+| `addressName` | The Move.toml named address that the derived object address binds to (the `--address-name` CLI flag). Defaults to `moduleName`. Set when they differ — e.g. `module hello_blockchain::counter` with `[addresses] hello_blockchain = "_"` needs `addressName: "hello_blockchain"`, `moduleName: "counter"`. |
+| `packageDir` | Path to the Move package. Defaults to `config.moveDir` (usually `./move`). |
+| `namedAddresses` | Overlay on top of the named addresses auto-detected from `<packageDir>/sources/**.move`. |
+| `includedArtifacts` | One of `'none'` / `'sparse'` / `'all'` — defaults to the CLI default (`'sparse'`). |
+
+**Re-deploying:** the local record at `deployments/{network}/{moduleName}.json` makes a second call refuse with `ModuleAlreadyDeployedError`. Set `MH_CLI_REDEPLOY=true` to force a re-deploy.
+
+**Fork-mode guard:** throws a clear error on a `Harness.createFork(...)` instance (forks are read-only).
+
+### `harness.upgradeCodeObject(options)`
+
+Wraps `movement move upgrade-object`. Requires `objectAddress` — the existing on-chain object's address. The local `DeploymentInfo` record is overwritten with a new `timestamp` + `txHash`; the address stays the same.
+
+```typescript
+const upgraded = await harness.upgradeCodeObject({
+  moduleName: "counter",
+  objectAddress: "0xCAFE...",
+});
+```
+
+Fork-mode guard applies.
+
+### `harness.runViewFunction(options)`
+
+Pure SDK call — no Movement CLI invocation, no profile management. Works on all 3 harness modes (read-only).
+
+```typescript
+const result = await harness.runViewFunction({
+  function: "0xCAFE::counter::get",      // fully qualified function id
+  typeArguments: [],                     // optional Move type tags
+  functionArguments: ["0xdeployer..."],  // optional Move function args
+});
+// result: unknown[] — the raw view-function return tuple
+const [value] = result;
+```
+
+Returns the SDK's raw `unknown[]` (Move view functions can return tuples of any arity). Destructure for singletons.
+
+### `harness.runMoveScript(options)`
+
+Wraps `movement move run-script`. Accepts either a `.move` source path (CLI auto-compiles) or a pre-compiled `.mv` bytecode path — the extension picks the right CLI flag.
+
+```typescript
+const result = await harness.runMoveScript({
+  scriptPath: "scripts/init.move",       // or scripts/init.mv
+  args: ["address:0x1", "u64:42"],       // typed args per Movement CLI grammar
+  typeArgs: ["0x1::aptos_coin::AptosCoin"],
+});
+// result: { txHash, success?, vmStatus? }
+```
+
+`success` and `vmStatus` are best-effort parsed from the CLI's Result JSON block. `txHash` is always present (the parser throws if it can't extract one). Fork-mode guard applies.
+
+### `harness.cleanup()`
+
+Releases owned services and poisons the harness:
+
+- `createLocal`: stops the Movement local node
+- `createFork`: stops the fork server
+- `createLive`: no-op (no spawned process), but still poisons the instance
+
+After `cleanup()`, any call to `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`, or `runMoveScript` throws `HarnessDisposedError` **synchronously on property access** (before the awaited body runs). `cleanup()` is idempotent — calling it twice is a no-op.
+
+```typescript
+const harness = await Harness.createLocal();
+await harness.cleanup();
+harness.deployCodeObject({ moduleName: "x" });
+// throws HarnessDisposedError immediately
+```
+
+## Use-After-Cleanup Safety
+
+`HarnessDisposedError` is exported alongside `Harness`:
+
+```typescript
+import { Harness, HarnessDisposedError } from "movehat";
+
+try {
+  await disposedHarness.runViewFunction({ function: "..." });
+} catch (err) {
+  if (err instanceof HarnessDisposedError) {
+    console.error(`Method '${err.methodName}' rejected — harness is disposed.`);
+  }
+}
+```
+
+The poisoning is implemented via a `Proxy` whose `get` trap throws on access to any of the four mutating/view methods listed above. Properties like `mode`, `poisoned`, `runtime`, and `cleanup` itself stay readable — so `await harness.cleanup()` after a previous `cleanup()` is safe and idempotent, and `console.log(harness)` / promise-protocol checks (`.then`, etc.) don't fire the trap.
+
+## Coexistence with `setupTestFixture` / `mh()`
+
+Both pre-M2 helpers continue to work in M2.4:
+
+- `import { setupTestFixture } from "movehat/helpers"` — still exported, still functional.
+- `import { getMovehat } from "movehat"` — exported with a `@deprecated` JSDoc tag; removed in `0.1.0` (M6 / [#73](https://github.com/gilbertsahumada/movehat/issues/73)).
+
+`Harness.createLocal` actually goes through `setupLocalTesting` (which `setupTestFixture` also uses) under the hood — the test environment is identical. The migration is API-level, not infrastructure-level.
+
+## AccountManager Shared Pool
+
+`AccountManager` is a process-wide static. Two `Harness` instances in the same process share account labels:
+
+```typescript
+const h1 = await Harness.createLocal({ accountLabels: ["alice"] });
+const h2 = await Harness.createLocal({ accountLabels: ["alice"] });
+// h1 and h2 see the SAME alice key — AccountManager doesn't re-derive per harness.
+```
+
+This is the same constraint that already governs `setupTestFixture`. A per-Harness pool is a future change tracked under M3.
+
+## Reference Implementation
+
+The canonical end-to-end migration:
+
+- **Counter test using `Harness.createLocal`:** [`examples/counter-example/tests/Counter.test.ts`](https://github.com/gilbertsahumada/movehat/blob/develop/examples/counter-example/tests/Counter.test.ts)
+- **Deploy script using `Harness.createLive` + `deployCodeObject` + `addressName`:** [`examples/counter-example/scripts/deploy-counter.ts`](https://github.com/gilbertsahumada/movehat/blob/develop/examples/counter-example/scripts/deploy-counter.ts)
+- **Template the `movehat init` CLI ships:** [`packages/movehat/src/templates/scripts/deploy-counter.ts`](https://github.com/gilbertsahumada/movehat/blob/develop/packages/movehat/src/templates/scripts/deploy-counter.ts)

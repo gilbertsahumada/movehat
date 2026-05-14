@@ -12,30 +12,64 @@ Execute TypeScript/JavaScript scripts with the Movehat Runtime:
 movehat run scripts/deploy-counter.ts --network testnet
 ```
 
-The `movehat run` command provides your script with access to the **Movehat Runtime Environment (MRE)**, which includes the Movement TypeScript SDK client, account management, contract helpers, and more.
+The `movehat run` command provides your script with access to the **Hardhat-style `Harness` API**, which wraps the Movement TypeScript SDK client, account management, contract helpers, and the new code-object deployment path.
 
 ## Writing Scripts
 
 ### Deploy and Initialize
 
 ```typescript
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  try {
+    // 1. Deploy via `movement move deploy-object` (code object).
+    //    Set `addressName` if Move.toml's named address ≠ moduleName.
+    const deployment = await harness.deployCodeObject({ moduleName: "counter" });
+    console.log("Module deployed at:", deployment.address);
+    console.log("Transaction:", deployment.txHash);
 
-  // 1. Deploy (publish) the module
-  const deployment = await mh.deployContract("counter");
-  console.log("Module deployed at:", deployment.address);
-  console.log("Transaction:", deployment.txHash);
+    // 2. Initialize
+    const contract = harness.runtime.getContract(deployment.address, "counter");
+    await contract.call(harness.runtime.account, "init", []);
 
-  // 2. Initialize
-  const contract = mh.getContract(deployment.address, "counter");
-  await contract.call(mh.account, "init", []);
+    // 3. Verify via the SDK-backed view path
+    const [value] = await harness.runViewFunction({
+      function: `${deployment.address}::counter::getValue`,
+    });
+    console.log("Initial value:", value);
+  } finally {
+    // Always release — cleanup() is idempotent and poisons the harness.
+    await harness.cleanup();
+  }
+}
 
-  // 3. Verify
-  const value = await contract.view("getValue", []);
-  console.log("Initial value:", value);
+main().catch(console.error);
+```
+
+### Running a Move Script
+
+For Move scripts (one-shot transactions, not module publishes), use `harness.runMoveScript`. It accepts either a `.move` source path (CLI auto-compiles) or a pre-compiled `.mv` bytecode path — the extension determines which CLI flag is used.
+
+```typescript
+import { Harness } from "movehat";
+
+async function main() {
+  const harness = await Harness.createLive("testnet");
+  try {
+    const result = await harness.runMoveScript({
+      scriptPath: "scripts/initialize.move",  // or scripts/initialize.mv
+      typeArgs: ["0x1::aptos_coin::AptosCoin"],
+      args: ["address:0xCAFE", "u64:100"],
+    });
+    console.log("Transaction:", result.txHash);
+    if (result.success === false) {
+      throw new Error(`Script failed: ${result.vmStatus}`);
+    }
+  } finally {
+    await harness.cleanup();
+  }
 }
 
 main().catch(console.error);
@@ -44,19 +78,22 @@ main().catch(console.error);
 ### Multi-Network Deployment
 
 ```typescript
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const harness = await Harness.createLive(network);
+  try {
+    if (harness.runtime.config.network === "mainnet") {
+      console.log("WARNING: Deploying to MAINNET");
+      // Add confirmation logic
+    }
 
-  if (mh.config.network === "mainnet") {
-    console.log("WARNING: Deploying to MAINNET");
-    // Add confirmation logic
+    const deployment = await harness.deployCodeObject({ moduleName: "counter" });
+    console.log(`Deployed on ${harness.runtime.network.name}:`, deployment.address);
+  } finally {
+    await harness.cleanup();
   }
-
-  // Deploy module — automatically tracked per network
-  const deployment = await mh.deployContract("counter");
-  console.log(`Deployed on ${mh.config.network}:`, deployment.address);
 }
 
 main().catch(console.error);
@@ -76,30 +113,36 @@ movehat run scripts/deploy-counter.ts --network local
 movehat run scripts/deploy-counter.ts --network testnet --redeploy
 ```
 
-## Available Runtime Properties
+## Available Harness Properties
 
 ```typescript
-const mh = await getMovehat();
+const harness = await Harness.createLive("testnet");
 
-// Core
-mh.config         // Resolved configuration
-mh.network        // Network info (name, chainId, rpc)
-mh.aptos          // Movement TypeScript SDK client
-mh.account        // Primary account
-mh.accounts       // All configured accounts
+// Mode + cleanup state
+harness.mode               // 'local' | 'fork' | 'live'
+harness.poisoned           // true once cleanup() has been called
 
-// Contract helpers
-mh.getContract    // Get contract helper
+// Harness methods (M2 public API)
+harness.deployCodeObject   // movement move deploy-object
+harness.upgradeCodeObject  // movement move upgrade-object
+harness.runViewFunction    // aptos.view (read-only, works in all modes)
+harness.runMoveScript      // movement move run-script
+harness.cleanup            // release resources + poison harness
 
-// Deployment functions
-mh.deployContract       // Deploy and track module
-mh.getDeployment        // Get deployment info
-mh.getDeployments       // Get all deployments
-mh.getDeploymentAddress // Get deployed address
-
-// Network management
-mh.switchNetwork  // Switch to different network
+// Underlying runtime (Movement SDK + account/contract/deployment helpers)
+harness.runtime.config              // Resolved configuration
+harness.runtime.network             // Network info (name, chainId, rpc)
+harness.runtime.aptos               // Movement TypeScript SDK client
+harness.runtime.account             // Primary account
+harness.runtime.accounts            // All configured accounts
+harness.runtime.getContract         // Get a MoveContract helper
+harness.runtime.getDeployment       // Get deployment info
+harness.runtime.getDeployments      // Get all deployments
+harness.runtime.getDeploymentAddress // Get deployed address
+harness.runtime.switchNetwork       // Switch to different network (returns a new runtime)
 ```
+
+> **`harness.runtime.deployContract` (legacy `move publish` path)** is still available for users who prefer it. New code should use `harness.deployCodeObject` (code-object path).
 
 ## Using Multiple Accounts
 
@@ -107,13 +150,20 @@ mh.switchNetwork  // Switch to different network
 // movehat.config.ts
 export default {
   accounts: [
-    process.env.PRIVATE_KEY,     // Primary (mh.account)
-    process.env.SECONDARY_KEY,   // mh.accounts[1]
+    process.env.PRIVATE_KEY,     // Primary (harness.runtime.account)
+    process.env.SECONDARY_KEY,   // harness.runtime.accounts[1]
   ].filter(Boolean),
 };
 
 // In your script
-const mh = await getMovehat();
-const primaryAccount = mh.account;
-const secondaryAccount = mh.getAccountByIndex(1);
+import { Harness } from "movehat";
+
+const harness = await Harness.createLive("testnet");
+try {
+  const primaryAccount = harness.runtime.account;
+  const secondaryAccount = harness.runtime.getAccountByIndex(1);
+  // ...
+} finally {
+  await harness.cleanup();
+}
 ```

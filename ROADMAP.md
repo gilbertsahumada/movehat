@@ -2,6 +2,10 @@
 
 This roadmap organizes the next phase of Movehat development. Each milestone has explicit Definition of Done criteria and is tracked as a meta-issue on GitHub.
 
+## Reference documents
+
+- **`GRANT.pdf`** (local-only, gitignored) — underlying MOU that defines the deliverable KPIs this roadmap maps to. Kept out of the repo by the `*.pdf` rule in `.gitignore`. Milestone headers below carry `(KPI 1)` / `(KPI 2)` tags pointing at the relevant KPI section in `GRANT.pdf`. When in doubt about acceptance criteria, the MOU text is the source of truth.
+
 ## Current state
 
 - Documentation site shipped (Fumadocs + Next.js, static export)
@@ -33,7 +37,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 
 Each milestone below lists **explicit, mechanically verifiable** acceptance criteria. The criteria use exact file paths, command outputs, and CLI invocations so progress is unambiguous.
 
-### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75
+### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75 — (KPI 2)
 
 **Goal**: Bring the repo to standard open-source hygiene.
 
@@ -48,7 +52,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `git commit -m "test"` is **rejected** by the local hook; `git commit -m "chore: test"` is accepted
 - [N/A] CI green after PR lands — GitHub Actions paused by user; security checks (GitGuardian, Socket, CodeRabbit) green
 
-### M1 — Testability refactors (~5 days, issue #68)
+### M1 — Testability refactors (~5 days, issue #68) — ✅ shipped in PR #106 — (prerequisite for KPI 1)
 
 **Goal**: Refactor core modules so they can be unit-tested without spawning real processes or relying on global state.
 
@@ -81,34 +85,45 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #110 (M1.7). Tier 3 verification `pnpm test:e2e` 32/32 passing (captured on the `develop → main` batch PR #106). Ready for `develop → main` batch.**
 
-### M2 — Hardhat-style Harness API (~6 days, issue #69)
+### M2 — Hardhat-style Harness API (~6 days, issue #69) — (KPI 1)
 
 **Goal**: Provide a Hardhat-style testing harness with explicit lifecycle and use-after-cleanup safety.
 
+**Sub-issues** (each is a separate PR. Execution order: M2.1 → M2.2 → M2.3 → M2.4 in serial — M2.2/M2.3 replace M2.1's method stubs and M2.4 migrates consumers, so each depends on the previous):
+
+| Status | Sub-PR | Issue | Focus | Closes |
+|---|---|---|---|---|
+| ✅ | M2.1 | [#116](https://github.com/gilbertsahumada/movehat/issues/116) (shipped in PR #120 @ `c44f9cb`) | Harness skeleton + 3 factories + Proxy poisoning + cleanup + HarnessDisposedError (4 methods stubbed) | foundations |
+| ✅ | M2.2 | [#117](https://github.com/gilbertsahumada/movehat/issues/117) (shipped in PR #121 @ `c336077`) | `deployCodeObject` + `upgradeCodeObject` via `movement move deploy-object` / `upgrade-object` + extract `core/movementProfile.ts` | (partial of #69) |
+| ✅ | M2.3 | [#118](https://github.com/gilbertsahumada/movehat/issues/118) (shipped in PR #122 @ `a334991`) | `runViewFunction` + `runMoveScript` + extract `utils/parseCliOutput.ts` | (partial of #69) |
+| ✅ | M2.4 | [#119](https://github.com/gilbertsahumada/movehat/issues/119) (shipped in PR #123 @ `602cfca`) | Migrate `examples/counter-example/` + templates + 8 docs MDX + new `api/harness.mdx`; `@deprecated` JSDoc on `getMovehat`; fix M2.2 `addressName` bug | closes #69 |
+
 **Definition of Done — API surface**:
-- [ ] `import { Harness } from 'movehat'` works from the built package
-- [ ] `Harness.createLocal()` returns a usable instance
-- [ ] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance
-- [ ] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance
-- [ ] `harness.deployCodeObject(options)` deploys a real Move package
-- [ ] `harness.upgradeCodeObject(options)` upgrades an existing code object
-- [ ] `harness.runViewFunction(options)` executes a view function
-- [ ] `harness.runMoveScript(options)` compiles and executes a Move script
-- [ ] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true`
+- [x] `import { Harness } from 'movehat'` works from the built package (M2.4 — verified by Tier 2 smoke + Tier 3 e2e on the dev→main batch)
+- [x] `Harness.createLocal()` returns a usable instance (M2.4 — exercised end-to-end by the migrated `examples/counter-example/tests/Counter.test.ts`)
+- [x] `Harness.createFork(network: string, apiKey?: string)` returns a usable instance (M2.1 factory + documented in `api/harness.mdx`; integration coverage in M4)
+- [x] `Harness.createLive(network: string, faucetUrl?: string)` returns a usable instance (M2.1)
+- [x] `harness.deployCodeObject(options)` deploys a real Move package (M2.2 — wraps `movement move deploy-object`; reuses Publisher hardening via the extracted `core/movementProfile.ts` helpers; integration coverage in M4)
+- [x] `harness.upgradeCodeObject(options)` upgrades an existing code object (M2.2 — wraps `movement move upgrade-object`; same shared helpers)
+- [x] `harness.runViewFunction(options)` executes a view function (M2.3 — delegates to `aptos.view`; returns raw `unknown[]`; works on all 3 harness modes including fork since views are read-only)
+- [x] `harness.runMoveScript(options)` compiles and executes a Move script (M2.3 — wraps `movement move run-script`; auto-detects `.move` vs `.mv` from extension; `parseTxHash` shared via `utils/parseCliOutput.ts`)
+- [x] `harness.cleanup()` releases the local node, removes temp dirs, and sets `poisoned = true` (M2.1 — idempotent; stops owned localNode / forkServer; tested)
 
 **Definition of Done — Use-after-cleanup safety**:
-- [ ] Calling **any** method on a disposed harness (other than `cleanup`) throws `HarnessDisposedError` synchronously
-- [ ] `HarnessDisposedError` exported from the package
+- [x] Calling **any** method on a disposed harness (other than `cleanup`) throws `HarnessDisposedError` synchronously (M2.1 — Proxy `get` trap fires on property access before the awaited body)
+- [x] `HarnessDisposedError` exported from the package (M2.1)
 
 **Definition of Done — Migration**:
-- [ ] `examples/counter-example/` uses `Harness.createLocal()`
-- [ ] `packages/movehat/src/templates/scripts/deploy-counter.ts` uses the new API
-- [ ] All MDX code snippets in `packages/docs/content/docs/` updated
-- [ ] `packages/docs/content/docs/api/harness.mdx` covers the 7 methods + cleanup
-- [ ] `mh()` still exported with `@deprecated` JSDoc tag
-- [ ] `pnpm test` green
+- [x] `examples/counter-example/` uses `Harness.createLocal()` (M2.4 — `tests/Counter.test.ts` + `scripts/deploy-counter.ts`; `greeting.test.ts` + `message.test.ts` + `scripts/deploy-greeting.ts` stay on `setupTestFixture` / `getMovehat` as the coexistence demo)
+- [x] `packages/movehat/src/templates/scripts/deploy-counter.ts` uses the new API (M2.4 — plus `templates/tests/Counter.test.ts`)
+- [x] All MDX code snippets in `packages/docs/content/docs/` updated (M2.4 — 8 MDX files: index, getting-started/{quickstart,configuration}, guides/{testing,scripts,deployment}, cli/{init,run})
+- [x] `packages/docs/content/docs/api/harness.mdx` covers the 7 methods + cleanup (M2.4 — ~200 lines: factory matrix, options reference, fork-mode guard, HarnessDisposedError, AccountManager shared-pool quirk)
+- [x] `getMovehat()` still exported with `@deprecated` JSDoc tag (M2.4 — full migration snippet inline; `initRuntime` stays public as a low-level utility used by `Harness.createLive`)
+- [x] `pnpm test` green (M2.4 — 222/222 unit tests; Tier 2 `test:example` 9/9 passing in ~1 min)
 
-### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70)
+**M2 status: ✅ ready for `develop → main` batch (PR #124) — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #123) merged to develop. Tier 3 `pnpm test:e2e` 32/32 captured on M2.4 (PR #123) per CLAUDE.md §6.3.**
+
+### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
 
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
 
@@ -138,7 +153,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Cache hit path skips the 66 MB tarball download
 - [ ] Visible runtime drop on cache hit vs miss in CI logs
 
-### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71)
+### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71) — (KPI 1)
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
@@ -156,7 +171,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] Wall-clock for the E2E job is observed **<5 minutes** on cache hit
 - [ ] CI is green on `main` and on at least one non-`main` branch (e.g., a feature/security branch)
 
-### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72)
+### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
 
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
@@ -177,7 +192,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] At least 2 versions tested green
 - [ ] CI cache key references the pinned version(s)
 
-### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73)
+### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73) — (KPI 2)
 
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
@@ -195,7 +210,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] `npm view movehat@0.1.0` returns the new version after publish
 - [ ] `npm pack` output does not contain `mh` exports
 
-### M7 — Maintenance quota (continuous)
+### M7 — Maintenance quota (continuous) — (KPI 2)
 
 **Goal**: Address open audit issues throughout the roadmap.
 

@@ -26,8 +26,18 @@ export interface InitRuntimeOptions {
 }
 
 /**
- * Initialize the Movehat Runtime Environment
- * This function loads the configuration and creates the runtime context
+ * Initialize the Movehat Runtime Environment.
+ *
+ * Lower-level construction utility — loads `movehat.config.ts`, resolves
+ * the active network, and builds a `MovehatRuntime` bound to it. Used
+ * internally by {@link Harness.createLive} (see `harness/Harness.ts`).
+ *
+ * **External callers should prefer the `Harness.create*` factories**
+ * (`Harness.createLocal` / `createFork` / `createLive`) for the Hardhat-
+ * style lifecycle + use-after-cleanup safety. `initRuntime` remains
+ * exported as a public utility for advanced use cases that need to
+ * skip the Harness abstraction (e.g. embedding movehat inside another
+ * framework).
  */
 export async function initRuntime(
   options: InitRuntimeOptions = {}
@@ -150,10 +160,30 @@ export async function initRuntime(
 /**
  * Get the Movehat Runtime Environment.
  *
- * As of M1.5 this is a thin alias of {@link initRuntime} — each call
- * constructs a fresh runtime. The previous module-cached behavior was
- * removed because it leaked state between parallel tests and hid the
- * runtime dependency from script signatures.
+ * @deprecated since M2.4 (pre-1.0). Prefer the Hardhat-style `Harness`
+ * factories (`Harness.createLocal` / `createFork` / `createLive`)
+ * which carry explicit lifecycle (`harness.cleanup()`) and
+ * use-after-cleanup safety. `getMovehat()` will be removed in
+ * `0.1.0` (M6 / issue #73).
+ *
+ * Migration:
+ * ```diff
+ * - import { getMovehat } from "movehat";
+ * - const mh = await getMovehat();
+ * - const deployment = await mh.deployContract("counter");
+ * + import { Harness } from "movehat";
+ * + const harness = await Harness.createLive("testnet");
+ * + try {
+ * +   const deployment = await harness.deployCodeObject({ moduleName: "counter" });
+ * +   // ...
+ * + } finally {
+ * +   await harness.cleanup();
+ * + }
+ * ```
+ *
+ * As of M1.5 each call constructs a fresh runtime — the previous
+ * module-cached behavior was removed because it leaked state between
+ * parallel tests and hid the runtime dependency from script signatures.
  */
 export async function getMovehat(): Promise<MovehatRuntime> {
   return initRuntime();
