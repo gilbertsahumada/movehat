@@ -151,15 +151,34 @@ Why this matters: without this rule, the ROADMAP drifts from reality. M0 + M1.1 
 
 How to apply: when finalizing a sub-PR (before pushing), grep the ROADMAP for the milestone you just touched, and check off every bullet the PR satisfies. If you're unsure whether a bullet is satisfied, ask in the PR description rather than guessing.
 
+### Milestone closeout (separate PR after batch merge)
+
+After a `develop → main` batch PR merges, open a follow-on `docs/MN-roadmap-status` PR targeting `develop`:
+
+- Flip the milestone header line from `### MN — …` to `### MN — ✅ shipped in PR #<batch> (develop → main batch) — …`.
+- Add the sub-PR + commit-hash table inside the milestone section: columns `| Sub | Description | PR | Commit |` — mirrors the precedent set by M3 (PR #142 / commit `d8bafac`) and M4 (PR #151 / commit `0568049`).
+- List any follow-up issues filed during the milestone with a one-line "deferred to MN+1" rationale.
+- No code, no test, no CI changes. Pure ROADMAP edit.
+
+Why a separate PR from the batch itself: the batch is the change-set; the closeout is the post-mortem. Mixing them makes the batch diff harder to review (status flips bury inside hundreds of code-diff lines) and the milestone status harder to find via `git log --grep`.
+
 ## 8. Self-Review Before Merge — Unconditional
 
 **Every PR gets a structured self-review before `gh pr merge` runs. No exceptions — including pure-docs PRs, one-line fixes, single-file edits, and PRs the author is confident about.**
+
+**Pre-merge checklist** (from #148 Major #1 — verify each item before `gh pr merge`):
+
+- [ ] §8 self-review posted as a `gh pr review --comment` by the PR author
+- [ ] 🔴 / 🟡 findings resolved on the same branch, OR explicitly deferred in a follow-up resolution comment with rationale
+- [ ] Tier 2 / Tier 3 results recorded in the PR body (or `N/A` with reason per §6.2 / §6.3)
+- [ ] `gh pr view N --json mergeable --jq .mergeable` returns `MERGEABLE` (not `UNKNOWN` or `CONFLICTING`)
 
 The rule:
 
 - Before calling `gh pr merge N`, post a self-review via `gh pr review N --comment` using the same severity-tiered structure used on prior PRs:
   - 🔴 blockers (correctness, security, broken contracts)
   - 🟡 worth fixing before merge (real concerns, fragile assumptions, deferred-but-noted)
+    - **Defer threshold** (from #150 Minor #1): when (a) the fix is ≤5 LoC AND (b) the cost of being wrong is non-zero (i.e. not pure stylistic), apply the fix in the originating PR — don't wait for a second reviewer to agree. The bar "wait until two reviewers flag it" makes the second reviewer pay the cost of catching what should have been fixed on first surface.
   - 🟢 nits (style, naming, polish)
 - If the review surfaces **🔴 or 🟡** findings, either fix them on the same branch and post a resolution comment listing what was resolved vs deferred, or explicitly note in the resolution why a 🟡 is being deferred to a follow-up sub-PR.
 - Merge happens only after **(a)** review is posted, **(b)** 🟡-or-worse findings are resolved or explicitly deferred with a reason, **(c)** mergeable state is CLEAN, **(d)** install-verification gates from §6.2 / §6.3 have been run (or marked N/A in the PR body with reason).
