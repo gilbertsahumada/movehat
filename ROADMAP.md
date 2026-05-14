@@ -123,9 +123,22 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M2 status: ✅ ready for `develop → main` batch (PR #124) — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #123) merged to develop. Tier 3 `pnpm test:e2e` 32/32 captured on M2.4 (PR #123) per CLAUDE.md §6.3.**
 
-### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
+### M3 — ✅ shipped in PR #135 (develop → main batch) — 80% unit coverage + Movement CLI cache (issue #70) — (KPI 1)
 
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
+
+**Sub-PRs**:
+
+| Sub | Description | PR | Commit |
+|---|---|---|---|
+| M3.1 | CI cache for Movement CLI tarball | #130 | `ea2e08a` |
+| M3.2 | Coverage: runtime + config + AccountManager | #132 | `fd37bf6` |
+| M3.3 | Coverage: ForkManager + LocalNodeManager | #134 | `97178cb` |
+| M3.4 | Coverage: top-level commands | #137 | `161d2b6` |
+| M3.5 | Coverage: fork commands + global gate flip | #139 | `277253a` |
+| M3-CR | CodeRabbit batch review fixes | #141 | `1ace3d9` |
+
+Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred from M3.1, likely M5 alignment).
 
 **Definition of Done — Coverage thresholds (each ≥80% statements)**:
 - [x] `packages/movehat/src/runtime.ts` (M3.2 — 100% stmts via `src/__tests__/runtime.test.ts`, 13 cases)
@@ -157,19 +170,30 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
+**Sub-PRs**:
+
+| Sub | Description | Issue | PR |
+|---|---|---|---|
+| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 |
+| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _this PR_ |
+
+Follow-ups filed during M4:
+- #146 — `upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions (upstream Movement CLI / SDK).
+- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort). Forces the integration suite's local-mode path to skip in CI via `MOVEHAT_SKIP_LOCAL_NODE=true`; fork-mode path + grep guard still gate. Local developers run the full suite green on macOS.
+
 **Definition of Done — Integration suite**:
-- [ ] `packages/movehat/test/integration/` directory exists
-- [ ] Suite drives the full Harness flow: `createLocal` → `deployCodeObject` → `runViewFunction` → `upgradeCodeObject` → `runMoveScript` → `cleanup`
-- [ ] At least one test path uses `createFork`
-- [ ] `grep -r "vi\.mock" packages/movehat/test/integration/` returns **no matches**
-- [ ] Suite runs via a separate `vitest.integration.config.ts`
-- [ ] `TESTING.md` documents how to run the suite locally and the Docker fallback
+- [x] `packages/movehat/test/integration/` directory exists (M4.1)
+- [x] Suite drives the full Harness flow: `createLocal` → `deployCodeObject` → `runViewFunction` → `upgradeCodeObject` → `runMoveScript` → `cleanup` (M4.1 — `harness-local.integration.test.ts`, 7 cases sharing one lifecycle)
+- [x] At least one test path uses `createFork` (M4.1 — `harness-fork.integration.test.ts`; `skipIf` guards both cases on `MOVEMENT_RPC_URL` so the local suite stays self-contained)
+- [x] `grep -r "vi\.mock" packages/movehat/test/integration/` returns **no matches** (M4.1 — verified during Tier 1; M4.2 wires a CI grep guard step)
+- [x] Suite runs via a separate `vitest.integration.config.ts` (M4.1 — `pool: 'forks'` + `singleFork: true` for port/state sanity; no coverage block — unit suite owns thresholds)
+- [x] `TESTING.md` documents how to run the suite locally and the Docker fallback (M4.1 — new "Integration Suite (zero-mock)" section under "Full E2E Test")
 
 **Definition of Done — CI policy**:
-- [ ] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main`
-- [ ] `timeout-minutes: 5` set per job
-- [ ] Wall-clock for the E2E job is observed **<5 minutes** on cache hit
-- [ ] CI is green on `main` and on at least one non-`main` branch (e.g., a feature/security branch)
+- [x] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main` (M4.2 — dropped the `if: github.event_name == 'pull_request' && github.base_ref == 'main'` gate from the `e2e-tests` job; `on: push` block at lines 3-7 already targets `main`/`develop`/`feature/*`)
+- [x] `timeout-minutes: 5` set per job (M4.2 — applied uniformly to all 6 jobs: `build`, `unit-tests`, `test-matrix`, `e2e-tests`, `quality`, `security`)
+- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — green re-run on PR #147 (`b3e54bf`, run #25865395431) completed in **2m20s total wall-clock**; e2e-tests job at **1m17s** with Movement CLI cache hit; integration step 2.4s with fork tests passing + harness-local skipped via `MOVEHAT_SKIP_LOCAL_NODE` per #149; grep guard passes silently)
+- [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
 ### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
 
