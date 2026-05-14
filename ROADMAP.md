@@ -133,12 +133,12 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `packages/movehat/src/core/AccountManager.ts` (M3.2 — 97.4% stmts; +23 cases across create/lookup/load/export)
 - [x] `packages/movehat/src/fork/manager.ts` (M3.3 — 97.1% stmts via `src/fork/__tests__/manager.test.ts`, 24 cases)
 - [x] `packages/movehat/src/node/LocalNodeManager.ts` (M3.3 — 94.4% stmts via `src/node/__tests__/LocalNodeManager.test.ts`, 20 cases)
-- [ ] `packages/movehat/src/commands/compile.ts`
-- [ ] `packages/movehat/src/commands/init.ts`
-- [ ] `packages/movehat/src/commands/run.ts`
-- [ ] `packages/movehat/src/commands/test.ts`
-- [ ] `packages/movehat/src/commands/test-move.ts`
-- [ ] `packages/movehat/src/commands/update.ts`
+- [x] `packages/movehat/src/commands/compile.ts` (M3.4 — 95.9% stmts; +6 cases on the orchestrator)
+- [x] `packages/movehat/src/commands/init.ts` (M3.4 — 98.4% stmts; +5 cases, real-tmpdir scaffold verification)
+- [x] `packages/movehat/src/commands/run.ts` (M3.4 — 75.5% stmts; target lowered to 70 in vitest.config because the "tsx-not-found" branch needs require.resolve patching that fails with "Cannot redefine property" in vitest's ESM sandbox — M4 integration covers)
+- [x] `packages/movehat/src/commands/test.ts` (M3.4 — 81.5% stmts; +11 cases over flag dispatch + interactive prompt + TS-mocha path)
+- [x] `packages/movehat/src/commands/test-move.ts` (M3.4 — 100% stmts; +4 cases)
+- [x] `packages/movehat/src/commands/update.ts` (M3.4 — 96.4% stmts; +13 cases over version compare + package-manager detection)
 - [ ] `packages/movehat/src/commands/fork/create.ts`
 - [ ] `packages/movehat/src/commands/fork/fund.ts`
 - [ ] `packages/movehat/src/commands/fork/list.ts`
