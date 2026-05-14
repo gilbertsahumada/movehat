@@ -123,9 +123,22 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M2 status: ✅ ready for `develop → main` batch (PR #124) — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #123) merged to develop. Tier 3 `pnpm test:e2e` 32/32 captured on M2.4 (PR #123) per CLAUDE.md §6.3.**
 
-### M3 — 80% unit coverage + Movement CLI cache (~5 days, issue #70) — (KPI 1)
+### M3 — ✅ shipped in PR #135 (develop → main batch) — 80% unit coverage + Movement CLI cache (issue #70) — (KPI 1)
 
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
+
+**Sub-PRs**:
+
+| Sub | Description | PR | Commit |
+|---|---|---|---|
+| M3.1 | CI cache for Movement CLI tarball | #130 | `ea2e08a` |
+| M3.2 | Coverage: runtime + config + AccountManager | #132 | `fd37bf6` |
+| M3.3 | Coverage: ForkManager + LocalNodeManager | #134 | `97178cb` |
+| M3.4 | Coverage: top-level commands | #137 | `161d2b6` |
+| M3.5 | Coverage: fork commands + global gate flip | #139 | `277253a` |
+| M3-CR | CodeRabbit batch review fixes | #141 | `1ace3d9` |
+
+Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred from M3.1, likely M5 alignment).
 
 **Definition of Done — Coverage thresholds (each ≥80% statements)**:
 - [x] `packages/movehat/src/runtime.ts` (M3.2 — 100% stmts via `src/__tests__/runtime.test.ts`, 13 cases)
