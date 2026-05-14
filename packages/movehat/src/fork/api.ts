@@ -5,12 +5,18 @@ import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js'
 import { normalizeAddressShort } from '../utils/address.js';
 
 /**
- * Client for interacting with Movement L1 JSON API
+ * Client for interacting with Movement L1 JSON API.
+ *
+ * When constructed with an `apiKey`, every outgoing request carries
+ * an `Authorization: Bearer <apiKey>` header. Use this for rate-
+ * limited public endpoints (e.g. Movement testnet under load) or
+ * auth-gated nodes.
  */
 export class MovementApiClient {
   private nodeUrl: string;
+  private readonly apiKey?: string;
 
-  constructor(nodeUrl: string) {
+  constructor(nodeUrl: string, apiKey?: string) {
     // Remove trailing slash
     let normalized = nodeUrl.replace(/\/$/, '');
 
@@ -21,10 +27,16 @@ export class MovementApiClient {
     }
 
     this.nodeUrl = normalized;
+    if (apiKey !== undefined) this.apiKey = apiKey;
   }
 
   /**
-   * Make a GET request to the API
+   * Make a GET request to the API.
+   *
+   * Adds `Authorization: Bearer <apiKey>` when the client was
+   * constructed with an `apiKey`. The header is omitted otherwise
+   * to preserve backwards-compatible behavior for unauthenticated
+   * public endpoints.
    */
   private async get<T>(path: string): Promise<T> {
     const fullUrl = `${this.nodeUrl}${path}`;
@@ -32,8 +44,16 @@ export class MovementApiClient {
     const isHttps = parsedUrl.protocol === 'https:';
     const client = isHttps ? https : http;
 
+    const requestOptions: {
+      method: 'GET';
+      headers?: Record<string, string>;
+    } = { method: 'GET' };
+    if (this.apiKey !== undefined) {
+      requestOptions.headers = { Authorization: `Bearer ${this.apiKey}` };
+    }
+
     return new Promise((resolve, reject) => {
-      const req = client.get(fullUrl, (res) => {
+      const req = client.get(fullUrl, requestOptions, (res) => {
         let data = '';
 
         res.on('data', (chunk) => {

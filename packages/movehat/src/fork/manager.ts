@@ -13,16 +13,49 @@ export class ForkManager {
   private apiClient: MovementApiClient | null = null;
   private metadata: ForkMetadata | null = null;
 
+  /**
+   * Optional API key sent as `Authorization: Bearer <key>` on every
+   * outgoing Movement API request. Not persisted to disk via
+   * {@link ForkMetadata} (keys stay in process memory). For the
+   * load-then-set pattern, call {@link setApiKey} after `load()`.
+   */
+  private apiKey?: string;
+
   constructor(forkPath: string) {
     this.storage = new ForkStorage(forkPath);
   }
 
   /**
-   * Initialize a new fork from a network
+   * Set or update the API key used for upstream Movement API requests.
+   * Reconstructs the internal `MovementApiClient` if one exists.
    */
-  async initialize(nodeUrl: string, networkName: string = 'custom'): Promise<void> {
-    // Create API client
-    this.apiClient = new MovementApiClient(nodeUrl);
+  setApiKey(apiKey: string | undefined): void {
+    if (apiKey === undefined) {
+      delete this.apiKey;
+    } else {
+      this.apiKey = apiKey;
+    }
+    if (this.apiClient && this.metadata) {
+      this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
+    }
+  }
+
+  /**
+   * Initialize a new fork from a network.
+   *
+   * @param nodeUrl - Upstream JSON-RPC base URL.
+   * @param networkName - Logical network label (defaults to `'custom'`).
+   * @param apiKey - Optional API key for `Authorization: Bearer` header.
+   */
+  async initialize(
+    nodeUrl: string,
+    networkName: string = 'custom',
+    apiKey?: string
+  ): Promise<void> {
+    if (apiKey !== undefined) this.apiKey = apiKey;
+
+    // Create API client (with optional Authorization header)
+    this.apiClient = new MovementApiClient(nodeUrl, this.apiKey);
 
     // Fetch network info
     const ledgerInfo = await this.apiClient.getLedgerInfo();
@@ -48,7 +81,9 @@ export class ForkManager {
   }
 
   /**
-   * Load an existing fork
+   * Load an existing fork. The API key is NOT persisted to disk —
+   * callers needing authenticated upstream reads after `load()` must
+   * call {@link setApiKey} explicitly.
    */
   load(): void {
     if (!this.storage.exists()) {
@@ -56,7 +91,7 @@ export class ForkManager {
     }
 
     this.metadata = this.storage.loadMetadata();
-    this.apiClient = new MovementApiClient(this.metadata.nodeUrl);
+    this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
   }
 
   /**

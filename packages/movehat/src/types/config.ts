@@ -59,6 +59,14 @@ export interface LocalTestOptions {
     forkName?: string;                  // Name for the fork (default: 'test-local')
     forkPort?: number;                  // Fork server port (default: 8080)
     forkResetState?: boolean;           // Clear fork state before tests (default: true)
+    /**
+     * Optional API key sent as `Authorization: Bearer <key>` on every
+     * outgoing Movement API request made by the fork's
+     * `MovementApiClient`. Use for rate-limited public endpoints or
+     * auth-gated nodes. The key stays in process memory only — not
+     * persisted to the fork's on-disk metadata.
+     */
+    forkApiKey?: string;
 
     // Common options (both modes)
     autoFund?: boolean;                 // Auto-fund accounts (default: true)
