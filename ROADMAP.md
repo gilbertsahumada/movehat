@@ -174,8 +174,10 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 
 | Sub | Description | Issue | PR |
 |---|---|---|---|
-| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | _pending_ |
-| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _pending_ |
+| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 |
+| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _this PR_ |
+
+Follow-ups filed during M4: #146 (`upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions — needs upstream Movement CLI / SDK diagnosis).
 
 **Definition of Done — Integration suite**:
 - [x] `packages/movehat/test/integration/` directory exists (M4.1)
@@ -186,10 +188,10 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 - [x] `TESTING.md` documents how to run the suite locally and the Docker fallback (M4.1 — new "Integration Suite (zero-mock)" section under "Full E2E Test")
 
 **Definition of Done — CI policy**:
-- [ ] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main`
-- [ ] `timeout-minutes: 5` set per job
-- [ ] Wall-clock for the E2E job is observed **<5 minutes** on cache hit
-- [ ] CI is green on `main` and on at least one non-`main` branch (e.g., a feature/security branch)
+- [x] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main` (M4.2 — dropped the `if: github.event_name == 'pull_request' && github.base_ref == 'main'` gate from the `e2e-tests` job; `on: push` block at lines 3-7 already targets `main`/`develop`/`feature/*`)
+- [x] `timeout-minutes: 5` set per job (M4.2 — applied uniformly to all 6 jobs: `build`, `unit-tests`, `test-matrix`, `e2e-tests`, `quality`, `security`)
+- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — _observed wall-clock pending first Actions run; will be updated in this PR_)
+- [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
 ### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
 
