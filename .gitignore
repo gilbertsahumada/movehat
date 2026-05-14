@@ -42,6 +42,7 @@ pnpm-debug.log*
 # Markdown files - ignore all except specific ones
 *.md
 !README.md
+!CLAUDE.md
 !CONTRIBUTING.md
 !FORK_GUIDE.md
 !QUICKSTART.md
