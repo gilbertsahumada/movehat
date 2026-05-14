@@ -84,9 +84,12 @@ jobs:
           fi
           LINES=$(jq '.total.lines.pct' coverage/coverage-summary.json)
           echo "Line coverage: $LINES%"
-          # Fail if coverage is below 15% (baseline; raise as tests grow)
-          if (( $(echo "$LINES < 15" | bc -l) )); then
-            echo "Coverage is below 15% threshold!"
+          # M3.5 raised the floor from 15% to 70%. Per-file thresholds for
+          # the 16 M3 target files (≥80%) are enforced by vitest itself
+          # via coverage.thresholds in vitest.config.ts — this gate is
+          # the global safety net for helper/UI modules outside that list.
+          if (( $(echo "$LINES < 70" | bc -l) )); then
+            echo "Coverage is below 70% threshold!"
             exit 1
           fi
 
