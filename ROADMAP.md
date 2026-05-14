@@ -149,9 +149,9 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [ ] `coverage-summary.json` produced and uploaded as CI artifact
 
 **Definition of Done — CI cache**:
-- [ ] `actions/cache@v4` step in the E2E job, keyed by Movement CLI tarball SHA / release URL hash
-- [ ] Cache hit path skips the 66 MB tarball download
-- [ ] Visible runtime drop on cache hit vs miss in CI logs
+- [x] `actions/cache@v4` step in the E2E job, keyed by Movement CLI tarball SHA / release URL hash (M3.1 — key `movement-cli-${{ runner.os }}-${{ runner.arch }}-bypass-homebrew-l1`)
+- [x] Cache hit path skips the 66 MB tarball download (M3.1 — Install step wrapped in `if: steps.cache-movement-cli.outputs.cache-hit != 'true'`)
+- [ ] Visible runtime drop on cache hit vs miss in CI logs — pending first CI re-run; numbers to be reported in PR #130 comment
 
 ### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71) — (KPI 1)
 
