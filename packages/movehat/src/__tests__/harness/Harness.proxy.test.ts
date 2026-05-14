@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { Harness, HarnessDisposedError } from "../../harness/index.js";
-import { _resetConfigCache } from "../../core/config.js";
+import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 /**
  * Proxy poisoning is the load-bearing safety guarantee of M2: once a
@@ -20,49 +17,14 @@ import { _resetConfigCache } from "../../core/config.js";
  * node is acceptable.
  */
 describe("Harness — proxy poisoning", () => {
-  let tmpCwd: string;
-  let origCwd: string;
+  let fixture: HarnessTestFixture;
 
   beforeEach(() => {
-    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-harness-test-"));
-    writeFileSync(
-      join(tmpCwd, "movehat.config.js"),
-      `export default {
-  defaultNetwork: "testnet",
-  networks: {
-    testnet: {
-      url: "https://testnet.movementnetwork.xyz/v1",
-      chainId: "testnet"
-    }
-  }
-};
-`
-    );
-    const moveDir = join(tmpCwd, "move");
-    mkdirSync(join(moveDir, "sources"), { recursive: true });
-    writeFileSync(
-      join(moveDir, "Move.toml"),
-      `[package]
-name = "dummy"
-version = "0.0.1"
-
-[addresses]
-`
-    );
-    writeFileSync(join(moveDir, "sources", "dummy.move"), "// intentionally empty\n");
-
-    origCwd = process.cwd();
-    process.chdir(tmpCwd);
-    _resetConfigCache();
+    fixture = setupHarnessTestFixture();
   });
 
   afterEach(() => {
-    try {
-      process.chdir(origCwd);
-    } finally {
-      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
-      _resetConfigCache();
-    }
+    fixture.teardown();
   });
 
   it("cleanup() flips poisoned to true", async () => {

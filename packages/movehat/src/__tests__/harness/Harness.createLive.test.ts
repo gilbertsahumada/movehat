@@ -1,60 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { Harness } from "../../harness/index.js";
-import { _resetConfigCache } from "../../core/config.js";
+import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 describe("Harness.createLive", () => {
-  let tmpCwd: string;
-  let origCwd: string;
+  let fixture: HarnessTestFixture;
 
   beforeEach(() => {
-    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-harness-live-"));
-    writeFileSync(
-      join(tmpCwd, "movehat.config.js"),
-      `export default {
-  defaultNetwork: "testnet",
-  networks: {
-    testnet: {
-      url: "https://testnet.movementnetwork.xyz/v1",
-      chainId: "testnet"
-    },
-    custom: {
-      url: "https://custom.example.com/v1",
-      chainId: "custom",
-      accounts: ["0x${"a".repeat(64)}"]
-    }
-  }
-};
-`
-    );
-    const moveDir = join(tmpCwd, "move");
-    mkdirSync(join(moveDir, "sources"), { recursive: true });
-    writeFileSync(
-      join(moveDir, "Move.toml"),
-      `[package]
-name = "dummy"
-version = "0.0.1"
-
-[addresses]
-`
-    );
-    writeFileSync(join(moveDir, "sources", "dummy.move"), "// intentionally empty\n");
-
-    origCwd = process.cwd();
-    process.chdir(tmpCwd);
-    _resetConfigCache();
+    fixture = setupHarnessTestFixture({
+      extraNetworks: {
+        custom: {
+          url: "https://custom.example.com/v1",
+          chainId: "custom",
+          accounts: ["0x" + "a".repeat(64)],
+        },
+      },
+    });
   });
 
   afterEach(() => {
-    try {
-      process.chdir(origCwd);
-    } finally {
-      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
-      _resetConfigCache();
-    }
+    fixture.teardown();
   });
 
   it("returns a Harness bound to the requested network with mode='live'", async () => {
