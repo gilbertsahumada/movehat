@@ -29,6 +29,8 @@
     "docker:clean": "docker-compose -f docker-compose.test.yml down --rmi local --volumes",
     "build:docs": "pnpm --filter docs build",
     "dev:docs": "pnpm --filter docs dev",
+    "docs:api": "pnpm --filter movehat docs:api",
+    "bench": "pnpm --filter movehat bench",
     "prepare": "husky"
   },
   "packageManager": "pnpm@9.0.0",

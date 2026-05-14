@@ -45,6 +45,8 @@ Before installing Movehat, make sure you have:
   movement --version
   ```
 
+  For the exact CLI revision Movehat tests against (with SHA256-pinned CI verification), see [`MOVEMENT_CLI_COMPAT.md`](./MOVEMENT_CLI_COMPAT.md).
+
   **IMPORTANT:** Without Movement CLI installed, compilation will fail with:
   ```
   Compilation failed: Command failed: movement move build

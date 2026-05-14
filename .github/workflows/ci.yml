@@ -174,24 +174,41 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local/bin/movement
-          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-bypass-homebrew-l1
+          # SHA256 short prefix in the cache key ties cache hits to the
+          # exact pinned binary. Rotating MOVEMENT_CLI_SHA256_LINUX_X64
+          # below busts the cache automatically. See MOVEMENT_CLI_COMPAT.md
+          # for the pinning policy + rotation procedure.
+          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
           restore-keys: |
             movement-cli-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install Movement CLI
         if: steps.cache-movement-cli.outputs.cache-hit != 'true'
+        env:
+          # Pinned SHA256 of `movement-cli-l1-linux-x86_64.tar.gz` from
+          # the `bypass-homebrew` tag, uploaded upstream 2025-11-26.
+          # Upstream publishes a single moving tag; SHA256 is the only
+          # version-pin equivalent (see MOVEMENT_CLI_COMPAT.md #140).
+          # Rotation: maintainer updates this value + the matrix doc in
+          # the same PR after consciously adopting a new upstream build.
+          MOVEMENT_CLI_SHA256_LINUX_X64: f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2
         run: |
           # Map runner.arch to the artifact suffix the upstream release uses.
           # The cache key (above) already includes runner.arch, so the
           # download URL must follow the same arch dimension or a cache hit
           # on the wrong architecture would install an unusable binary.
           case "${{ runner.arch }}" in
-            X64)   CLI_ARCH="x86_64" ;;
-            ARM64) CLI_ARCH="aarch64" ;;
+            X64)   CLI_ARCH="x86_64"; EXPECTED_SHA256="${MOVEMENT_CLI_SHA256_LINUX_X64}" ;;
+            ARM64) echo "::error::aarch64 SHA256 not pinned; see MOVEMENT_CLI_COMPAT.md"; exit 1 ;;
             *)     echo "::error::Unsupported runner.arch: ${{ runner.arch }}"; exit 1 ;;
           esac
           ARTIFACT="movement-cli-l1-linux-${CLI_ARCH}.tar.gz"
           curl -fLO "https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/${ARTIFACT}"
+          # Verify SHA256 BEFORE chmod/sudo mv — supply-chain hardening
+          # closes #140 (deferred from M3.1). Mismatch means upstream
+          # silently re-uploaded; the job fails and a maintainer rotates
+          # the pin per MOVEMENT_CLI_COMPAT.md.
+          echo "${EXPECTED_SHA256}  ${ARTIFACT}" | sha256sum -c
           mkdir -p temp_extract
           tar -xzf "${ARTIFACT}" -C temp_extract
           chmod +x temp_extract/movement
@@ -254,17 +271,12 @@ jobs:
         run: pnpm install
 
       - name: Check package.json
-        run: |
-          cd packages/movehat
-          node -e "
-            const pkg = require('./package.json');
-            const required = ['name', 'version', 'description', 'author', 'license', 'repository', 'bin'];
-            const missing = required.filter(f => !pkg[f]);
-            if (missing.length) {
-              console.error('Missing required fields:', missing);
-              process.exit(1);
-            }
-          "
+        # Validation logic lives in packages/movehat/scripts/check-package-json.js
+        # (ESM, uses `readFileSync` + `JSON.parse`). Extracted from an inline
+        # CommonJS `node -e` block per M4 self-review (#147 Major 3) — the
+        # inline form tripped the workflow validation hook on every ci.yml
+        # edit during the M4.2 cycle.
+        run: node packages/movehat/scripts/check-package-json.js
 
       - name: Check for TODO/FIXME comments
         run: |

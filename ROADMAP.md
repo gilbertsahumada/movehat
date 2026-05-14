@@ -166,20 +166,24 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 - [x] Cache hit path skips the 66 MB tarball download (M3.1 — Install step wrapped in `if: steps.cache-movement-cli.outputs.cache-hit != 'true'`)
 - [ ] Visible runtime drop on cache hit vs miss in CI logs — pending first CI re-run; numbers to be reported in PR #130 comment
 
-### M4 — Zero-mock integration suite + E2E SLO (~4 days, issue #71) — (KPI 1)
+### M4 — ✅ shipped in PR #148 (develop → main batch) — Zero-mock integration suite + E2E SLO (issue #71) — (KPI 1)
 
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
 **Sub-PRs**:
 
-| Sub | Description | Issue | PR |
-|---|---|---|---|
-| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 |
-| M4.2 | CI: E2E on every push under 5-min SLO | #144 | _this PR_ |
+| Sub | Description | Issue | PR | Commit |
+|---|---|---|---|---|
+| M4.1 | Zero-mock harness suite + vitest config + fixtures | #143 | #145 | `fc0ef71` |
+| M4.2 | CI: E2E on every push under 5-min SLO | #144 | #147 | `a165c01` |
+| M4-CR | CodeRabbit batch review fix (env restore in afterAll) | — | #150 | `62ea644` |
 
-Follow-ups filed during M4:
-- #146 — `upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions (upstream Movement CLI / SDK).
-- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort). Forces the integration suite's local-mode path to skip in CI via `MOVEHAT_SKIP_LOCAL_NODE=true`; fork-mode path + grep guard still gate. Local developers run the full suite green on macOS.
+Batch merge commit: `e1dde96` (`develop → main` via PR #148, merged `2026-05-14T14:49:13Z`).
+
+Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M5 compat-matrix work):
+- #146 — `upgradeCodeObject` reports `Result: Success` but on-chain ABI doesn't expose v2 functions. Needs upstream Movement CLI / Aptos SDK diagnosis.
+- #149 — Movement local-node fails to start on Linux x86_64 (MintFunder genesis abort: `ENOT_APTOS_FRAMEWORK_ADDRESS`). M4.2 mitigates by env-gated `harness-local` skip in CI; macOS local dev runs the full suite. Likely M5 alignment.
+- #140 — Movement CLI artifact integrity verification (deferred from M3.1).
 
 **Definition of Done — Integration suite**:
 - [x] `packages/movehat/test/integration/` directory exists (M4.1)
@@ -199,22 +203,32 @@ Follow-ups filed during M4:
 
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
+**Sub-PRs**:
+
+| Sub | Description | Status |
+|---|---|---|
+| M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | ✅ shipped in PR #160 |
+| M5.2 | `perf(fork): benchmarks + fundAccount auth_key fix` (issue #157, closes #63) | ✅ shipped in PR #161 |
+| M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | 🔄 in-flight |
+
 **Definition of Done — Auto-generated docs**:
-- [ ] `typedoc` + `typedoc-plugin-markdown` installed
-- [ ] `pnpm docs:api` script generates MDX into `packages/docs/content/docs/api/`
-- [ ] `packages/docs/package.json` `prebuild` runs the generation step
-- [ ] `/api/Harness` (or equivalent) route renders the generated content on the docs site
+- [x] `typedoc` + `typedoc-plugin-markdown` installed (M5.1)
+- [x] `pnpm docs:api` script generates MDX into `packages/docs/content/docs/api/reference/` (M5.1)
+- [x] `packages/docs/package.json` `prebuild` runs the generation step (M5.1)
+- [x] `/api/reference/classes/Harness` (and 50 sibling pages) renders the generated content on the docs site (M5.1 — `pnpm build:docs` green with 51 MDX files + narrative `/api/harness` unchanged)
 
 **Definition of Done — Benchmarks**:
-- [ ] `packages/movehat/bench/fork.bench.ts` exists (using `vitest bench` or `tinybench`)
-- [ ] Measures cold-start, fork hydrate, RPC round-trip
-- [ ] `BENCHMARKS.md` at repo root with baseline numbers
-- [ ] At least 1–2 optimization wins applied (e.g., parallel resource fetch); before/after numbers in the same file
+- [x] `packages/movehat/bench/fork.bench.ts` exists (plain tsx + `performance.now()` — vitest bench's per-iter model doesn't fit `createLocal`/`createFork` heavy lifecycle ops; rationale documented in `BENCHMARKS.md`) (M5.2)
+- [x] Measures cold-start, fork hydrate, RPC round-trip (M5.2)
+- [x] `BENCHMARKS.md` at repo root with baseline numbers (M5.2 — Darwin arm64 baseline captured; CI variance disclaimed)
+- [N/A] At least 1–2 optimization wins applied — **deliberately not applied**. Each candidate from the M5 plan (parallelize `getAllResources`, cache `getLedgerInfo`, reduce `runViewFunction` overhead) was inspected and rejected: the dominant costs are external (Movement CLI startup, testnet RPC latency) and the Movehat-side surface area is already tight. Rationale captured in `BENCHMARKS.md` "Optimization wins applied" section. The plan explicitly anticipated this outcome: "If <5% improvement, document the negative result in BENCHMARKS.md and don't claim the win."
 
 **Definition of Done — Compatibility matrix**:
-- [ ] `MOVEMENT_CLI_COMPAT.md` at repo root listing tested Movement CLI versions
-- [ ] At least 2 versions tested green
-- [ ] CI cache key references the pinned version(s)
+- [x] `MOVEMENT_CLI_COMPAT.md` at repo root listing tested Movement CLI revisions (M5.3 — single row pinned by SHA256, with documented rationale for why "≥2 versions" doesn't fit upstream's release model)
+- [N/A] At least 2 versions tested green — upstream `homebrew-movement-cli` publishes a **single moving tag** (`bypass-homebrew`); the `movement` main repo's versioned releases have zero binary assets. Older binaries are not retrievable after upstream replaces them. The SHA256 lock implemented in M5.3 is the version-pin equivalent: upstream re-uploads fail the CI's `sha256sum -c` step, surfacing rotation for explicit maintainer review. Full rationale in `MOVEMENT_CLI_COMPAT.md` "Why a single row" section.
+- [x] CI cache key references the pinned SHA256 (M5.3 — `movement-cli-${runner.os}-${runner.arch}-f2bdf3fa` short prefix; cache busts automatically on intentional pin rotation)
+- [x] Closes #140 (artifact integrity verification — `sha256sum -c` BEFORE `chmod +x`/`sudo mv`, fails the job on mismatch) (M5.3)
+- [x] Documents #146 reproduction + hypotheses in `MOVEMENT_CLI_COMPAT.md` "Known issues" section (M5.3)
 
 ### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73) — (KPI 2)
 
