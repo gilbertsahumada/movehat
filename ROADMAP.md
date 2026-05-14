@@ -192,7 +192,7 @@ Follow-ups filed during M4:
 **Definition of Done — CI policy**:
 - [x] `.github/workflows/ci.yml` E2E trigger on **every push** (`on: push`), not only on PR to `main` (M4.2 — dropped the `if: github.event_name == 'pull_request' && github.base_ref == 'main'` gate from the `e2e-tests` job; `on: push` block at lines 3-7 already targets `main`/`develop`/`feature/*`)
 - [x] `timeout-minutes: 5` set per job (M4.2 — applied uniformly to all 6 jobs: `build`, `unit-tests`, `test-matrix`, `e2e-tests`, `quality`, `security`)
-- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — first all-jobs run on PR #147 completed in **3m21s total** with e2e-tests at **2m14s** before #149 forced a skip; backfilled with the post-skip number after the re-run)
+- [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — green re-run on PR #147 (`b3e54bf`, run #25865395431) completed in **2m20s total wall-clock**; e2e-tests job at **1m17s** with Movement CLI cache hit; integration step 2.4s with fork tests passing + harness-local skipped via `MOVEHAT_SKIP_LOCAL_NODE` per #149; grep guard passes silently)
 - [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
 ### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
