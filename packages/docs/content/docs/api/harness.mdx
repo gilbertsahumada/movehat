@@ -59,11 +59,18 @@ Read-only path. `network` is `'testnet'`, `'mainnet'`, or any custom name resolv
 
 ```typescript
 const harness = await Harness.createFork("testnet");
-// harness.runViewFunction works
+// harness.runViewFunction works against runtime.aptos.view payloads that
+// hit the fork's account/resource pass-through path; calls that require
+// the SDK to hydrate a module ABI (e.g. anything that resolves a fully
+// qualified function id at submit time) currently raise endpoint_not_found
+// because the fork server doesn't expose /accounts/<addr>/module/<name>.
+// See the "Fork-mode view caveat" note below.
 // harness.deployCodeObject / upgradeCodeObject / runMoveScript throw a clear error
 ```
 
 > The `apiKey` parameter is reserved — wiring into the `MovementApiClient` Authorization header is a TODO for an upcoming sub-PR. Passing it today is a silent no-op.
+
+> **Fork-mode view caveat:** the fork server proxies `/v1/accounts/<addr>` and `/v1/accounts/<addr>/resource/...` but **not** `/v1/accounts/<addr>/module/<name>`. SDK paths that call `getAccountModule` under the hood (which includes `aptos.view` for some payload shapes) raise `endpoint_not_found`. For full-fidelity view-function reads against testnet/mainnet state, prefer `createLive(network)` or point the SDK directly at the upstream RPC. Fork mode remains the right choice for resource reads and write-attempt rejection tests.
 
 ### `Harness.createLive(network: string, faucetUrl?: string)`
 
@@ -115,7 +122,7 @@ Fork-mode guard applies.
 
 ### `harness.runViewFunction(options)`
 
-Pure SDK call — no Movement CLI invocation, no profile management. Works on all 3 harness modes (read-only).
+Pure SDK call — no Movement CLI invocation, no profile management. Works on `createLocal` and `createLive` unconditionally. **Fork mode is limited:** the fork server doesn't proxy `/accounts/<addr>/module/<name>`, so SDK paths that hydrate the function's ABI raise `endpoint_not_found`. See the [fork-mode view caveat](#harnesscreateforknetwork-string-apikey-string) above.
 
 ```typescript
 const result = await harness.runViewFunction({
