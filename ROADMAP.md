@@ -131,8 +131,8 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `packages/movehat/src/runtime.ts` (M3.2 — 100% stmts via `src/__tests__/runtime.test.ts`, 13 cases)
 - [x] `packages/movehat/src/core/config.ts` (M3.2 — 88.7% stmts; +20 cases on resolveNetworkConfig)
 - [x] `packages/movehat/src/core/AccountManager.ts` (M3.2 — 97.4% stmts; +23 cases across create/lookup/load/export)
-- [ ] `packages/movehat/src/fork/manager.ts`
-- [ ] `packages/movehat/src/node/LocalNodeManager.ts`
+- [x] `packages/movehat/src/fork/manager.ts` (M3.3 — 97.1% stmts via `src/fork/__tests__/manager.test.ts`, 24 cases)
+- [x] `packages/movehat/src/node/LocalNodeManager.ts` (M3.3 — 94.4% stmts via `src/node/__tests__/LocalNodeManager.test.ts`, 20 cases)
 - [ ] `packages/movehat/src/commands/compile.ts`
 - [ ] `packages/movehat/src/commands/init.ts`
 - [ ] `packages/movehat/src/commands/run.ts`
