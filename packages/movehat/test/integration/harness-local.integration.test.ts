@@ -42,6 +42,7 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
   let harness: Harness;
   let codeObjectAddr: string;
   let originalCwd: string;
+  let originalRedeployEnv: string | undefined;
 
   beforeAll(async () => {
     // `Harness.createLocal` → `initRuntime` → `loadUserConfig` reads
@@ -50,8 +51,12 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
     // load succeeds without polluting the package root with a user-
     // facing config file. `MH_CLI_REDEPLOY=true` allows re-running the
     // suite without `deployments/local/counter.json` stale-record
-    // bookkeeping aborting the second run.
+    // bookkeeping aborting the second run. Both env mutations get
+    // restored in afterAll so the process state is exactly what it
+    // was on entry — defensive against future integration tests that
+    // run in the same fork.
     originalCwd = process.cwd();
+    originalRedeployEnv = process.env.MH_CLI_REDEPLOY;
     process.chdir(integrationDir);
     process.env.MH_CLI_REDEPLOY = 'true';
 
@@ -83,6 +88,11 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
   afterAll(async () => {
     if (harness) await harness.cleanup();
     if (originalCwd) process.chdir(originalCwd);
+    if (originalRedeployEnv === undefined) {
+      delete process.env.MH_CLI_REDEPLOY;
+    } else {
+      process.env.MH_CLI_REDEPLOY = originalRedeployEnv;
+    }
   });
 
   it('deployCodeObject publishes the v1 package', async () => {
