@@ -2,7 +2,7 @@
 
 Complete testing and validation guide before publishing.
 
-##  Table of Contents
+## Table of Contents
 
 1. [Testing Levels](#testing-levels)
 2. [Local Testing](#local-testing)
@@ -13,7 +13,7 @@ Complete testing and validation guide before publishing.
 
 ---
 
-##  Testing Levels
+## Testing Levels
 
 ### 1. **Unit Tests** (Future)
 - Individual function testing
@@ -42,7 +42,7 @@ Complete testing and validation guide before publishing.
 
 ---
 
-##  Local Testing
+## Local Testing
 
 ### Quick Smoke Test
 
@@ -147,7 +147,7 @@ This checks:
 
 ---
 
-##  Docker Testing
+## Docker Testing
 
 Docker testing provides **isolated, reproducible environments** to test installation and usage across different configurations.
 
@@ -195,7 +195,7 @@ docker-compose -f docker-compose.test.yml down --rmi local --volumes
 
 ---
 
-##  Pre-Publish Checklist
+## Pre-Publish Checklist
 
 Before publishing to npm, complete this checklist:
 
@@ -250,7 +250,7 @@ Before publishing to npm, complete this checklist:
 
 ---
 
-##  CI/CD Pipeline
+## CI/CD Pipeline
 
 ### Automated Testing (GitHub Actions)
 
@@ -308,7 +308,7 @@ Pre-Publish Checks  Publish to npm  Create GitHub Release  Verify Install
 
 ---
 
-##  Manual Testing Steps
+## Manual Testing Steps
 
 ### Before Every Release
 
@@ -373,7 +373,7 @@ movehat update
 # Should check for updates
 ```
 
-#### 7. Test Help Commands
+#### 8. Test Help Commands
 
 ```bash
 movehat --help
@@ -382,7 +382,7 @@ movehat test --help
 movehat fork --help
 ```
 
-#### 8. Test on Different Systems (if possible)
+#### 9. Test on Different Systems (if possible)
 
 - [ ] macOS (Intel)
 - [ ] macOS (Apple Silicon)
@@ -456,7 +456,7 @@ movehat test --move  # Fast tests only (no node required)
 
 ---
 
-##  Release Process
+## Release Process
 
 ### 1. Prepare Release
 
@@ -515,7 +515,7 @@ movehat --version
 
 ---
 
-##  Testing Metrics
+## Testing Metrics
 
 Track these metrics for quality:
 
@@ -528,7 +528,7 @@ Track these metrics for quality:
 
 ---
 
-##  Useful Commands
+## Useful Commands
 
 ```bash
 # Build package
@@ -562,7 +562,7 @@ npm publish
 
 ---
 
-##  Best Practices
+## Best Practices
 
 1. **Always test on clean install** - Users don't have your dev environment
 2. **Test major Node versions** - Support LTS versions (18, 20)
@@ -575,7 +575,7 @@ npm publish
 
 ---
 
-##  Troubleshooting Tests
+## Troubleshooting Tests
 
 ### Smoke Tests Failing
 
