@@ -70,16 +70,12 @@ export class ForkManager {
   ): Promise<void> {
     if (apiKey !== undefined) this.apiKey = apiKey;
 
-    // Create API client (with optional Authorization header)
     this.apiClient = new MovementApiClient(nodeUrl, this.apiKey);
 
-    // Fetch network info
     const ledgerInfo = await this.apiClient.getLedgerInfo();
 
-    // Create fork structure
     this.storage.initialize();
 
-    // Save metadata
     this.metadata = {
       network: networkName,
       nodeUrl,
@@ -110,9 +106,6 @@ export class ForkManager {
     this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
   }
 
-  /**
-   * Get fork metadata
-   */
   getMetadata(): ForkMetadata {
     if (!this.metadata) {
       this.metadata = this.storage.loadMetadata();
@@ -120,18 +113,12 @@ export class ForkManager {
     return this.metadata;
   }
 
-  /**
-   * Get account state (with lazy loading)
-   */
   async getAccount(address: string): Promise<AccountState> {
-    // Normalize address
     const normalizedAddress = normalizeAddress(address);
 
-    // Check cache first
     let accountState = this.storage.getAccount(normalizedAddress);
 
     if (!accountState) {
-      // Fetch from network
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
@@ -144,7 +131,6 @@ export class ForkManager {
         authenticationKey: accountData.authentication_key,
       };
 
-      // Cache it
       this.storage.saveAccount(normalizedAddress, accountState);
       console.log(`  ✓ Cached account ${normalizedAddress}`);
     }
@@ -152,17 +138,12 @@ export class ForkManager {
     return accountState;
   }
 
-  /**
-   * Get a specific resource (with lazy loading)
-   */
   async getResource(address: string, resourceType: string): Promise<any> {
     const normalizedAddress = normalizeAddress(address);
 
-    // Check cache first
     let resource = this.storage.getResource(normalizedAddress, resourceType);
 
     if (!resource) {
-      // Fetch from network
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
@@ -173,7 +154,6 @@ export class ForkManager {
         const resourceData = await this.apiClient.getAccountResource(normalizedAddress, resourceType);
         resource = resourceData.data;
 
-        // Cache it
         this.storage.saveResource(normalizedAddress, resourceType, resource);
         console.log(`  ✓ Cached resource ${resourceType}`);
       } catch (error) {
@@ -188,16 +168,11 @@ export class ForkManager {
     return resource;
   }
 
-  /**
-   * Get all resources for an account (with lazy loading)
-   */
   async getAllResources(address: string): Promise<Record<string, any>> {
     const normalizedAddress = normalizeAddress(address);
 
-    // Check if we have any cached resources
     let resources = this.storage.getAllResources(normalizedAddress);
 
-    // If no cached resources, fetch all from network
     if (Object.keys(resources).length === 0) {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
@@ -211,7 +186,6 @@ export class ForkManager {
         resources[resource.type] = resource.data;
       }
 
-      // Cache them
       this.storage.saveAllResources(normalizedAddress, resources);
       console.log(`  ✓ Cached ${Object.keys(resources).length} resources`);
     }
@@ -219,18 +193,13 @@ export class ForkManager {
     return resources;
   }
 
-  /**
-   * Set a resource value (for testing/mocking)
-   */
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);
     console.log(`  ✓ Updated resource ${resourceType} for ${normalizedAddress}`);
   }
 
-  /**
-   * Fund an account with coins (adds to existing balance)
-   */
+  /** Adds to the existing balance rather than replacing it. */
   async fundAccount(address: string, amount: number, coinType: string = '0x1::aptos_coin::AptosCoin'): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
@@ -250,7 +219,6 @@ export class ForkManager {
         throw error;
       }
 
-      // If doesn't exist, create new one
       coinStore = {
         coin: { value: '0' },
         deposit_events: {
@@ -275,15 +243,12 @@ export class ForkManager {
       };
     }
 
-    // Add to existing balance (instead of replacing it)
     const currentBalance = BigInt(coinStore.coin.value ?? '0');
     const newBalance = currentBalance + BigInt(amount);
     coinStore.coin.value = newBalance.toString();
 
-    // Save
     await this.setResource(normalizedAddress, resourceType, coinStore);
 
-    // Also ensure account exists
     let account = this.storage.getAccount(normalizedAddress);
     if (!account) {
       account = {
@@ -296,9 +261,6 @@ export class ForkManager {
     console.log(`  ✓ Funded ${normalizedAddress} with ${amount} coins`);
   }
 
-  /**
-   * List all accounts in the fork
-   */
   listAccounts(): string[] {
     return this.storage.listAccounts();
   }
@@ -364,11 +326,9 @@ export class ForkManager {
   async getOrCreateAccount(address: string): Promise<AccountState> {
     const normalizedAddress = normalizeAddress(address);
 
-    // Try to get existing account
     try {
       return await this.getAccount(normalizedAddress);
     } catch (error) {
-      // If account doesn't exist, create a minimal one
       const newAccount: AccountState = {
         sequenceNumber: '0',
         authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),

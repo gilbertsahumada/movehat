@@ -94,9 +94,6 @@ export class MoveContract {
   }
 }
 
-/**
- * Factory function to create a contract instance
- */
 export function getContract(
     aptos: Aptos,
     moduleAddress: string,

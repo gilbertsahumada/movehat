@@ -54,13 +54,10 @@ export class Publisher {
   async deploy(input: PublishInput): Promise<DeploymentInfo> {
     const { moduleName, config, account } = input;
 
-    // Validate moduleName early
     validateSafeName(moduleName, "module");
 
-    // Check if --redeploy flag was passed via CLI
     const forceRedeploy = process.env.MH_CLI_REDEPLOY === "true";
 
-    // Check if already deployed
     const existingDeployment = loadDeployment(config.network, moduleName);
     if (existingDeployment && !forceRedeploy) {
       // Build detailed error message with all deployment info
