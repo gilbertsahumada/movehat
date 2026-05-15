@@ -179,9 +179,9 @@ describe("runCommand — orchestrator", () => {
   // the workspace's own node_modules from __dirname's perspective, so the
   // fallback never throws. Patching `module.createRequire` to inject a
   // failing resolver fails with "Cannot redefine property" because the
-  // ESM-imported `node:module` is read-only. The branch is exercised by
-  // the existing "tsx not found" runtime failure in CI when tsx is
-  // accidentally missing from a published consumer. M4 integration covers.
+  // ESM-imported `node:module` is read-only. The branch is exercised
+  // by the integration suite via the "tsx not found" runtime failure
+  // when tsx is missing from a published consumer.
 
   it("catches and exits 1 when runCli throws (spawn-time failure)", async () => {
     runCliMock.mockRejectedValueOnce(new Error("ENOENT: node not found"));

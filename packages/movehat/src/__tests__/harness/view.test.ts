@@ -7,9 +7,9 @@ import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js"
  * Tests for `Harness.runViewFunction` — the SDK delegation path.
  *
  * The Aptos SDK isn't behind an injectable adapter, so we monkey-patch
- * `harness.runtime.aptos.view` after `createLive`. One-off for M2.3.
- * Acceptable here because the function under test is a 6-line wrapper
- * that only forwards options.
+ * `harness.runtime.aptos.view` after `createLive`. Acceptable here
+ * because the function under test is a 6-line wrapper that only
+ * forwards options.
  */
 describe("Harness.runViewFunction", () => {
   let fixture: HarnessTestFixture;

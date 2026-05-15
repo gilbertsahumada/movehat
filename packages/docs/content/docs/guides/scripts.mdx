@@ -122,7 +122,7 @@ const harness = await Harness.createLive("testnet");
 harness.mode               // 'local' | 'fork' | 'live'
 harness.poisoned           // true once cleanup() has been called
 
-// Harness methods (M2 public API)
+// Harness methods
 harness.deployCodeObject   // movement move deploy-object
 harness.upgradeCodeObject  // movement move upgrade-object
 harness.runViewFunction    // aptos.view (read-only, works in all modes)

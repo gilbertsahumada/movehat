@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Tests for `ForkManager` (M3.3). Strategy:
+ * Tests for `ForkManager`. Strategy:
  *   - `vi.mock` the upstream `MovementApiClient` (network layer) so
  *     tests stay offline and deterministic.
  *   - Use a REAL `ForkStorage` against a tmpdir (storage is already

@@ -4,14 +4,14 @@ import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
 
 /**
- * Migrated to the M2 Harness API. Uses Harness.createLocal with
- * autoDeploy — same Publisher-based publish path the previous
- * setupTestFixture flow used. The sibling tests (greeting.test.ts,
- * message.test.ts) stay on setupTestFixture to demonstrate that the
- * older API continues to work side-by-side.
+ * Uses the Harness API: Harness.createLocal with autoDeploy. Same
+ * Publisher-based publish path the older setupTestFixture flow used.
+ * The sibling tests (greeting.test.ts, message.test.ts) stay on
+ * setupTestFixture to demonstrate that the older API continues to
+ * work side-by-side.
  *
- * For the new code-object deploy path (`harness.deployCodeObject`),
- * see scripts/deploy-counter.ts in this directory.
+ * For the code-object deploy path (`harness.deployCodeObject`), see
+ * scripts/deploy-counter.ts in this directory.
  */
 describe("Counter Contract", () => {
   let harness: Harness;

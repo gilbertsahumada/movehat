@@ -36,16 +36,10 @@ interface HarnessInit {
  * a Proxy that synchronously throws {@link HarnessDisposedError} on any
  * post-`cleanup()` call to one of the deployment / script / view methods.
  *
- * Methods `deployCodeObject`, `upgradeCodeObject`, `runViewFunction`,
- * and `runMoveScript` are stubbed in M2.1 — they throw at runtime until
- * M2.2/M2.3 lands. The type surface is complete so callers and docs can
- * be written against it ahead of time.
- *
- * AccountManager note: as of M2.1 the underlying account pool is a
- * process-wide static (see `core/AccountManager.ts`). Two Harness
- * instances in the same process share account labels; this is the same
- * constraint that already governs `setupTestFixture`. A per-Harness pool
- * is a future change.
+ * AccountManager note: the underlying account pool is a process-wide
+ * static (see `core/AccountManager.ts`). Two Harness instances in the
+ * same process share account labels; this is the same constraint that
+ * already governs `setupTestFixture`.
  */
 export class Harness {
   public readonly mode: HarnessMode;
@@ -128,7 +122,7 @@ export class Harness {
    * spawned; transactions are submitted to the configured RPC.
    *
    * @param network - Named network from movehat.config.ts.
-   * @param _faucetUrl - Reserved for M2.2 (auto-fund on networks with a faucet).
+   * @param _faucetUrl - Reserved for future auto-fund support on networks with a faucet.
    */
   static async createLive(network: string, _faucetUrl?: string): Promise<Harness> {
     const runtime = await initRuntime({ network });

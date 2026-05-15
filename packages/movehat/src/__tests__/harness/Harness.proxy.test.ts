@@ -4,17 +4,15 @@ import { Harness, HarnessDisposedError } from "../../harness/index.js";
 import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 /**
- * Proxy poisoning is the load-bearing safety guarantee of M2: once a
- * Harness has been cleaned up, any further deploy / view / script /
- * upgrade call must throw `HarnessDisposedError` synchronously on
- * property access — not after the awaited method body. These tests
- * lock that contract.
+ * Proxy poisoning is the load-bearing safety guarantee of the Harness:
+ * once cleaned up, any further deploy / view / script / upgrade call
+ * must throw `HarnessDisposedError` synchronously on property access —
+ * not after the awaited method body. These tests lock that contract.
  *
  * Uses `Harness.createLive(network)` because it does not spawn a real
  * Movement node — `initRuntime` only constructs the SDK client (no RPC
  * round-trip) from the fixture config. `createLocal` / `createFork`
- * runtime tests live in the M4 integration suite where spinning a real
- * node is acceptable.
+ * runtime tests live in the integration suite.
  */
 describe("Harness — proxy poisoning", () => {
   let fixture: HarnessTestFixture;
@@ -93,10 +91,8 @@ describe("Harness — proxy poisoning", () => {
     expect(harness.runtime).toBeDefined();
   });
 
-  // The M2.3-era "stubs reject" assertion was retired when M2.3 shipped
-  // real bodies for runViewFunction and runMoveScript. All four methods
-  // now have dedicated test suites (codeObject.deploy/upgrade.test.ts,
-  // view.test.ts, script.test.ts).
+  // Dedicated suites exist for each of the four methods
+  // (codeObject.deploy/upgrade.test.ts, view.test.ts, script.test.ts).
 
   it("await harness.someAsyncMethod() pattern: post-cleanup throw happens before await", async () => {
     const harness = await Harness.createLive("testnet");

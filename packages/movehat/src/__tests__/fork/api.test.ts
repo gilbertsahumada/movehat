@@ -3,8 +3,8 @@ import type { ClientRequest, IncomingMessage } from "node:http";
 import { EventEmitter } from "node:events";
 
 /**
- * Tests for `MovementApiClient` Authorization header injection (M2.4
- * follow-up — wires the apiKey threading from `Harness.createFork`).
+ * Tests for `MovementApiClient` Authorization header injection —
+ * verifies the apiKey threading from `Harness.createFork`.
  *
  * Strategy: `vi.mock` `node:https` and `node:http` so the test
  * captures the request options passed to `client.get(url, options, cb)`

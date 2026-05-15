@@ -41,12 +41,10 @@ describe.skipIf(!RUN_FORK)('Harness.createFork — read-only against testnet', (
   it('deployCodeObject throws in fork mode (read-only enforcement)', async () => {
     // Synchronous-style assertion: `Harness.deployCodeObject` checks
     // `this.mode === 'fork'` before any CLI call, so this rejects
-    // without touching the network. The DoD's `createFork` test path
-    // checks both: (a) the harness boots, and (b) the read-only
-    // boundary is enforced. View-function reads against the fork are
-    // skipped — the fork server doesn't expose `/accounts/<addr>/module/`
-    // endpoints, so SDK ABI lookups raise `endpoint_not_found`. Probing
-    // fork-only read paths is M5 work (see TESTING.md).
+    // without touching the network. View-function reads against the
+    // fork are skipped — the fork server doesn't expose
+    // `/accounts/<addr>/module/` endpoints, so SDK ABI lookups raise
+    // `endpoint_not_found` (see TESTING.md).
     await expect(
       harness.deployCodeObject({
         moduleName: 'counter',

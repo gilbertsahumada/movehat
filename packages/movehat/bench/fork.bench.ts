@@ -1,11 +1,11 @@
-// Fork-system benchmarks (M5.2). Plain tsx script — vitest bench's per-iter
-// model doesn't fit Harness.createLocal / Harness.createFork (heavy lifecycle
-// ops that spawn a process / snapshot RPC). Each run prints a small table and
-// exits. Numbers are wall-clock, measured on the author's machine; CI variance
-// is expected for the heavy-setup suites.
+// Fork-system benchmarks. Plain tsx script — vitest bench's per-iter model
+// doesn't fit Harness.createLocal / Harness.createFork (heavy lifecycle ops
+// that spawn a process / snapshot RPC). Each run prints a small table and
+// exits. Numbers are wall-clock, measured on the author's machine; CI
+// variance is expected for the heavy-setup suites.
 //
 // Run: pnpm --filter movehat bench
-// Output is consumed by BENCHMARKS.md (baseline + after-optimization).
+// Output is consumed by BENCHMARKS.md.
 
 import { performance } from 'node:perf_hooks';
 import { existsSync, rmSync } from 'node:fs';

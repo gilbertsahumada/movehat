@@ -304,7 +304,7 @@ describe("Harness.deployCodeObject", () => {
     }
   });
 
-  it("fork-mode harness throws synchronously before any CLI call (covered separately for createLocal/createFork in M4 integration suite)", async () => {
+  it("fork-mode harness throws synchronously before any CLI call (createLocal/createFork covered by the integration suite)", async () => {
     // This case can't be tested with a real createFork (it spawns a fork
     // server). Instead, prove that the disposed-instance path also fires
     // synchronously: a poisoned harness throws HarnessDisposedError on
