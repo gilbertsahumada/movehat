@@ -20,3 +20,11 @@ export { ModuleAlreadyDeployedError, PostPublishError } from "./errors.js";
 
 export { Harness, HarnessDisposedError } from "./harness/index.js";
 export type { HarnessMode } from "./harness/index.js";
+export type {
+  DeployCodeObjectOptions,
+  UpgradeCodeObjectOptions,
+  CodeObjectInfo,
+  RunViewFunctionOptions,
+  RunMoveScriptOptions,
+  MoveScriptResult,
+} from "./types/harness.js";
