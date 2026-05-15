@@ -45,13 +45,10 @@ jobs:
       - name: Build docs site
         run: pnpm build:docs
         env:
-          # Base path for GitHub Pages project site
-          # (gilbertsahumada.github.io/movehat/).
-          MOVEHAT_DOCS_BASE_PATH: /movehat
-          # Canonical site URL for og:metadata, llms.txt, copy-link
-          # actions. NEXT_PUBLIC_ prefix exposes it to client bundles
-          # (the llm-actions.tsx button uses it in the browser).
-          NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL: https://gilbertsahumada.github.io/movehat
+          # Custom domain served at root (CNAME = movehat.org). No basePath
+          # needed; the assetPrefix/basePath defaults from next.config.mjs
+          # apply when MOVEHAT_DOCS_BASE_PATH is unset.
+          NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL: https://movehat.org
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

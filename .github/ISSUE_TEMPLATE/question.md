@@ -12,7 +12,7 @@ labels: [question]
 ## What you've already checked
 
 - [ ] [README](../../README.md)
-- [ ] [Docs site](https://gilbertsahumada.github.io/movehat/)
+- [ ] [Docs site](https://movehat.org/)
 - [ ] Existing issues
 
 ## Environment (if relevant)
