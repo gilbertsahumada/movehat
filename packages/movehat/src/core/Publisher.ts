@@ -41,11 +41,6 @@ export interface PublishInput {
 /**
  * Publishes a Move module via the Movement CLI.
  *
- * Extracted from `runtime.deployContract` (M1.4 / #79). Carries the
- * destructive Move.toml-rewrite + shared-yaml-write semantics of the
- * original closure verbatim in this scaffold commit — bug fixes for
- * #36 / #37 / #38 land in subsequent commits.
- *
  * @internal
  */
 export class Publisher {

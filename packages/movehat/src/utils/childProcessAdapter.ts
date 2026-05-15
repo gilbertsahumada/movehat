@@ -99,10 +99,9 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
   run(input: RunInput): Promise<RunResult> {
     // Skip the default 5-minute timeout when the caller wires stdio
     // through to the terminal — interactive sessions (mocha, tsx scripts,
-    // `movement move test`, `pnpm install`) routinely exceed 5 minutes and
-    // SIGTERM'ing them silently is a regression vs the direct-spawn code
-    // these callers used before M1.3a. An explicitly-passed `timeoutMs`
-    // is always honored, regardless of `inheritStdio`.
+    // `movement move test`, `pnpm install`) routinely exceed 5 minutes
+    // and SIGTERM'ing them silently would be a regression. An explicit
+    // `timeoutMs` is always honored, regardless of `inheritStdio`.
     const timeoutMs =
       input.timeoutMs ?? (input.inheritStdio ? undefined : DEFAULT_TIMEOUT_MS);
 

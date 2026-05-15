@@ -11,7 +11,7 @@ describe("Counter Contract", () => {
   before(async function () {
     this.timeout(60000); // Allow time for local node startup + deployment
 
-    // Hardhat-style Harness — primary public API since M2.
+    // Hardhat-style Harness — the primary public API.
     // createLocal spins up a Movement local node, funds the labeled
     // accounts from the local faucet, and (via autoDeploy) builds +
     // publishes the named modules so they're ready to use.
@@ -43,7 +43,7 @@ describe("Counter Contract", () => {
       const tx = await counter.call(deployer, "init", []);
       console.log(`   Init transaction: ${tx.hash}`);
 
-      // Read counter value via harness.runViewFunction (new in M2)
+      // Read counter value via harness.runViewFunction
       const [value] = await harness.runViewFunction({
         function: `${counter.moduleAddress}::counter::get`,
         functionArguments: [deployer.accountAddress.toString()],

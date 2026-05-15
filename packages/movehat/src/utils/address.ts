@@ -1,10 +1,6 @@
 /**
  * Address normalization helpers shared across the fork code.
  *
- * Two normalization variants live in production today and are preserved here
- * with identical semantics so the in-place migration in M1.2 is behavior-
- * preserving:
- *
  *   - `normalizeAddress`      → lowercase + `0x` + left-pad to 64 hex chars.
  *                                Used by `fork/manager.ts` for storage keys.
  *   - `normalizeAddressShort` → lowercase + `0x`, no padding.

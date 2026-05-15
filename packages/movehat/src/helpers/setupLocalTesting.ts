@@ -20,8 +20,7 @@ import type { LocalTestOptions } from "../types/config.js";
  * @public The `runtime` and `teardown` fields are the supported surface.
  *         `localNode`, `forkServer`, and `forkManager` are exposed for
  *         escape hatches (e.g. mid-test `forkManager.resetState()`) but
- *         their concrete shapes are considered `@internal` until the M5
- *         TypeDoc pass formalizes the public API.
+ *         their concrete shapes are `@internal`.
  */
 export interface LocalTestingContext {
   runtime: MovehatRuntime;

@@ -93,9 +93,7 @@ export async function initRuntime(
       adapter?: ChildProcessAdapter;
     }
   ): Promise<DeploymentInfo> => {
-    // Thin orchestrator over Publisher (M1.4 / #79). The 250-line closure
-    // body lives in core/Publisher.ts and carries the bug fixes for
-    // #36 / #37 / #38.
+    // Thin orchestrator; the actual logic lives in core/Publisher.ts.
     return new Publisher({ adapter: options?.adapter }).deploy({
       moduleName,
       config,
