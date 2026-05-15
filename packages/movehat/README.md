@@ -1,361 +1,214 @@
-# Movehat
+<div align="center">
+  <img src="./packages/movehat/public/movehat.png" alt="Movehat" width="160"/>
 
-> Hardhat-like development framework for Movement L1 smart contracts
+  # Movehat
 
-[![npm version](https://badge.fury.io/js/movehat.svg)](https://www.npmjs.com/package/movehat)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  **A Hardhat-like development framework for Movement L1 smart contracts.**
+
+  Write your tests and deployment scripts in TypeScript while building Move contracts.
+
+  [![NPM Version](https://img.shields.io/npm/v/movehat)](https://www.npmjs.com/package/movehat)
+  [![License](https://img.shields.io/npm/l/movehat)](./LICENSE)
+
+  **[Full documentation](https://movehat.org/)**
+
+</div>
+
+---
 
 ## Features
 
-- **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
-- **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
-- **Auto-Deploy in Tests** - Contracts deploy automatically when tests run - zero manual setup
-- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts
-- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from Move code
-- **Quick Start** - Scaffold new Move projects in seconds
-- **TypeScript Testing** - Write integration tests with familiar tools (Mocha, Chai)
-- **Movement CLI Integration** - Seamless compilation and deployment
+- **Hardhat-style Harness API** — `Harness.createLocal`, `createFork`, `createLive` factory methods with explicit lifecycle (`cleanup()`) and use-after-cleanup safety (Proxy poisoning).
+- **Three execution modes** — full local blockchain, read-only fork of a remote network, or live testnet/mainnet binding.
+- **Auto-deploy in tests + auto-detect named addresses** — contracts compile and deploy automatically; no manual address wiring.
+- **Native fork system** — local JSON-backed snapshots of Movement L1 state, no BCS compatibility issues.
+- **TypeScript-first** — single `PRIVATE_KEY` across all networks (Hardhat-style); deployments tracked per-network in `deployments/`.
+- **SLSA-provenance releases** — every npm release ships with [Trusted Publishers](https://docs.npmjs.com/trusted-publishers) provenance. Verify with `npm view movehat@<version>`.
+- **Security hardening built-in** — path-traversal, command-injection, and YAML-injection protections at every boundary.
 
-## Prerequisites
+## Quick Start
 
-Before installing Movehat, ensure you have:
+### Prerequisites
 
-- **Node.js v18+** - [Download](https://nodejs.org/)
-- **Movement CLI** - **REQUIRED** for compiling Move contracts
+- **Node.js v20+** ([download](https://nodejs.org/))
+- **Movement CLI** — required for compiling and deploying Move code ([install guide](https://docs.movementnetwork.xyz/devs/movementcli)). For the exact revision Movehat tests against, see [`MOVEMENT_CLI_COMPAT.md`](./MOVEMENT_CLI_COMPAT.md).
 
-  Install from: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
-
-  Verify: `movement --version`
-
-**IMPORTANT: Without Movement CLI:** Compilation will fail with "movement: command not found"
-
-## Installation
+### Installation
 
 ```bash
 npm install -g movehat
 # or
-pnpm add -g movehat
+pnpm install -g movehat
 ```
 
-## Quick Start
+### Five commands to a working test
 
 ```bash
-# Create a new project
-npx movehat init my-move-project
-
-# Navigate to project
-cd my-move-project
-
-# Install dependencies
-npm install
-
-# Compile contracts (auto-detects named addresses)
-npx movehat compile
-
-# Run tests
-npm test
+npx movehat init my-project    # 1. Scaffold project
+cd my-project
+npm install                    # 2. Install dependencies
+npx movehat compile            # 3. Compile contracts (auto-detects addresses)
+npm test                       # 4. Run tests (auto-starts local node, deploys, runs)
 ```
 
-**Note:** Movehat automatically detects named addresses from your Move files, so no manual configuration is needed for compilation!
+That's it — local blockchain starts automatically, accounts get funded, contracts deploy, tests run.
 
-## Project Structure
-
-```
-my-move-project/
-├── move/                   # Move smart contracts
-│   ├── sources/
-│   │   └── Counter.move
-│   └── Move.toml
-├── scripts/                # Deployment scripts
-│   └── deploy-counter.ts
-├── tests/                  # Integration tests
-│   └── Counter.test.ts
-├── movehat.config.ts       # Configuration
-└── .env                    # Environment variables
-```
+For more depth (project layout, configuration, account model, deployment tracking), browse the [full docs](https://movehat.org/).
 
 ## Configuration
 
-Edit `movehat.config.ts`:
+A minimal `movehat.config.ts` looks like this:
 
 ```typescript
-export default {
-  network: "movement-testnet",
-  rpc: "https://testnet.movementnetwork.xyz/v1",
-  account: process.env.MH_ACCOUNT || "",
-  privateKey: process.env.MH_PRIVATE_KEY || "",
-  moveDir: "./move",
+import dotenv from "dotenv";
+dotenv.config();
 
-  // Named addresses are auto-detected from your Move files
-  // Only specify if you need specific production addresses
-  namedAddresses: {
-    // Optional: counter: "0xYourProductionAddress",
+export default {
+  defaultNetwork: "testnet",
+  networks: {
+    testnet: { url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+    mainnet: { url: "https://mainnet.movementnetwork.xyz/v1", chainId: "mainnet" },
+    local:   { url: "http://localhost:8080/v1", chainId: "local" },
   },
+  accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+  moveDir: "./move",
 };
 ```
 
-Set up your environment variables in `.env`:
+A single `PRIVATE_KEY` is reused across networks (Hardhat-style). For testing, accounts are auto-generated and funded from the local faucet — no `.env` needed.
 
-```bash
-MH_PRIVATE_KEY=your_private_key_here
-MH_ACCOUNT=your_account_address_here
-MH_NETWORK=testnet
-```
+Full reference: [`/docs/getting-started/configuration`](https://movehat.org/docs/getting-started/configuration).
 
 ## Writing Tests
 
-Movehat runs tests on a **real local Movement blockchain** (just like Hardhat!):
+The canonical pattern uses `Harness.createLocal`:
 
 ```typescript
+// tests/Counter.test.ts
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, teardownTestFixture, type TestFixture } from "movehat/helpers";
+import { Harness } from "movehat";
+import type { MoveContract } from "movehat/helpers";
 
 describe("Counter Contract", () => {
-  let fixture: TestFixture<'counter'>;
+  let harness: Harness;
+  let counter: MoveContract;
+  let counterAddr: string;
 
   before(async function () {
-    this.timeout(60000); // Allow time for local node startup + deployment
+    this.timeout(60000); // Local node startup + autoDeploy
 
-    // Setup local testing environment with auto-deployment
-    // This will:
-    // 1. Start a local Movement blockchain node
-    // 2. Generate and fund test accounts from local faucet
-    // 3. Auto-deploy the counter module
-    // 4. Return everything ready to use
-    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice"],
+      autoDeploy: ["counter"],
+    });
 
-    console.log(`\n✅ Testing on local blockchain`);
-    console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
+    counterAddr = harness.runtime.getDeploymentAddress("counter");
+    counter = harness.runtime.getContract(counterAddr, "counter");
   });
 
-  it("should initialize with value 0", async () => {
-    const counter = fixture.contracts.counter; // Type-safe, no `!` needed
-    const deployer = fixture.accounts.deployer;
+  after(async () => { await harness.cleanup(); });
 
-    // Read counter value (returns string from view function)
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
-
-    expect(parseInt(value)).to.equal(0);
-  });
-
-  it("should increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
-
-    // Increment the counter (real transaction on local blockchain!)
-    const tx = await counter.call(deployer, "increment", []);
-    console.log(`   Transaction: ${tx.hash}`);
-
-    // Read new value
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
-
-    expect(parseInt(value)).to.equal(1);
-  });
-
-  after(async () => {
-    // Cleanup: Stop local node and clear account pool
-    await teardownTestFixture();
+  it("alice can increment her own counter", async () => {
+    const alice = harness.runtime.getAccountByLabel("alice");
+    await counter.call(alice, "increment", []);
+    const [value] = await harness.runViewFunction({
+      function: `${counterAddr}::counter::get`,
+      functionArguments: [alice.accountAddress.toString()],
+    });
+    expect(parseInt(value as string)).to.equal(1);
   });
 });
 ```
 
-**Benefits of Local Node Testing:**
-- Real blockchain with actual state changes
-- Test real transactions (not just simulations)
-- Auto-deploy contracts for each test run
-- Type-safe contract access (no `!` operator needed)
-- Automatic cleanup after tests
-- Just like Hardhat - zero manual setup
+Run with `npm test` (interactive menu) or `movehat test --ts` (TypeScript suite, starts local node).
+
+> `setupTestFixture` from `movehat/helpers` is a lighter-weight alternative for tests that don't need the Harness lifecycle — both styles are documented at [`/docs/guides/testing`](https://movehat.org/docs/guides/testing).
 
 ## Writing Deployment Scripts
 
+Deploy as a code object with `Harness.createLive`:
+
 ```typescript
-import { getMovehat } from "movehat";
+// scripts/deploy-counter.ts
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  try {
+    const deployment = await harness.deployCodeObject({
+      moduleName: "counter",
+    });
+    console.log(`Deployed: ${deployment.address}::counter`);
+    console.log(`Tx:       ${deployment.txHash}`);
 
-  console.log("Deploying from:", mh.account.accountAddress.toString());
-  console.log("Network:", mh.config.network);
-
-  // Deploy (publish) the module
-  // Movehat automatically checks if already deployed
-  const deployment = await mh.deployContract("counter");
-
-  console.log("Module deployed at:", deployment.address);
-  console.log("Transaction:", deployment.txHash);
-
-  // Get contract instance
-  const contract = mh.getContract(deployment.address, "counter");
-
-  // Initialize the counter
-  await contract.call(mh.account, "init", []);
-
-  console.log("Counter initialized!");
-
-  // Verify
-  const value = await contract.view<string>("get", [
-    mh.account.accountAddress.toString()
-  ]);
-
-  console.log(`Initial counter value: ${value}`);
+    // Initialize the freshly deployed module
+    const counter = harness.runtime.getContract(deployment.address, "counter");
+    await counter.call(harness.runtime.account, "init", []);
+  } finally {
+    await harness.cleanup();
+  }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main().catch((err) => { console.error(err); process.exit(1); });
 ```
 
-## API Reference
+Run with `movehat run scripts/deploy-counter.ts --network testnet`.
 
-### Testing Helpers
+Re-running fails with `ModuleAlreadyDeployedError` (local record at `deployments/{network}/counter.json`). Set `MH_CLI_REDEPLOY=true` to force a re-deploy.
 
-#### `setupTestFixture(modules, accountLabels, options?)`
+> Requires `movehat@^0.2.0`. Full deploy guide (named addresses, code-object semantics, redeploy flow, deployment tracking): [`/docs/guides/deployment`](https://movehat.org/docs/guides/deployment).
 
-High-level API for setting up local testing with auto-deployment. Returns type-safe fixture with contracts and accounts.
+## Fork System
 
-```typescript
-// Setup with type inference
-const fixture = await setupTestFixture(
-  ['counter'] as const,  // Modules to deploy
-  ['alice', 'bob']       // Additional account labels
-);
+Movehat ships a native fork system for testing against real Movement L1 state without deploying to testnet. Forks are JSON-backed local snapshots that lazy-load resources as you read them, and `Harness.createFork(network)` binds a Harness to one.
 
-// Access type-safe contracts (no `!` needed)
-const counter = fixture.contracts.counter;
+Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [`/docs/guides/fork`](https://movehat.org/docs/guides/fork) (live site).
 
-// Access accounts
-const deployer = fixture.accounts.deployer;
-const alice = fixture.accounts.alice;
+## CLI Reference
 
-// Options (all optional)
-const fixture = await setupTestFixture(['counter'] as const, ['alice'], {
-  mode: 'fork',                    // 'local-node' (default) or 'fork'
-  defaultBalance: 100_000_000,     // Balance per account in octas
-  nodeForceRestart: true,          // Restart node on each run
-  // ... see LocalTestOptions for more
-});
-```
+| Command | Description | Docs |
+|---|---|---|
+| `movehat init [name]` | Scaffold a new Movehat project | [/docs/cli/init](https://movehat.org/docs/cli/init) |
+| `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://movehat.org/docs/cli/compile) |
+| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://movehat.org/docs/cli/run) |
+| `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://movehat.org/docs/cli/fork) |
+| `movehat update` | Check npm for a newer version and upgrade | — |
 
-#### `setupLocalTesting(options?)`
+## Troubleshooting
 
-Lower-level API for setting up local testing environment. Returns MovehatRuntime.
+| Error | Solution |
+|---|---|
+| `movement: command not found` | Install Movement CLI per [the Movement docs](https://docs.movementnetwork.xyz/devs/movementcli) |
+| `Module "X" is already deployed on Y` | Set `MH_CLI_REDEPLOY=true` to force a re-deploy |
+| `Configuration file not found` | Create `movehat.config.ts` or run `movehat init` |
+| `No accounts configured` | Set `PRIVATE_KEY` in `.env` |
+| `Cannot find package 'dotenv'` | Run `npm install` or `pnpm install` in the project dir |
 
-```typescript
-import { setupLocalTesting } from "movehat/helpers";
-
-// Local node mode (default) - Full blockchain
-const mh = await setupLocalTesting({
-  mode: 'local-node',
-  accountLabels: ['deployer', 'alice', 'bob'],
-  autoDeploy: ['counter'],  // Auto-deploy modules
-  autoFund: true,
-  defaultBalance: 100_000_000
-});
-
-// Fork mode - Read-only snapshot
-const mh = await setupLocalTesting({
-  mode: 'fork',
-  forkNetwork: 'testnet',
-  forkName: 'my-fork',
-  accountLabels: ['alice', 'bob'],
-  // Note: autoDeploy doesn't work in fork mode
-});
-```
-
-#### `teardownTestFixture()`
-
-Cleanup function to stop local node and clear accounts.
-
-```typescript
-after(async () => {
-  await teardownTestFixture();
-});
-```
-
-#### `stopLocalTesting()`
-
-Stops the local testing environment (for lower-level API).
-
-```typescript
-await stopLocalTesting();
-```
-
-### Contract Interaction
-
-#### `mh.getContract(moduleAddress, moduleName)`
-
-Creates a contract wrapper for easy interaction.
-
-```typescript
-const mh = await getMovehat();
-const counter = mh.getContract(deployment.address, "counter");
-```
-
-#### `contract.call(signer, functionName, args, typeArgs?)`
-
-Executes an entry function (transaction).
-
-```typescript
-const tx = await counter.call(account, "increment", []);
-console.log(`Transaction: ${tx.hash}`);
-```
-
-#### `contract.view<T>(functionName, args, typeArgs?)`
-
-Reads data from a view function (no transaction).
-
-```typescript
-// Note: View functions return strings
-const value = await counter.view<string>("get", [address]);
-console.log(`Value: ${parseInt(value)}`);
-```
-
-## Available Commands
-
-```bash
-npx movehat compile             # Compile Move contracts
-npx movehat test                # Interactive menu to choose test type
-npx movehat test --move         # Run only Move unit tests (fast)
-npx movehat test --ts           # Run only TypeScript tests (starts local node)
-npx movehat test --all          # Run all tests (Move + TypeScript)
-npx movehat run scripts/...     # Run deployment scripts
-```
-
-## System Requirements
-
-**Required:**
-- Node.js v18+
-- Movement CLI - **REQUIRED** ([Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI))
-- npm or pnpm
-
-**What fails without Movement CLI:**
-- `movehat compile` → "movement: command not found"
-- Contract building and deployment will not work
-
-**Recommended:**
-- Git
-- VS Code with Move syntax extension
-
-## Documentation
-
-Visit [GitHub Repository](https://github.com/gilbertsahumada/movehat) for full documentation and examples.
+For anything not on this list, open an issue on [GitHub](https://github.com/gilbertsahumada/movehat/issues).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development setup, the dual-tier test infrastructure, and the PR workflow.
 
 ## License
 
-MIT © 
+MIT — see [`LICENSE`](./LICENSE).
+
 ## Links
 
-- [Movement Network](https://movementnetwork.xyz)
-- [Move Language Book](https://move-language.github.io/move/)
-- [GitHub Issues](https://github.com/gilbertsahumada/movehat/issues)
+- [Full documentation](https://movehat.org/) — guides, CLI reference, auto-generated API reference (50 pages from TypeDoc)
+- [Fork system guide](./FORK_GUIDE.md) — in-repo deep-dive
+- [GitHub repository](https://github.com/gilbertsahumada/movehat)
+- [NPM package](https://www.npmjs.com/package/movehat)
+- [Movement Network](https://movementnetwork.xyz/) — the L1 Movehat targets
+- [Movement Network docs](https://docs.movementnetwork.xyz/)
+
+## Author
+
+**Gilberts Ahumada**
+
+[![Twitter](https://img.shields.io/badge/Twitter-@gilbertsahumada-1DA1F2?logo=x&logoColor=white)](https://x.com/@gilbertsahumada)
+[![YouTube](https://img.shields.io/badge/YouTube-@gilbertsahumada-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@gilbertsahumada)
+[![Website](https://img.shields.io/badge/Website-gilbertsahumada.com-blue)](https://gilbertsahumada.com)
