@@ -5,9 +5,8 @@
 // template). The `Harness.create*` factories read this file via
 // `loadUserConfig` to resolve the active network + accounts.
 //
-// The older `getMovehat()` / `setupTestFixture()` helpers also read
-// the same shape and are still supported (marked `@deprecated` from
-// M2; removal is M6 / 0.1.0).
+// The `setupTestFixture()` helper also reads the same shape and
+// remains supported as a lighter-weight alternative to Harness.
 
 import dotenv from "dotenv";
 dotenv.config();
