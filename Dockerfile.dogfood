@@ -1,0 +1,41 @@
+# Dockerfile.dogfood — Tier B end-to-end dogfood test environment.
+#
+# Real Movement CLI (SHA256-pinned to match .github/workflows/ci.yml) +
+# Node 20 + pnpm. Builds movehat from the bind-mounted source, installs
+# globally inside the container, and runs scripts/dogfood-test.sh which
+# exercises the full user journey: scaffold → user-authored module edit →
+# compile → test on real local Movement node → fork-mode validation.
+#
+# Build + run via:
+#   pnpm docker:test:dogfood
+
+FROM node:20-bookworm
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Movement CLI. SHA256 must match the value pinned in
+# .github/workflows/ci.yml (`MOVEMENT_CLI_SHA256_LINUX_X64`). When that
+# value is rotated, this one must rotate in the same PR.
+ARG MOVEMENT_CLI_SHA256_LINUX_X64=f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2
+ARG MOVEMENT_CLI_TAG=bypass-homebrew
+RUN ARTIFACT=movement-cli-l1-linux-x86_64.tar.gz && \
+    curl -fLO "https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/${MOVEMENT_CLI_TAG}/${ARTIFACT}" && \
+    echo "${MOVEMENT_CLI_SHA256_LINUX_X64}  ${ARTIFACT}" | sha256sum -c && \
+    mkdir -p /tmp/movement-cli && \
+    tar -xzf ${ARTIFACT} -C /tmp/movement-cli && \
+    mv /tmp/movement-cli/movement /usr/local/bin/movement && \
+    chmod +x /usr/local/bin/movement && \
+    rm -rf /tmp/movement-cli ${ARTIFACT} && \
+    movement --version
+
+RUN npm install -g pnpm@9
+
+WORKDIR /workspace
+
+ENV CI=true
+
+CMD ["bash", "/workspace/scripts/dogfood-test.sh"]
