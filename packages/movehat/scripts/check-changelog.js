@@ -1,10 +1,8 @@
 // Verify that CHANGELOG.md contains a section header matching the version
 // declared in packages/movehat/package.json. Blocks `npm publish` when the
-// release lacks a corresponding `## [X.Y.Z]` entry — the codified gate
-// meta-issue #73 specified for M6.
+// release lacks a corresponding `## [X.Y.Z]` entry.
 //
-// ESM, anchored via `import.meta.url` so the script works regardless of cwd
-// (matches the PR #153 check-package-json.js precedent).
+// ESM, anchored via `import.meta.url` so the script works regardless of cwd.
 //
 // Usage:
 //   node packages/movehat/scripts/check-changelog.js

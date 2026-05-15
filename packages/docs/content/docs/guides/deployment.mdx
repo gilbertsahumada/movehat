@@ -122,7 +122,7 @@ MH_CLI_REDEPLOY=true movehat run scripts/deploy-counter.ts --network testnet
 ```typescript
 const harness = await Harness.createLive("testnet");
 
-// Harness methods (M2 public API)
+// Harness methods
 harness.mode               // 'local' | 'fork' | 'live'
 harness.deployCodeObject   // movement move deploy-object
 harness.upgradeCodeObject  // movement move upgrade-object

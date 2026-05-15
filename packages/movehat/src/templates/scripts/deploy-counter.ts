@@ -3,7 +3,7 @@ import { Harness } from "movehat";
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
 
-  // Hardhat-style Harness — primary public API since M2.
+  // Hardhat-style Harness — the primary public API.
   // createLive binds to a real running network (testnet / mainnet / a
   // custom one defined in movehat.config.ts). No local process spawned.
   const network = process.env.MOVEHAT_NETWORK ?? "testnet";

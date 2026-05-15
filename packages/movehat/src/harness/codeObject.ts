@@ -289,8 +289,6 @@ async function executeMovementMoveObject(
     }
 
     // Parse object address (for deploy-object) and txHash (both flows).
-    // No captured fixture exists at M2.2 commit time; M4 integration
-    // tests validate against real CLI output.
     const objectAddress = opts.fixedAddress ?? parseObjectAddress(deployOut);
     const txHash = parseTxHash(deployOut);
 
@@ -361,9 +359,7 @@ async function executeMovementMoveObject(
 /**
  * Extract a code-object address from `movement move deploy-object` stdout.
  *
- * Movement CLI typically emits the address in one of these shapes (none
- * of them captured at M2.2 commit time — patterns are speculative, with
- * M4 integration tests as the validation gate):
+ * Movement CLI typically emits the address in one of these shapes:
  *
  *   - Free text: `Code was successfully deployed to object address 0x…`
  *   - Free text: `Object address: 0x…`

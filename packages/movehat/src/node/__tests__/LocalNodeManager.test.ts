@@ -13,7 +13,7 @@ import type {
 } from "../../utils/childProcessAdapter.js";
 
 /**
- * Tests for `LocalNodeManager` (M3.3).
+ * Tests for `LocalNodeManager`.
  *
  * Strategy:
  *   - Inject a fake `ChildProcessAdapter` so we control the spawn

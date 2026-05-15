@@ -9,7 +9,6 @@ export interface SnapshotOptions {
   /**
    * Override the child-process adapter. Test-only — production callers
    * leave this undefined so the default spawn-based adapter is used.
-   * Mirrors the M1.3c pattern on `runtime.deployContract`.
    */
   adapter?: ChildProcessAdapter;
 }
