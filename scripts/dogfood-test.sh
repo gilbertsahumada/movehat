@@ -56,18 +56,16 @@ command -v movehat >/dev/null || fail "movehat not on PATH after global install"
 log "movehat version: $(movehat --version)"
 
 step "4/9 — Scaffold a new project via movehat init"
-# `movehat init <name>` uses the argument as both the directory AND the
-# Move package name. Pass a bare identifier (not a path) so Move.toml
-# gets a valid `name = "dogfood-project"`.
-PROJECT_NAME="$(basename "${PROJECT_DIR}")"
-PROJECT_PARENT="$(dirname "${PROJECT_DIR}")"
+# `movehat init <path>` accepts a full path; the Move package name is
+# auto-derived from the basename and sanitized into a valid Move
+# identifier (closes #195 — previously this path leaked into Move.toml
+# unchanged and broke compile with a cryptic "No such file or directory").
 rm -rf "${PROJECT_DIR}"
-cd "${PROJECT_PARENT}"
-movehat init "${PROJECT_NAME}" 2>&1 | tail -10
+movehat init "${PROJECT_DIR}" 2>&1 | tail -10
 cd "${PROJECT_DIR}"
 test -f move/sources/Counter.move || fail "Scaffold did not produce Counter.move"
 test -f tests/Counter.test.ts || fail "Scaffold did not produce Counter.test.ts"
-log "Project scaffolded at ${PROJECT_DIR} (package name: ${PROJECT_NAME})"
+log "Project scaffolded at ${PROJECT_DIR}"
 
 step "5/9 — Extend Counter with a user-authored reset() function + Move test"
 # Inject `reset()` entry function AND a corresponding #[test] right

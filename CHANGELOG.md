@@ -9,7 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Re-export six Harness option/result types from the root `movehat`
+  entry point (`DeployCodeObjectOptions`, `UpgradeCodeObjectOptions`,
+  `CodeObjectInfo`, `RunViewFunctionOptions`, `RunMoveScriptOptions`,
+  `MoveScriptResult`). Closes
+  [#200](https://github.com/gilbertsahumada/movehat/issues/200) —
+  callers can now type wrappers around Harness methods without
+  deep-importing from internal paths.
+- `examples/counter-example/scripts/upgrade-counter.ts` demonstrates
+  `harness.upgradeCodeObject` against an existing deployment.
+- `examples/counter-example/scripts/run-script.ts` plus
+  `move/scripts/echo.move` demonstrate `harness.runMoveScript` against
+  a local node.
+- `examples/counter-example/scripts/demo-harness-fork.ts` demonstrates
+  the high-level `Harness.createFork` factory (read-only view +
+  write-rejection contract + post-cleanup poisoning via
+  `HarnessDisposedError`). Complements the existing low-level
+  `demo-fork.ts`. Closes
+  [#199](https://github.com/gilbertsahumada/movehat/issues/199).
+- `examples/counter-example/README.md` documenting the npm script
+  surface.
+
 ### Changed
+
+- `movehat init <name>` now sanitizes the project name into a valid Move
+  identifier when writing `move/Move.toml`, preserving the original name for
+  `package.json` and the directory. Invalid characters (hyphens, slashes,
+  dots) are replaced with underscores; names starting with a digit are
+  prefixed with `pkg_`. A warning is printed when sanitization changes the
+  name. Names that resolve to nothing usable (`.`, `..`, empty, only
+  separators) are now rejected with a clear error. Previously, passing a
+  path like `/tmp/my-project` produced a malformed `Move.toml` and a cryptic
+  `"No such file or directory"` compile failure. Closes
+  [#195](https://github.com/gilbertsahumada/movehat/issues/195).
 
 ### Deprecated
 
