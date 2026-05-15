@@ -54,6 +54,18 @@ services:
         npm test
       "
 
+  # Tier B dogfood test — full end-to-end user journey with real Movement CLI
+  # (install + scaffold + user-authored Move edit + compile + test on local
+  # node + fork-mode invariants). Run via `pnpm docker:test:dogfood`.
+  test-dogfood:
+    build:
+      context: .
+      dockerfile: Dockerfile.dogfood
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: bash /workspace/scripts/dogfood-test.sh
+
   # Test de integración completa
   test-integration:
     build:
