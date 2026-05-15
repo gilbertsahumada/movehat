@@ -240,7 +240,7 @@ fixture.contracts.counter.view<string>("get", [deployer.accountAddress.toString(
 
 **Named Addresses:** Auto-detected from Move source; use directly without manual address resolution.
 
-**Coverage Target:** 80% (currently ~15%)
+**Coverage gates:** global ≥70% lines, per-file ≥80% on 16 critical modules (configured in `packages/movehat/vitest.config.ts`). Reports in `packages/movehat/coverage/` (HTML at `coverage/index.html`).
 
 ### Docs Site
 - **Framework:** Fumadocs v15 + Next.js 15 with `output: 'export'` (static)
@@ -249,8 +249,8 @@ fixture.contracts.counter.view<string>("get", [deployer.accountAddress.toString(
 - **Content:** `packages/docs/content/docs/`
 
 ### CI Workflow
-- **Unit tests:** On all PRs, Node 20/22, coverage threshold 15%
-- **E2E tests:** PRs to main only, downloads Movement CLI tarball
+- **Unit tests:** On all PRs, Node 20/22, global coverage threshold 70%
+- **E2E tests:** On all PRs, downloads Movement CLI tarball with SHA256 pin
 - **Security audit:** Runs on PRs
 
 ### Key Files (for reference)

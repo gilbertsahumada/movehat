@@ -34,10 +34,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Upgrade npm to >= 11.5.1 for Trusted Publishers
-        # Trusted Publishers require npm >= 11.5.1 — the OIDC exchange
-        # and provenance attestation paths only ship in that line.
-        # Node 20 bundles npm ~10.x, so the upgrade is mandatory.
-        # See https://docs.npmjs.com/trusted-publishers.
+        # OIDC + provenance only ship in npm >= 11.5.1; Node 20 bundles ~10.x.
         run: npm install -g npm@latest
 
       - name: Install dependencies
@@ -56,22 +53,15 @@ jobs:
           echo "Publishing version: $VERSION"
 
       - name: Update package version
-        # `--allow-same-version` makes this step a no-op when the in-repo
-        # manifest already declares the release tag's version (i.e. the
-        # version bump shipped in the PR that landed before the tag was
-        # cut, rather than relying on the workflow to do the bump).
-        # Without it, npm errors with "Version not changed" and the
-        # release fails — see v0.2.0 attempt at 2026-05-15 (run 25900063511).
+        # `--allow-same-version` lets the step no-op when the manifest is
+        # already at the release tag (version bump landed in a prior PR).
         run: |
           cd packages/movehat
           npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Verify CHANGELOG section exists for release version
-        # Codified CHANGELOG gate per M6 (issue #73, sub-issue #165). Blocks
-        # publish if packages/movehat/package.json version lacks a matching
-        # `## [X.Y.Z]` section in CHANGELOG.md. Runs AFTER `npm version`
-        # writes the new version into the manifest so the script sees the
-        # value the release will actually publish under.
+        # Blocks publish if package.json version lacks a `## [X.Y.Z]` entry
+        # in CHANGELOG.md. Runs after `npm version` so it sees the final value.
         run: node packages/movehat/scripts/check-changelog.js
 
       - name: Replace workspace:* in template with actual version
@@ -88,9 +78,8 @@ jobs:
         run: pnpm --filter movehat test:integration
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
-          # M4.2 / #149 — `movement node run-local-testnet` aborts during
-          # MintFunder setup on Linux x86_64. The harness-local lifecycle
-          # is gated behind this env var; harness-fork tests still run.
+          # `movement node run-local-testnet` aborts during MintFunder setup
+          # on Linux x86_64; harness-local is gated, harness-fork still runs.
           MOVEHAT_SKIP_LOCAL_NODE: 'true'
 
       - name: Run smoke tests
@@ -114,10 +103,8 @@ jobs:
           ls -la dist/
 
       - name: Publish to npm (Trusted Publishers + provenance)
-        # Authenticates via the GitHub Actions OIDC token (job already
-        # has `id-token: write`). Requires a Trusted Publisher
-        # configured on npmjs.com for the movehat package — see
-        # `MOVEMENT_CLI_COMPAT.md`-style operational doc / PR body.
+        # Authenticates via GitHub Actions OIDC (`id-token: write`).
+        # Requires a Trusted Publisher configured on npmjs.com for movehat.
         # No NPM_TOKEN secret consumed.
         run: |
           cd packages/movehat
