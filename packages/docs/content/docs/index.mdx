@@ -3,67 +3,130 @@ title: Introduction
 description: A Hardhat-like development framework for Movement L1 smart contracts
 ---
 
-# Movehat
+import { Cards, Card } from 'fumadocs-ui/components/card';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Rocket, FlaskConical, Rocket as Deploy, BookOpen, Terminal, GitBranchPlus } from 'lucide-react';
 
-**A Hardhat-like development framework for Movement L1 smart contracts.**
+**Movehat** is a Hardhat-like development framework for [**Movement L1**](https://movementnetwork.xyz/). Write tests and deployment scripts in TypeScript against a real local blockchain, a read-only fork of a remote network, or a live testnet / mainnet — all behind a single Hardhat-style harness.
 
-Write your tests and deployment scripts in TypeScript while building Move smart contracts.
+<Cards>
+  <Card
+    icon={<Rocket />}
+    title="Quick start"
+    description="From npm install to first passing test in five commands."
+    href="/docs/getting-started/quickstart"
+  />
+  <Card
+    icon={<FlaskConical />}
+    title="Write your first test"
+    description="Canonical Harness pattern with autoDeploy and labeled accounts."
+    href="/docs/guides/testing"
+  />
+  <Card
+    icon={<Deploy />}
+    title="Deploy to testnet"
+    description="Code-object deploy via the Movement CLI with profile management built in."
+    href="/docs/guides/deployment"
+  />
+  <Card
+    icon={<BookOpen />}
+    title="API reference"
+    description="Auto-generated TypeDoc reference for every exported class, interface, and function."
+    href="/docs/api/harness"
+  />
+</Cards>
 
-## Features
+## At a glance
 
-- **Hardhat-style Harness API** - `Harness.createLocal()` / `createFork()` / `createLive()` with explicit lifecycle and use-after-cleanup safety
-- **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
-- **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
-- **Auto-Deploy in Tests** - Contracts deploy automatically when tests run — zero manual setup
-- **Code-Object Deployment** - `harness.deployCodeObject()` wraps `movement move deploy-object` with security-hardened profile management
-- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts (alternative to Harness)
-- **Zero Setup Testing** - Auto-generated test accounts funded from local faucet
-- **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code
-- **Native Fork System** - Create local snapshots of Movement L1 with actual network state
-- **TypeScript-first** - Write tests and deployment scripts in TypeScript
-- **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
-- **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
-- **Hardhat-like workflow** - Familiar commands and project structure
-- **Movehat Runtime Environment** - Global context object similar to Hardhat's HRE
-- **Movement CLI integration** - Wraps Movement CLI for compilation and publishing
-- **Deployment tracking** - Automatic per-network deployment tracking (like hardhat-deploy)
-- **Security-focused** - Built-in protection against path traversal, command injection, and YAML injection
+Three execution modes cover the spectrum from unit tests to production deployments. Each mode is constructed via a static factory on `Harness`; the returned instance shares the same surface, so test code is portable across modes.
 
-## Quick Start
+<Tabs items={['Local', 'Fork', 'Live']}>
+<Tab value="Local">
 
-Get started in 4 commands:
+Spawns a real Movement local node, funds the labeled accounts from the local faucet, and (when `autoDeploy` is set) publishes the named modules. Best for integration tests with real transaction flow.
 
-```bash
-# 1. Create project
-npx movehat init my-project && cd my-project
+```typescript
+import { Harness } from "movehat";
 
-# 2. Install dependencies
-npm install
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice"],
+  autoDeploy: ["counter"],
+});
 
-# 3. Compile contracts (auto-detects addresses)
-npx movehat compile
-
-# 4. Run tests (runs on real local blockchain)
-npm test
+const counter = harness.runtime.getContract(
+  harness.runtime.getDeploymentAddress("counter"),
+  "counter"
+);
+await counter.call(harness.runtime.account, "increment", []);
+await harness.cleanup();
 ```
 
-No manual setup needed — local blockchain starts automatically.
+</Tab>
+<Tab value="Fork">
 
-## How It Works
+Reads from a JSON-backed local snapshot of a remote network. Resources lazy-load as you read them. Best for testing against real testnet / mainnet state without deploying.
 
-- Tests run on a **real local Movement node** (full blockchain, just like Hardhat!)
-- Automatically starts blockchain, funds accounts, deploys contracts
-- Zero manual setup — perfect for learning and rapid development
+```typescript
+import { Harness } from "movehat";
 
-## Key Differences
+const harness = await Harness.createFork("testnet");
 
-| Feature | Movehat | Hardhat | Foundry |
-|---------|---------|---------|---------|
-| **Move Unit Tests** | Yes (`test:move`) | N/A | Yes (`forge test`) |
-| **Integration Tests** | Yes (`test:ts`) | Yes (`test`) | Yes (`test --fork`) |
-| **Dual Testing** | Yes | No | Yes |
-| **Setup for Testing** | Zero config | Need local node | Zero config |
-| **Named Addresses** | Auto-detected | N/A | Manual |
-| **Account Config** | Single `PRIVATE_KEY` | Single account | Multiple |
-| **Fork System** | Built-in JSON | External | Built-in |
-| **Language** | Move + TypeScript | Solidity + JS/TS | Solidity |
+const [supply] = await harness.runViewFunction({
+  function: "0x1::coin::CoinInfo::supply",
+  typeArguments: ["0x1::aptos_coin::AptosCoin"],
+});
+
+await harness.cleanup();
+```
+
+</Tab>
+<Tab value="Live">
+
+Binds to a real running network. No local process spawned; transactions hit the configured RPC. Best for deployment scripts and real-network interactions.
+
+```typescript
+import { Harness } from "movehat";
+
+const harness = await Harness.createLive("testnet");
+
+const deployment = await harness.deployCodeObject({
+  moduleName: "counter",
+});
+console.log(`Deployed: ${deployment.address}::counter`);
+
+await harness.cleanup();
+```
+
+</Tab>
+</Tabs>
+
+<Callout type="info">
+  `Harness.cleanup()` poisons the instance: any further call to a deploy / view / script method throws `HarnessDisposedError` synchronously. Lifecycle errors fail loud instead of silently using a stale handle.
+</Callout>
+
+## Why Movehat?
+
+|                            | Movehat              | Hardhat            | Foundry            |
+|----------------------------|----------------------|--------------------|--------------------|
+| **Language**               | Move + TypeScript    | Solidity + TS/JS   | Solidity           |
+| **Local blockchain**       | Built-in             | Built-in           | Built-in (anvil)   |
+| **Fork system**            | Built-in JSON        | External           | Built-in           |
+| **Auto-detected addresses**| Yes                  | N/A                | Manual             |
+
+## What's next?
+
+<Cards>
+  <Card
+    icon={<Terminal />}
+    title="CLI reference"
+    description="movehat init, compile, test, run, fork — single source of truth."
+    href="/docs/cli/init"
+  />
+  <Card
+    icon={<GitBranchPlus />}
+    title="Fork system"
+    description="Local snapshots, lazy resource loading, state mutation for tests."
+    href="/docs/guides/fork"
+  />
+</Cards>
