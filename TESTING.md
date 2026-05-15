@@ -155,11 +155,8 @@ Docker testing provides **isolated, reproducible environments** to test installa
 ### Test Single Configuration
 
 ```bash
-# Test on Node 20
+# Test on Node 20 (minimum supported)
 docker-compose -f docker-compose.test.yml up test-node20
-
-# Test on Node 18
-docker-compose -f docker-compose.test.yml up test-node18
 
 # Test on Node 22
 docker-compose -f docker-compose.test.yml up test-node22
@@ -218,7 +215,7 @@ Before publishing to npm, complete this checklist:
 
 - [ ] Smoke tests pass (`bash scripts/smoke-test.sh`)
 - [ ] E2E tests pass (`bash scripts/test-e2e.sh`)
-- [ ] Docker tests pass (at least Node 18 & 20)
+- [ ] Docker tests pass (at least Node 20 & 22)
 - [ ] Package size is reasonable (<10MB)
 
 ### 4. Documentation
@@ -267,7 +264,7 @@ Build & Type Check  Test Matrix  Quality Checks  Security Audit
 - Upload for later jobs
 
 #### Test Matrix
-- Tests on Node 18, 20, 22
+- Tests on Node 20, 22
 - Smoke tests on each version
 - Fail-fast disabled to see all results
 

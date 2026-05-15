@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Movehat! This guide will help you
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20
 - **pnpm** >= 9.0.0
 - **Movement CLI** installed and configured
 
@@ -443,8 +443,7 @@ For testing across different Node.js versions in isolated environments:
 
 ```bash
 pnpm docker:test              # Run all Docker tests
-pnpm docker:test:node18       # Test on Node.js 18
-pnpm docker:test:node20       # Test on Node.js 20
+pnpm docker:test:node20       # Test on Node.js 20 (minimum supported)
 pnpm docker:test:node22       # Test on Node.js 22
 pnpm docker:clean             # Clean Docker artifacts
 ```
