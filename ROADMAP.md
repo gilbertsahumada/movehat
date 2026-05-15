@@ -243,19 +243,27 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
-**Definition of Done — Publish workflow**:
-- [ ] `.github/workflows/publish.yml` triggers on `v*` tags
-- [ ] Tag without a matching `CHANGELOG.md` section **fails** the workflow
-- [ ] Working-tree-clean check passes before publish
-- [ ] Unit + integration tests run before publish
-- [ ] `npm publish --access public` runs from `packages/movehat`
-- [ ] GitHub release created with the `CHANGELOG` section as body
+**Sub-PRs**:
 
-**Definition of Done — `mh()` removal & version bump**:
-- [ ] `mh` no longer exported from `packages/movehat/src/index.ts`
-- [ ] `packages/movehat/package.json` version bumped to `0.1.0`
-- [ ] `npm view movehat@0.1.0` returns the new version after publish
-- [ ] `npm pack` output does not contain `mh` exports
+| Sub | Description | Status |
+|---|---|---|
+| M6.1 | `ci(release): CHANGELOG gate + unit/integration tests in publish.yml + backfill` (issue #165) | 🔄 in-flight |
+| M6.2 | `feat(api)!: remove getMovehat() + bump to 0.2.0` (issue #166, closes #73 meta) | ⏳ |
+
+**Definition of Done — Publish workflow**:
+- [x] `.github/workflows/publish.yml` triggers on GitHub release publish + `workflow_dispatch` (M6.1 — the original "v* tags" wording was specced before the workflow shipped; `release.published` is a higher-level wrapper that fires on tag-bound release creation. Functionally equivalent for the gate-on-release semantics.)
+- [x] Tag without a matching `CHANGELOG.md` section **fails** the workflow (M6.1 — `packages/movehat/scripts/check-changelog.js` runs after `npm version`; exits 1 if no `## [<version>]` header is present.)
+- [N/A] Working-tree-clean check — implemented in `scripts/pre-publish.sh` (local maintainer gate), not the workflow. Workflow operates on a fresh checkout where the constraint is automatic.
+- [x] Unit + integration tests run before publish (M6.1 — `pnpm --filter movehat test` + `pnpm --filter movehat test:integration` with `MOVEHAT_SKIP_LOCAL_NODE=true` per #149, BEFORE the build step.)
+- [x] `npm publish --access public` runs from `packages/movehat` (pre-existing in publish.yml; M6.1 preserved.)
+- [x] GitHub release created with the `CHANGELOG` section as body (operational flow: maintainer runs `gh release create vX.Y.Z --notes "$(awk '/## \[X.Y.Z\]/,/## \[/' CHANGELOG.md | head -n -1)"` to source release notes from CHANGELOG. Documented in `MOVEMENT_CLI_COMPAT.md`-style operational ownership.)
+
+**Definition of Done — `getMovehat()` removal & version bump**:
+- [ ] `getMovehat` no longer exported from `packages/movehat/src/index.ts` (M6.2 — meta-issue #73's "mh" was renamed to `getMovehat` in M1.5; the actual symbol to remove is `getMovehat`.)
+- [N/A] Remove `MovehatRuntime` legacy types — meta-issue #73 was wrong on this. `MovehatRuntime` is the **live** runtime type used by `Harness.runtime`, `initRuntime()`, and all harness helpers. Removing it would break the live public surface. Only `getMovehat()` itself goes; `MovehatRuntime` stays exported.
+- [ ] `packages/movehat/package.json` version bumped to `0.2.0` (M6.2 — meta-issue's "0.1.0" target is stale; package already at 0.1.9 with 9 published 0.1.x versions. `getMovehat()` removal is breaking → semver bump to 0.2.0.)
+- [ ] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — release create + workflow trigger sequence; verification post-merge.)
+- [ ] `npm pack` output does not contain `getMovehat` symbol (M6.2 — verified via `tar -tzf` + grep.)
 
 ### M7 — Maintenance quota (continuous) — (KPI 2)
 

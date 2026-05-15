@@ -53,6 +53,14 @@ jobs:
           cd packages/movehat
           npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
 
+      - name: Verify CHANGELOG section exists for release version
+        # Codified CHANGELOG gate per M6 (issue #73, sub-issue #165). Blocks
+        # publish if packages/movehat/package.json version lacks a matching
+        # `## [X.Y.Z]` section in CHANGELOG.md. Runs AFTER `npm version`
+        # writes the new version into the manifest so the script sees the
+        # value the release will actually publish under.
+        run: node packages/movehat/scripts/check-changelog.js
+
       - name: Replace workspace:* in template with actual version
         run: |
           cd packages/movehat/src/templates
@@ -60,7 +68,19 @@ jobs:
           echo "Template package.json updated"
           cat package.json
 
-      - name: Run tests
+      - name: Run unit tests
+        run: pnpm --filter movehat test
+
+      - name: Run integration suite (zero-mock)
+        run: pnpm --filter movehat test:integration
+        env:
+          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+          # M4.2 / #149 — `movement node run-local-testnet` aborts during
+          # MintFunder setup on Linux x86_64. The harness-local lifecycle
+          # is gated behind this env var; harness-fork tests still run.
+          MOVEHAT_SKIP_LOCAL_NODE: 'true'
+
+      - name: Run smoke tests
         run: pnpm test:smoke
 
       - name: Build package
