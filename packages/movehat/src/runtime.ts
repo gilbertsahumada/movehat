@@ -157,34 +157,3 @@ export async function initRuntime(
   return runtime;
 }
 
-/**
- * Get the Movehat Runtime Environment.
- *
- * @deprecated since M2.4 (pre-1.0). Prefer the Hardhat-style `Harness`
- * factories (`Harness.createLocal` / `createFork` / `createLive`)
- * which carry explicit lifecycle (`harness.cleanup()`) and
- * use-after-cleanup safety. `getMovehat()` will be removed in
- * `0.1.0` (M6 / issue #73).
- *
- * Migration:
- * ```diff
- * - import { getMovehat } from "movehat";
- * - const mh = await getMovehat();
- * - const deployment = await mh.deployContract("counter");
- * + import { Harness } from "movehat";
- * + const harness = await Harness.createLive("testnet");
- * + try {
- * +   const deployment = await harness.deployCodeObject({ moduleName: "counter" });
- * +   // ...
- * + } finally {
- * +   await harness.cleanup();
- * + }
- * ```
- *
- * As of M1.5 each call constructs a fresh runtime — the previous
- * module-cached behavior was removed because it leaked state between
- * parallel tests and hid the runtime dependency from script signatures.
- */
-export async function getMovehat(): Promise<MovehatRuntime> {
-  return initRuntime();
-}

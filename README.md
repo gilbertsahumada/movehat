@@ -334,32 +334,35 @@ export default {
 
 ## Writing Deployment Scripts
 
-Deployment scripts use the **Movehat Runtime Environment (MRE)**:
+Deployment scripts use the **Hardhat-style `Harness` API**:
 
 ```typescript
 // scripts/deploy-counter.ts
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const harness = await Harness.createLive("testnet");
+  try {
+    console.log("Deploying from:", harness.runtime.account.accountAddress.toString());
+    console.log("Network:", harness.runtime.network.name);
 
-  console.log("Deploying from:", mh.account.accountAddress.toString());
-  console.log("Network:", mh.config.network);
+    // Deploy (publish) the module
+    // Movehat automatically checks if already deployed
+    const deployment = await harness.runtime.deployContract("counter");
 
-  // Deploy (publish) the module
-  // Movehat automatically checks if already deployed
-  const deployment = await mh.deployContract("counter");
+    console.log("Module deployed at:", deployment.address);
+    console.log("Transaction:", deployment.txHash);
 
-  console.log("Module deployed at:", deployment.address);
-  console.log("Transaction:", deployment.txHash);
+    // Get contract instance
+    const contract = harness.runtime.getContract(deployment.address, "counter");
 
-  // Get contract instance
-  const contract = mh.getContract(deployment.address, "counter");
+    // Initialize the counter
+    await contract.call(harness.runtime.account, "init", []);
 
-  // Initialize the counter
-  await contract.call(mh.account, "init", []);
-
-  console.log("Counter initialized!");
+    console.log("Counter initialized!");
+  } finally {
+    await harness.cleanup();
+  }
 }
 
 main().catch((error) => {
@@ -426,27 +429,31 @@ movehat run scripts/deploy-counter.ts --network testnet --redeploy
 
 ### Available Runtime Properties
 
+The runtime is reachable as `harness.runtime` on any Harness instance. For advanced use cases that need to skip the Harness lifecycle, `initRuntime()` returns the same shape directly.
+
 ```typescript
-const mh = await getMovehat();
+import { Harness } from "movehat";
+const harness = await Harness.createLive("testnet");
+const r = harness.runtime;
 
 // Core
-mh.config         // Resolved configuration
-mh.network        // Network info (name, chainId, rpc)
-mh.aptos          // Movement TypeScript SDK client
-mh.account        // Primary account
-mh.accounts       // All configured accounts
+r.config         // Resolved configuration
+r.network        // Network info (name, chainId, rpc)
+r.aptos          // Movement TypeScript SDK client
+r.account        // Primary account
+r.accounts       // All configured accounts
 
 // Contract helpers
-mh.getContract    // Get contract helper
+r.getContract    // Get contract helper
 
 // Deployment functions
-mh.deployContract       // Deploy and track module
-mh.getDeployment        // Get deployment info for a module
-mh.getDeployments       // Get all deployments for current network
-mh.getDeploymentAddress // Get deployed address for a module
+r.deployContract       // Deploy and track module
+r.getDeployment        // Get deployment info for a module
+r.getDeployments       // Get all deployments for current network
+r.getDeploymentAddress // Get deployed address for a module
 
 // Network management
-mh.switchNetwork  // Switch to different network
+r.switchNetwork  // Switch to different network
 ```
 
 ### Using Multiple Accounts
@@ -455,15 +462,16 @@ mh.switchNetwork  // Switch to different network
 // movehat.config.ts - Configure multiple accounts
 export default {
   accounts: [
-    process.env.PRIVATE_KEY,     // Primary (mh.account)
-    process.env.SECONDARY_KEY,   // mh.accounts[1]
+    process.env.PRIVATE_KEY,     // Primary (r.account)
+    process.env.SECONDARY_KEY,   // r.accounts[1]
   ].filter(Boolean),
 };
 
 // In your script - Access accounts
-const mh = await getMovehat();
-const primaryAccount = mh.account;               // accounts[0]
-const secondaryAccount = mh.getAccountByIndex(1); // accounts[1]
+const harness = await Harness.createLive("testnet");
+const r = harness.runtime;
+const primaryAccount = r.account;                 // accounts[0]
+const secondaryAccount = r.getAccountByIndex(1);  // accounts[1]
 ```
 
 ## Writing Tests
@@ -804,24 +812,27 @@ MH_DEFAULT_NETWORK=mainnet
 ### Deploy and Initialize
 
 ```typescript
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const harness = await Harness.createLive("testnet");
+  try {
+    // 1. Deploy (publish) the module
+    // Automatically checks if already deployed
+    const deployment = await harness.runtime.deployContract("counter");
+    console.log("Module deployed at:", deployment.address);
+    console.log("Transaction:", deployment.txHash);
 
-  // 1. Deploy (publish) the module
-  // Automatically checks if already deployed
-  const deployment = await mh.deployContract("counter");
-  console.log("Module deployed at:", deployment.address);
-  console.log("Transaction:", deployment.txHash);
+    // 2. Initialize
+    const contract = harness.runtime.getContract(deployment.address, "counter");
+    await contract.call(harness.runtime.account, "init", []);
 
-  // 2. Initialize
-  const contract = mh.getContract(deployment.address, "counter");
-  await contract.call(mh.account, "init", []);
-
-  // 3. Verify
-  const value = await contract.view("getValue", []);
-  console.log("Initial value:", value);
+    // 3. Verify
+    const value = await contract.view("getValue", []);
+    console.log("Initial value:", value);
+  } finally {
+    await harness.cleanup();
+  }
 }
 
 main().catch(console.error);
@@ -830,19 +841,23 @@ main().catch(console.error);
 ### Multi-Network Deployment
 
 ```typescript
-import { getMovehat } from "movehat";
+import { Harness } from "movehat";
 
 async function main() {
-  const mh = await getMovehat();
+  const network = process.argv[2] ?? "testnet";
+  const harness = await Harness.createLive(network);
+  try {
+    if (harness.runtime.network.name === "mainnet") {
+      console.log("WARNING: Deploying to MAINNET");
+      // Add confirmation logic
+    }
 
-  if (mh.config.network === "mainnet") {
-    console.log("WARNING: Deploying to MAINNET");
-    // Add confirmation logic
+    // Deploy module - automatically tracked per network
+    const deployment = await harness.runtime.deployContract("counter");
+    console.log(`Deployed on ${harness.runtime.network.name}:`, deployment.address);
+  } finally {
+    await harness.cleanup();
   }
-
-  // Deploy module - automatically tracked per network
-  const deployment = await mh.deployContract("counter");
-  console.log(`Deployed on ${mh.config.network}:`, deployment.address);
 }
 
 main().catch(console.error);

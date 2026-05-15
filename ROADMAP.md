@@ -247,8 +247,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 | Sub | Description | Status |
 |---|---|---|
-| M6.1 | `ci(release): CHANGELOG gate + unit/integration tests in publish.yml + backfill` (issue #165) | 🔄 in-flight |
-| M6.2 | `feat(api)!: remove getMovehat() + bump to 0.2.0` (issue #166, closes #73 meta) | ⏳ |
+| M6.1 | `ci(release): CHANGELOG gate + unit/integration tests in publish.yml + backfill` (issue #165) | ✅ shipped in PR #167 |
+| M6.2 | `feat(api)!: remove getMovehat() + bump to 0.2.0` (issue #166, closes #73 meta) | 🔄 in-flight |
 
 **Definition of Done — Publish workflow**:
 - [x] `.github/workflows/publish.yml` triggers on GitHub release publish + `workflow_dispatch` (M6.1 — the original "v* tags" wording was specced before the workflow shipped; `release.published` is a higher-level wrapper that fires on tag-bound release creation. Functionally equivalent for the gate-on-release semantics.)
@@ -259,11 +259,11 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] GitHub release created with the `CHANGELOG` section as body (operational flow: maintainer runs `gh release create vX.Y.Z --notes "$(awk '/## \[X.Y.Z\]/,/## \[/' CHANGELOG.md | head -n -1)"` to source release notes from CHANGELOG. Documented in `MOVEMENT_CLI_COMPAT.md`-style operational ownership.)
 
 **Definition of Done — `getMovehat()` removal & version bump**:
-- [ ] `getMovehat` no longer exported from `packages/movehat/src/index.ts` (M6.2 — meta-issue #73's "mh" was renamed to `getMovehat` in M1.5; the actual symbol to remove is `getMovehat`.)
+- [x] `getMovehat` no longer exported from `packages/movehat/src/index.ts` (M6.2 — meta-issue #73's "mh" was renamed to `getMovehat` in M1.5; removed the export + the function body in `runtime.ts` + the template `.d.ts` shim declaration + all README/example callers (migrated to `Harness.createLive()`).)
 - [N/A] Remove `MovehatRuntime` legacy types — meta-issue #73 was wrong on this. `MovehatRuntime` is the **live** runtime type used by `Harness.runtime`, `initRuntime()`, and all harness helpers. Removing it would break the live public surface. Only `getMovehat()` itself goes; `MovehatRuntime` stays exported.
-- [ ] `packages/movehat/package.json` version bumped to `0.2.0` (M6.2 — meta-issue's "0.1.0" target is stale; package already at 0.1.9 with 9 published 0.1.x versions. `getMovehat()` removal is breaking → semver bump to 0.2.0.)
-- [ ] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — release create + workflow trigger sequence; verification post-merge.)
-- [ ] `npm pack` output does not contain `getMovehat` symbol (M6.2 — verified via `tar -tzf` + grep.)
+- [x] `packages/movehat/package.json` version bumped to `0.2.0` (M6.2 — meta-issue's "0.1.0" target was stale; package was already at 0.1.9 with 9 published 0.1.x versions. `getMovehat()` removal is breaking → semver bump to 0.2.0.)
+- [ ] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — pending release create + workflow trigger sequence; verified post-merge.)
+- [ ] `npm pack` output does not contain `getMovehat` symbol (M6.2 — pending tarball verification post-merge.)
 
 ### M7 — Maintenance quota (continuous) — (KPI 2)
 

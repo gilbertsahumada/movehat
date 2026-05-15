@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getMovehat, initRuntime } from "../runtime.js";
+import { initRuntime } from "../runtime.js";
 import { _resetConfigCache } from "../core/config.js";
 import { AccountManager } from "../core/AccountManager.js";
 
@@ -15,7 +15,6 @@ import { AccountManager } from "../core/AccountManager.js";
  *   - config override merging
  *   - getAccountByIndex bounds error
  *   - switchNetwork delegates back into initRuntime
- *   - getMovehat = initRuntime() with no options
  *
  * Mainnet/security gates live in `resolveNetworkConfig` and are
  * covered in `core/__tests__/config.test.ts` to avoid re-driving the
@@ -181,35 +180,3 @@ describe("initRuntime", () => {
   });
 });
 
-describe("getMovehat (deprecated alias)", () => {
-  let tmpCwd: string;
-  let origCwd: string;
-
-  beforeEach(() => {
-    origCwd = process.cwd();
-    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-runtime-test-"));
-    process.chdir(tmpCwd);
-    _resetConfigCache();
-    AccountManager.clearPool();
-    writeConfig(tmpCwd, CONFIG_TWO_NETWORKS_TWO_ACCOUNTS);
-  });
-
-  afterEach(() => {
-    process.chdir(origCwd);
-    rmSync(tmpCwd, { recursive: true, force: true });
-    _resetConfigCache();
-    AccountManager.clearPool();
-  });
-
-  it("returns the same shape as initRuntime() with no options", async () => {
-    const fromGet = await getMovehat();
-    const fromInit = await initRuntime();
-
-    // Two fresh runtimes — addresses derive from the same private keys,
-    // so they should match.
-    expect(fromGet.network.name).toBe(fromInit.network.name);
-    expect(fromGet.account.accountAddress.toString()).toBe(
-      fromInit.account.accountAddress.toString()
-    );
-  });
-});

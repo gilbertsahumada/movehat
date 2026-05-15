@@ -53,9 +53,6 @@ declare module 'movehat' {
     switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
   }
 
-  // getMovehat is a thin alias of initRuntime as of M1.5 — each call
-  // constructs a fresh runtime. The previous cached behavior is gone.
-  export function getMovehat(): Promise<MovehatRuntime>;
   export function initRuntime(configOverride?: Partial<MovehatConfig>): Promise<MovehatRuntime>;
 }
 
