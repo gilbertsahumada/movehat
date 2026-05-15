@@ -199,17 +199,26 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — green re-run on PR #147 (`b3e54bf`, run #25865395431) completed in **2m20s total wall-clock**; e2e-tests job at **1m17s** with Movement CLI cache hit; integration step 2.4s with fork tests passing + harness-local skipped via `MOVEHAT_SKIP_LOCAL_NODE` per #149; grep guard passes silently)
 - [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
-### M5 — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
+### M5 — ✅ shipped in PR #163 (develop → main batch) — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
 
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
-**Sub-PRs**:
+**Sub-PRs + commit hashes** (mirrors the M3 / M4 precedent):
 
-| Sub | Description | Status |
+| Sub | Description | PR | Commit |
+|---|---|---|---|
+| M5.1 | TypeDoc → Fumadocs auto-generated API reference (closes #156) | [#160](https://github.com/gilbertsahumada/movehat/pull/160) | `c002f06` |
+| M5.2 | Fork-system benchmarks + fundAccount auth_key fix (closes #157, #63) | [#161](https://github.com/gilbertsahumada/movehat/pull/161) | `413bb9e` |
+| M5.3 | Movement CLI compat matrix + SHA256 artifact integrity (closes #158, #140) | [#162](https://github.com/gilbertsahumada/movehat/pull/162) | `18ddef3` |
+| Batch | develop → main batch (also carried M4 followups PRs #152-#155) | [#163](https://github.com/gilbertsahumada/movehat/pull/163) | `d6af34e` |
+
+**Follow-ups filed during M5** (deferred to later milestones):
+
+| Issue | Title | Reason for defer |
 |---|---|---|
-| M5.1 | `docs(api): TypeDoc → Fumadocs auto-generated API reference` (issue #156) | ✅ shipped in PR #160 |
-| M5.2 | `perf(fork): benchmarks + fundAccount auth_key fix` (issue #157, closes #63) | ✅ shipped in PR #161 |
-| M5.3 | `chore(ci): Movement CLI compat matrix + artifact integrity (closes #140) + #146 diagnosis` (issue #158) | 🔄 in-flight |
+| [#159](https://github.com/gilbertsahumada/movehat/issues/159) | Re-export Harness option types from `src/index.ts` | Mechanical re-export work spanning 3+ source files; >5 LoC per §8 defer threshold. M5.1 surfaced 10 TypeDoc warnings of the "referenced but not included" form; #159 captures the full list. |
+| [#146](https://github.com/gilbertsahumada/movehat/issues/146) | `upgradeCodeObject` reports success but on-chain ABI doesn't expose v2 functions | Upstream-dependent (likely Movement CLI or full-node bug). M5.3 documented the verbatim reproduction + 4 hypotheses in `MOVEMENT_CLI_COMPAT.md` "Known issues". Fix requires upstream investigation; deferred indefinitely. |
+| [#149](https://github.com/gilbertsahumada/movehat/issues/149) | `movement node run-local-testnet` aborts on Linux x86_64 (`ENOT_APTOS_FRAMEWORK_ADDRESS`) | Upstream-dependent. M4.2 CI workaround (`MOVEMENT_SKIP_LOCAL_NODE=true`) remains in place; M5.3 documented the symptom + workaround in `MOVEMENT_CLI_COMPAT.md`. Fix requires upstream investigation; deferred indefinitely. |
 
 **Definition of Done — Auto-generated docs**:
 - [x] `typedoc` + `typedoc-plugin-markdown` installed (M5.1)
@@ -234,19 +243,27 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
-**Definition of Done — Publish workflow**:
-- [ ] `.github/workflows/publish.yml` triggers on `v*` tags
-- [ ] Tag without a matching `CHANGELOG.md` section **fails** the workflow
-- [ ] Working-tree-clean check passes before publish
-- [ ] Unit + integration tests run before publish
-- [ ] `npm publish --access public` runs from `packages/movehat`
-- [ ] GitHub release created with the `CHANGELOG` section as body
+**Sub-PRs**:
 
-**Definition of Done — `mh()` removal & version bump**:
-- [ ] `mh` no longer exported from `packages/movehat/src/index.ts`
-- [ ] `packages/movehat/package.json` version bumped to `0.1.0`
-- [ ] `npm view movehat@0.1.0` returns the new version after publish
-- [ ] `npm pack` output does not contain `mh` exports
+| Sub | Description | Status |
+|---|---|---|
+| M6.1 | `ci(release): CHANGELOG gate + unit/integration tests in publish.yml + backfill` (issue #165) | ✅ shipped in PR #167 |
+| M6.2 | `feat(api)!: remove getMovehat() + bump to 0.2.0` (issue #166, closes #73 meta) | 🔄 in-flight |
+
+**Definition of Done — Publish workflow**:
+- [x] `.github/workflows/publish.yml` triggers on GitHub release publish + `workflow_dispatch` (M6.1 — the original "v* tags" wording was specced before the workflow shipped; `release.published` is a higher-level wrapper that fires on tag-bound release creation. Functionally equivalent for the gate-on-release semantics.)
+- [x] Tag without a matching `CHANGELOG.md` section **fails** the workflow (M6.1 — `packages/movehat/scripts/check-changelog.js` runs after `npm version`; exits 1 if no `## [<version>]` header is present.)
+- [N/A] Working-tree-clean check — implemented in `scripts/pre-publish.sh` (local maintainer gate), not the workflow. Workflow operates on a fresh checkout where the constraint is automatic.
+- [x] Unit + integration tests run before publish (M6.1 — `pnpm --filter movehat test` + `pnpm --filter movehat test:integration` with `MOVEHAT_SKIP_LOCAL_NODE=true` per #149, BEFORE the build step.)
+- [x] `npm publish --access public` runs from `packages/movehat` (pre-existing in publish.yml; M6.1 preserved.)
+- [x] GitHub release created with the `CHANGELOG` section as body (operational flow: maintainer runs `gh release create vX.Y.Z --notes "$(awk '/## \[X.Y.Z\]/,/## \[/' CHANGELOG.md | head -n -1)"` to source release notes from CHANGELOG. Documented in `MOVEMENT_CLI_COMPAT.md`-style operational ownership.)
+
+**Definition of Done — `getMovehat()` removal & version bump**:
+- [x] `getMovehat` no longer exported from `packages/movehat/src/index.ts` (M6.2 — meta-issue #73's "mh" was renamed to `getMovehat` in M1.5; removed the export + the function body in `runtime.ts` + the template `.d.ts` shim declaration + all README/example callers (migrated to `Harness.createLive()`).)
+- [N/A] Remove `MovehatRuntime` legacy types — meta-issue #73 was wrong on this. `MovehatRuntime` is the **live** runtime type used by `Harness.runtime`, `initRuntime()`, and all harness helpers. Removing it would break the live public surface. Only `getMovehat()` itself goes; `MovehatRuntime` stays exported.
+- [x] `packages/movehat/package.json` version bumped to `0.2.0` (M6.2 — meta-issue's "0.1.0" target was stale; package was already at 0.1.9 with 9 published 0.1.x versions. `getMovehat()` removal is breaking → semver bump to 0.2.0.)
+- [ ] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — pending release create + workflow trigger sequence; verified post-merge.)
+- [ ] `npm pack` output does not contain `getMovehat` symbol (M6.2 — pending tarball verification post-merge.)
 
 ### M7 — Maintenance quota (continuous) — (KPI 2)
 

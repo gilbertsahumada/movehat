@@ -188,10 +188,10 @@ The poisoning is implemented via a `Proxy` whose `get` trap throws on access to 
 
 ## Coexistence with `setupTestFixture` / `mh()`
 
-Both pre-M2 helpers continue to work in M2.4:
+Of the pre-M2 helpers:
 
 - `import { setupTestFixture } from "movehat/helpers"` — still exported, still functional.
-- `import { getMovehat } from "movehat"` — exported with a `@deprecated` JSDoc tag; removed in `0.1.0` (M6 / [#73](https://github.com/gilbertsahumada/movehat/issues/73)).
+- `import { getMovehat } from "movehat"` — **removed in `0.2.0`** (M6 / [#73](https://github.com/gilbertsahumada/movehat/issues/73)). Use `Harness.create*` factories or `initRuntime()` instead.
 
 `Harness.createLocal` actually goes through `setupLocalTesting` (which `setupTestFixture` also uses) under the hood — the test environment is identical. The migration is API-level, not infrastructure-level.
 
