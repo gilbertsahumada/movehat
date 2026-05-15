@@ -2,11 +2,11 @@
 
 Tracks which Movement CLI revisions Movehat is tested against, and the SHA256 hash of each pinned artifact.
 
-Maintained as part of M5 (issue #72) and updated in lockstep with `.github/workflows/ci.yml` whenever a CLI artifact is intentionally rotated.
+Updated in lockstep with `.github/workflows/ci.yml` whenever a CLI artifact is intentionally rotated.
 
 ## Why a single row instead of "≥2 versions"
 
-The M5 plan and meta-issue #72 originally specified "≥2 versions tested green". After surveying the upstream release surface:
+The original plan for this doc specified "≥2 versions tested green". After surveying the upstream release surface:
 
 - `movementlabsxyz/homebrew-movement-cli` publishes a **single moving tag** (`bypass-homebrew`) that is the only source of CLI tarballs. Assets at that tag are silently replaced when upstream cuts a new build (last replacement: 2025-11-26).
 - `movementlabsxyz/movement` (the main repo) publishes versioned releases (`0.3.4`, `0.3.2`, …) but **zero binary assets** — those tags are code-only.
@@ -20,7 +20,7 @@ If upstream begins publishing versioned releases with retained assets in the fut
 
 | Tag | Platform | SHA256 | Artifact size | Uploaded (upstream) | Status | Pinned in `ci.yml` |
 |---|---|---|---|---|---|---|
-| `bypass-homebrew` | linux-x86_64 | `f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2` | 66,049,380 bytes | 2025-11-26T03:08:09Z | ✅ green (M4.2 + earlier M3/M4) | yes |
+| `bypass-homebrew` | linux-x86_64 | `f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2` | 66,049,380 bytes | 2025-11-26T03:08:09Z | ✅ green in CI | yes |
 | `bypass-homebrew` | macos-arm64 | (not tested in CI — GitHub-hosted runners are linux-x86_64) | 70,288,208 bytes | 2025-11-25T22:11:54Z | local-only | no |
 | `bypass-homebrew` | macos-x86_64 | (not tested in CI) | 73,706,644 bytes | 2025-11-25T23:19:56Z | local-only | no |
 
@@ -39,7 +39,7 @@ CLI version reported by the linux-x86_64 binary at the SHA256 above: `movement 7
 
 **Reproduction** (verbatim from issue #146):
 
-1. Local M4.1 integration suite branch (`test/m4.1-integration-suite` at any commit after PR #145), Movement CLI on PATH.
+1. Local checkout at any commit after PR #145 (which introduced the integration suite), Movement CLI on PATH.
 2. Run `pnpm test:integration`.
 3. In `packages/movehat/test/integration/harness-local.integration.test.ts`, re-add the v2 ABI assertion that was removed in PR #145:
    ```ts
@@ -59,15 +59,15 @@ CLI version reported by the linux-x86_64 binary at the SHA256 above: `movement 7
 3. The `upgrade-object` subcommand's bytecode-replacement path is buggy on this CLI revision for object code deployments.
 4. The Aptos SDK caches the module ABI between the upgrade tx submission and the subsequent `getAccountModule` call. (Try with a fresh `new Aptos(config)` client.)
 
-**Status in M5**: documented here as a known issue, **not fixed**. Root cause is likely upstream (Movement CLI or full-node behavior); the symptom does NOT affect production code paths because the `Harness.upgradeCodeObject` contract (submit tx + return bound address) is honored. Fix is tracked in #146 and depends on upstream investigation.
+**Status**: documented here as a known issue, **not fixed**. Root cause is likely upstream (Movement CLI or full-node behavior); the symptom does NOT affect production code paths because the `Harness.upgradeCodeObject` contract (submit tx + return bound address) is honored. Fix is tracked in #146 and depends on upstream investigation.
 
-**Workaround**: the M4.1 integration test was narrowed to "tx succeeded + same object address" so the suite ships green. Consumers who need v2 ABI visibility should re-deploy as a fresh code object rather than upgrading, until #146 is resolved.
+**Workaround**: the integration test was narrowed to "tx succeeded + same object address" so the suite ships green. Consumers who need v2 ABI visibility should re-deploy as a fresh code object rather than upgrading, until #146 is resolved.
 
 ### #149 — `movement node run-local-testnet` aborts during MintFunder genesis on Linux x86_64
 
 **Symptom**: Move abort `ENOT_APTOS_FRAMEWORK_ADDRESS` during the delegate-mint step of MintFunder setup. Reproduces consistently on `ubuntu-latest` GitHub Actions runners; does NOT reproduce on macOS (Darwin arm64 / Darwin x86_64).
 
-**Status in M5**: documented here, **not fixed**. CI workaround is in place — the integration suite's `harness-local` lifecycle step is gated behind `MOVEMENT_SKIP_LOCAL_NODE=true` env var, set in `.github/workflows/ci.yml`'s integration step. The harness-fork tests + grep-guard step still gate; macOS / WSL developers run the full suite locally. Fix is upstream-dependent; tracked in #149.
+**Status**: documented here, **not fixed**. CI workaround is in place — the integration suite's `harness-local` lifecycle step is gated behind `MOVEMENT_SKIP_LOCAL_NODE=true` env var, set in `.github/workflows/ci.yml`'s integration step. The harness-fork tests + grep-guard step still gate; macOS / WSL developers run the full suite locally. Fix is upstream-dependent; tracked in #149.
 
 ## How to verify the pinned SHA256 locally
 

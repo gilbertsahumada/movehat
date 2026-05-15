@@ -1,6 +1,6 @@
 # Movehat Benchmarks
 
-Performance baseline for the fork system, captured during M5.2 (issue #157, PR <TBD>).
+Performance baseline for the fork system.
 
 ## Methodology
 
@@ -21,7 +21,7 @@ Performance baseline for the fork system, captured during M5.2 (issue #157, PR <
 
 CI variance is expected on Linux x86_64 GitHub Actions runners — Movement CLI startup is the dominant cost of the `createLocal` suite and depends on host I/O / scheduler. The numbers below are author-machine measurements, not CI-reproducible benchmarks.
 
-## Baseline (commit before any M5.2 perf changes — author's machine, 2026-05-14)
+## Baseline (author's machine, 2026-05-14)
 
 | Benchmark                              |  n  |    avg     |  median    |   min      |   max      |
 |----------------------------------------|-----|------------|------------|------------|------------|
@@ -44,7 +44,7 @@ Wall-clock breaks down as roughly:
 - Initial snapshot resource fetch: ~1-3 s (variance dominated by network).
 - Local storage init + metadata write: <50 ms.
 
-The high variance (min 1.4 s, max 3.5 s) reflects testnet RPC latency, not Movehat code. Parallelizing the snapshot fetch was considered (M5 plan locked-decision #6's candidate "1-2 obvious wins") but inspection showed the current path issues a single `getAccountResources` call — there is no sequential loop to parallelize. The single RPC round-trip is already optimal.
+The high variance (min 1.4 s, max 3.5 s) reflects testnet RPC latency, not Movehat code. Parallelizing the snapshot fetch was considered but inspection showed the current path issues a single `getAccountResources` call — there is no sequential loop to parallelize. The single RPC round-trip is already optimal.
 
 ### `runViewFunction` ≈ 3 ms
 
@@ -52,7 +52,7 @@ Already near the RPC floor (HTTP keep-alive + JSON parse). The implementation in
 
 ## Optimization wins applied
 
-**None applied this milestone.** The M5 plan anticipated this outcome ("If <5% improvement, document the negative result in BENCHMARKS.md and don't claim the win"). The three candidate optimizations from the plan were each evaluated:
+**None applied.** Policy: if <5% improvement, document the negative result and don't claim a win. The three obvious candidates were each evaluated:
 
 | Candidate | Inspected | Outcome |
 |---|---|---|
@@ -60,7 +60,7 @@ Already near the RPC floor (HTTP keep-alive + JSON parse). The implementation in
 | Cache `getLedgerInfo` for the Harness lifetime | yes | **Not applicable** — `getLedgerInfo` is called exactly once during `ForkManager.initialize()`. Caching benefits zero subsequent calls within a single Harness instance. |
 | Reduce `runViewFunction` overhead | yes | **Not applicable** — implementation is a 5-line wrapper over `aptos.view()`. No Movehat-side work to remove. |
 
-The honest conclusion: the M2/M3 cycles already left the fork system reasonably tight. The dominant costs (Movement CLI startup, testnet RPC latency) are external. Future perf work should target either (a) Movement CLI fast-start mode (upstream, not us), or (b) caching strategies that span Harness lifetimes (e.g. snapshot reuse across `createFork` calls).
+The honest conclusion: prior work already left the fork system reasonably tight. The dominant costs (Movement CLI startup, testnet RPC latency) are external. Future perf work should target either (a) Movement CLI fast-start mode (upstream, not us), or (b) caching strategies that span Harness lifetimes (e.g. snapshot reuse across `createFork` calls).
 
 ## How to reproduce
 
@@ -76,6 +76,6 @@ MH_BENCH_SUITES=view  pnpm bench
 
 Requires: Movement CLI on PATH (`movement --version`), network access for the `fork` suite, and a `movehat.config.ts` in the working directory (the script cd's into `examples/counter-example` automatically).
 
-## Related issues fixed in M5.2
+## Related issues fixed alongside this baseline
 
 - **#63** — `ForkManager.fundAccount` previously synthesized `authentication_key` as `address.padEnd(66, '0')`, which was a no-op since normalized addresses are already 66 characters. Replaced with a deterministic SHA3-256 hash of the address, producing a 66-char hex value distinguishable from the address itself. Documented in code as a fork-mode placeholder — downstream code must NOT trust it as real key material.

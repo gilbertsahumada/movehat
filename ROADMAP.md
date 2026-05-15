@@ -2,10 +2,6 @@
 
 This roadmap organizes the next phase of Movehat development. Each milestone has explicit Definition of Done criteria and is tracked as a meta-issue on GitHub.
 
-## Reference documents
-
-- **`GRANT.pdf`** (local-only, gitignored) — underlying MOU that defines the deliverable KPIs this roadmap maps to. Kept out of the repo by the `*.pdf` rule in `.gitignore`. Milestone headers below carry `(KPI 1)` / `(KPI 2)` tags pointing at the relevant KPI section in `GRANT.pdf`. When in doubt about acceptance criteria, the MOU text is the source of truth.
-
 ## Current state
 
 - Documentation site shipped (Fumadocs + Next.js, static export)
@@ -37,8 +33,7 @@ This roadmap organizes the next phase of Movehat development. Each milestone has
 
 Each milestone below lists **explicit, mechanically verifiable** acceptance criteria. The criteria use exact file paths, command outputs, and CLI invocations so progress is unambiguous.
 
-### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75 — (KPI 2)
-
+### M0 — Repository housekeeping (~1.5 days, issue #67) — ✅ shipped in PR #75
 **Goal**: Bring the repo to standard open-source hygiene.
 
 **Definition of Done**:
@@ -52,7 +47,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 - [x] `git commit -m "test"` is **rejected** by the local hook; `git commit -m "chore: test"` is accepted
 - [N/A] CI green after PR lands — GitHub Actions paused by user; security checks (GitGuardian, Socket, CodeRabbit) green
 
-### M1 — Testability refactors (~5 days, issue #68) — ✅ shipped in PR #106 — (prerequisite for KPI 1)
+### M1 — Testability refactors (~5 days, issue #68) — ✅ shipped in PR #106
 
 **Goal**: Refactor core modules so they can be unit-tested without spawning real processes or relying on global state.
 
@@ -85,8 +80,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M1 status: ✅ shipped via PRs #76, #87, #89, #92, #97, #99 (M1.4), #107 (M1.5), #109 (M1.6), and #110 (M1.7). Tier 3 verification `pnpm test:e2e` 32/32 passing (captured on the `develop → main` batch PR #106). Ready for `develop → main` batch.**
 
-### M2 — Hardhat-style Harness API (~6 days, issue #69) — (KPI 1)
-
+### M2 — Hardhat-style Harness API (~6 days, issue #69)
 **Goal**: Provide a Hardhat-style testing harness with explicit lifecycle and use-after-cleanup safety.
 
 **Sub-issues** (each is a separate PR. Execution order: M2.1 → M2.2 → M2.3 → M2.4 in serial — M2.2/M2.3 replace M2.1's method stubs and M2.4 migrates consumers, so each depends on the previous):
@@ -123,8 +117,7 @@ Each milestone below lists **explicit, mechanically verifiable** acceptance crit
 
 **M2 status: ✅ ready for `develop → main` batch (PR #124) — all 4 sub-PRs (M2.1 PR #120, M2.2 PR #121, M2.3 PR #122, M2.4 PR #123) merged to develop. Tier 3 `pnpm test:e2e` 32/32 captured on M2.4 (PR #123) per CLAUDE.md §6.3.**
 
-### M3 — ✅ shipped in PR #135 (develop → main batch) — 80% unit coverage + Movement CLI cache (issue #70) — (KPI 1)
-
+### M3 — ✅ shipped in PR #135 (develop → main batch) — 80% unit coverage + Movement CLI cache (issue #70)
 **Goal**: Raise unit coverage on critical modules to ≥80% statements; cut CI time by caching the Movement CLI tarball.
 
 **Sub-PRs**:
@@ -166,8 +159,7 @@ Follow-up issue: #140 (Movement CLI artifact integrity verification — deferred
 - [x] Cache hit path skips the 66 MB tarball download (M3.1 — Install step wrapped in `if: steps.cache-movement-cli.outputs.cache-hit != 'true'`)
 - [ ] Visible runtime drop on cache hit vs miss in CI logs — pending first CI re-run; numbers to be reported in PR #130 comment
 
-### M4 — ✅ shipped in PR #148 (develop → main batch) — Zero-mock integration suite + E2E SLO (issue #71) — (KPI 1)
-
+### M4 — ✅ shipped in PR #148 (develop → main batch) — Zero-mock integration suite + E2E SLO (issue #71)
 **Goal**: Build an integration suite running real Movement CLI; tighten CI policy.
 
 **Sub-PRs**:
@@ -199,8 +191,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] Wall-clock for the E2E job is observed **<5 minutes** on cache hit (M4.2 — green re-run on PR #147 (`b3e54bf`, run #25865395431) completed in **2m20s total wall-clock**; e2e-tests job at **1m17s** with Movement CLI cache hit; integration step 2.4s with fork tests passing + harness-local skipped via `MOVEHAT_SKIP_LOCAL_NODE` per #149; grep guard passes silently)
 - [x] CI is green on `main` and on at least one non-`main` branch (M4.2 — `ci/m4.2-e2e-slo` is the non-`main` branch; `main` ticks at develop→main batch merge)
 
-### M5 — ✅ shipped in PR #163 (develop → main batch) — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72) — (KPI 2)
-
+### M5 — ✅ shipped in PR #163 (develop → main batch) — TypeDoc API ref + benchmarks + Movement CLI compat (~4 days, issue #72)
 **Goal**: Auto-generate API reference from source; document fork-system performance and Movement CLI compatibility.
 
 **Sub-PRs + commit hashes** (mirrors the M3 / M4 precedent):
@@ -239,8 +230,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] Closes #140 (artifact integrity verification — `sha256sum -c` BEFORE `chmod +x`/`sudo mv`, fails the job on mismatch) (M5.3)
 - [x] Documents #146 reproduction + hypotheses in `MOVEMENT_CLI_COMPAT.md` "Known issues" section (M5.3)
 
-### M6 — ✅ shipped — Publish workflow with changelog gate + 0.2.0 release (~2 days, issue #73) — (KPI 2)
-
+### M6 — ✅ shipped — Publish workflow with changelog gate + 0.2.0 release (~2 days, issue #73)
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
 **Sub-PRs + commit hashes** (mirrors the M3 / M4 / M5 precedent):
@@ -285,8 +275,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] `--provenance` flag added; SLSA v1 attestations now ship with every release.
 - [ ] **TODO (post-M6 cleanup)**: delete the `NPM_TOKEN` secret from repo settings — no longer consumed.
 
-### M7 — Maintenance quota (continuous) — (KPI 2)
-
+### M7 — Maintenance quota (continuous)
 **Goal**: Address open audit issues throughout the roadmap.
 
 **Definition of Done**:

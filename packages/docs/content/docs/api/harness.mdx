@@ -4,7 +4,7 @@ description: Hardhat-style harness API — factories, deployment, view + script 
 icon: Wrench
 ---
 
-The `Harness` class is the primary public API of Movehat since M2 (KPI 1). It wraps the Movement TypeScript SDK + Movement CLI behind a Hardhat-style lifecycle: a static factory constructs the instance, methods do the work, and `cleanup()` releases resources + poisons the instance so any further method call throws `HarnessDisposedError` synchronously.
+The `Harness` class is the primary public API of Movehat. It wraps the Movement TypeScript SDK + Movement CLI behind a Hardhat-style lifecycle: a static factory constructs the instance, methods do the work, and `cleanup()` releases resources + poisons the instance so any further method call throws `HarnessDisposedError` synchronously.
 
 ## Quick Start
 
@@ -188,10 +188,10 @@ The poisoning is implemented via a `Proxy` whose `get` trap throws on access to 
 
 ## Coexistence with `setupTestFixture` / `mh()`
 
-Of the pre-M2 helpers:
+Of the older helpers:
 
 - `import { setupTestFixture } from "movehat/helpers"` — still exported, still functional.
-- `import { getMovehat } from "movehat"` — **removed in `0.2.0`** (M6 / [#73](https://github.com/gilbertsahumada/movehat/issues/73)). Use `Harness.create*` factories or `initRuntime()` instead.
+- `import { getMovehat } from "movehat"` — **removed in `0.2.0`** (see [#73](https://github.com/gilbertsahumada/movehat/issues/73)). Use `Harness.create*` factories or `initRuntime()` instead.
 
 `Harness.createLocal` actually goes through `setupLocalTesting` (which `setupTestFixture` also uses) under the hood — the test environment is identical. The migration is API-level, not infrastructure-level.
 
@@ -205,7 +205,7 @@ const h2 = await Harness.createLocal({ accountLabels: ["alice"] });
 // h1 and h2 see the SAME alice key — AccountManager doesn't re-derive per harness.
 ```
 
-This is the same constraint that already governs `setupTestFixture`. A per-Harness pool is a future change tracked under M3.
+This is the same constraint that already governs `setupTestFixture`. A per-Harness pool is a future change.
 
 ## Reference Implementation
 
