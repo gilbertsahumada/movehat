@@ -21,6 +21,15 @@ packages/docs/content/docs/api/reference/
 /tmp/
 .movehat/
 
+# Move build artifacts (leak from Docker bind-mount when movement CLI runs inside container)
+Move.lock
+
+# pnpm CAS cache (leaks into repo root when pnpm runs inside Docker without access to ~/.local/share/pnpm/store)
+.pnpm-store/
+
+# Claude Code session state
+.claude/
+
 # Local reference 
 /catapulta/
 
