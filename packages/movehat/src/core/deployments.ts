@@ -50,16 +50,10 @@ export function validateSafeName(name: string, type: "network" | "module"): void
   }
 }
 
-/**
- * Get the deployments directory path
- */
 function getDeploymentsDir(): string {
   return join(process.cwd(), "deployments");
 }
 
-/**
- * Get the network-specific deployments directory
- */
 function getNetworkDeploymentsDir(network: string): string {
   // Validate network name to prevent path traversal
   validateSafeName(network, "network");
@@ -78,9 +72,6 @@ function getNetworkDeploymentsDir(network: string): string {
   return networkDir;
 }
 
-/**
- * Save a deployment
- */
 export function saveDeployment(deployment: DeploymentInfo): void {
   // Validate both network and module name
   validateSafeName(deployment.network, "network");
@@ -103,9 +94,6 @@ export function saveDeployment(deployment: DeploymentInfo): void {
   }
 }
 
-/**
- * Load a deployment
- */
 export function loadDeployment(network: string, moduleName: string): DeploymentInfo | null {
   // Validate both network and module name
   validateSafeName(network, "network");
