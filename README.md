@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./packages/movehat/public/movehat_banner.png" alt="Movehat" width="200"/>
+  <img src="./packages/movehat/public/movehat.png" alt="Movehat" width="160"/>
 
   # Movehat
 
@@ -202,6 +202,7 @@ MIT — see [`LICENSE`](./LICENSE).
 - [Fork system guide](./FORK_GUIDE.md) — in-repo deep-dive
 - [GitHub repository](https://github.com/gilbertsahumada/movehat)
 - [NPM package](https://www.npmjs.com/package/movehat)
+- [Movement Network](https://movementnetwork.xyz/) — the L1 Movehat targets
 - [Movement Network docs](https://docs.movementnetwork.xyz/)
 
 ## Author
