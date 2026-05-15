@@ -10,7 +10,7 @@
   [![NPM Version](https://img.shields.io/npm/v/movehat)](https://www.npmjs.com/package/movehat)
   [![License](https://img.shields.io/npm/l/movehat)](./LICENSE)
 
-  **[Full documentation](https://gilbertsahumada.github.io/movehat/)**
+  **[Full documentation](https://movehat.org/)**
 
 </div>
 
@@ -53,7 +53,7 @@ npm test                       # 4. Run tests (auto-starts local node, deploys, 
 
 That's it — local blockchain starts automatically, accounts get funded, contracts deploy, tests run.
 
-For more depth (project layout, configuration, account model, deployment tracking), browse the [full docs](https://gilbertsahumada.github.io/movehat/).
+For more depth (project layout, configuration, account model, deployment tracking), browse the [full docs](https://movehat.org/).
 
 ## Configuration
 
@@ -77,7 +77,7 @@ export default {
 
 A single `PRIVATE_KEY` is reused across networks (Hardhat-style). For testing, accounts are auto-generated and funded from the local faucet — no `.env` needed.
 
-Full reference: [`/docs/getting-started/configuration`](https://gilbertsahumada.github.io/movehat/docs/getting-started/configuration).
+Full reference: [`/docs/getting-started/configuration`](https://movehat.org/docs/getting-started/configuration).
 
 ## Writing Tests
 
@@ -123,7 +123,7 @@ describe("Counter Contract", () => {
 
 Run with `npm test` (interactive menu) or `movehat test --ts` (TypeScript suite, starts local node).
 
-> `setupTestFixture` from `movehat/helpers` is a lighter-weight alternative for tests that don't need the Harness lifecycle — both styles are documented at [`/docs/guides/testing`](https://gilbertsahumada.github.io/movehat/docs/guides/testing).
+> `setupTestFixture` from `movehat/helpers` is a lighter-weight alternative for tests that don't need the Harness lifecycle — both styles are documented at [`/docs/guides/testing`](https://movehat.org/docs/guides/testing).
 
 ## Writing Deployment Scripts
 
@@ -157,23 +157,23 @@ Run with `movehat run scripts/deploy-counter.ts --network testnet`.
 
 Re-running fails with `ModuleAlreadyDeployedError` (local record at `deployments/{network}/counter.json`). Set `MH_CLI_REDEPLOY=true` to force a re-deploy.
 
-> Requires `movehat@^0.2.0`. Full deploy guide (named addresses, code-object semantics, redeploy flow, deployment tracking): [`/docs/guides/deployment`](https://gilbertsahumada.github.io/movehat/docs/guides/deployment).
+> Requires `movehat@^0.2.0`. Full deploy guide (named addresses, code-object semantics, redeploy flow, deployment tracking): [`/docs/guides/deployment`](https://movehat.org/docs/guides/deployment).
 
 ## Fork System
 
 Movehat ships a native fork system for testing against real Movement L1 state without deploying to testnet. Forks are JSON-backed local snapshots that lazy-load resources as you read them, and `Harness.createFork(network)` binds a Harness to one.
 
-Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [`/docs/guides/fork`](https://gilbertsahumada.github.io/movehat/docs/guides/fork) (live site).
+Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [`/docs/guides/fork`](https://movehat.org/docs/guides/fork) (live site).
 
 ## CLI Reference
 
 | Command | Description | Docs |
 |---|---|---|
-| `movehat init [name]` | Scaffold a new Movehat project | [/docs/cli/init](https://gilbertsahumada.github.io/movehat/docs/cli/init) |
-| `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://gilbertsahumada.github.io/movehat/docs/cli/compile) |
-| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://gilbertsahumada.github.io/movehat/docs/cli/test) |
-| `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://gilbertsahumada.github.io/movehat/docs/cli/run) |
-| `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://gilbertsahumada.github.io/movehat/docs/cli/fork) |
+| `movehat init [name]` | Scaffold a new Movehat project | [/docs/cli/init](https://movehat.org/docs/cli/init) |
+| `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://movehat.org/docs/cli/compile) |
+| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://movehat.org/docs/cli/run) |
+| `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://movehat.org/docs/cli/fork) |
 | `movehat update` | Check npm for a newer version and upgrade | — |
 
 ## Troubleshooting
@@ -198,7 +198,7 @@ MIT — see [`LICENSE`](./LICENSE).
 
 ## Links
 
-- [Full documentation](https://gilbertsahumada.github.io/movehat/) — guides, CLI reference, auto-generated API reference (50 pages from TypeDoc)
+- [Full documentation](https://movehat.org/) — guides, CLI reference, auto-generated API reference (50 pages from TypeDoc)
 - [Fork system guide](./FORK_GUIDE.md) — in-repo deep-dive
 - [GitHub repository](https://github.com/gilbertsahumada/movehat)
 - [NPM package](https://www.npmjs.com/package/movehat)
