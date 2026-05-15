@@ -8,6 +8,60 @@ import { logger, createSpinnerChain, formatCommand } from "../ui/index.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export class InvalidProjectNameError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidProjectNameError";
+  }
+}
+
+export interface ProjectNames {
+  /** User input as-is (after trim) — used for the filesystem target. */
+  dirName: string;
+  /** Basename of the resolved path — used for package.json + README.md. */
+  npmName: string;
+  /** Valid Move identifier — used for Move.toml. */
+  moveName: string;
+  /** True when moveName had to diverge from npmName to satisfy Move identifier rules. */
+  sanitized: boolean;
+}
+
+/**
+ * Derive filesystem, npm, and Move identifier names from a single user input.
+ *
+ * Move identifiers must match `[a-zA-Z_][a-zA-Z0-9_]*`. npm package names are
+ * looser (hyphens allowed). The filesystem accepts almost anything. Rather
+ * than reject inputs that would compile fine for npm but not for Move, we
+ * sanitize the Move identifier and leave the npm name + dir unchanged.
+ */
+export function resolveProjectNames(input: string): ProjectNames {
+  const trimmed = input.trim();
+  if (
+    trimmed === "" ||
+    trimmed === "." ||
+    trimmed === ".." ||
+    /^\/+$/.test(trimmed)
+  ) {
+    throw new InvalidProjectNameError(
+      `Project name '${input}' must include at least one character besides path separators.`
+    );
+  }
+
+  const dirName = trimmed;
+  const npmName = path.basename(path.resolve(trimmed));
+  let moveName = npmName.replace(/[^a-zA-Z0-9_]/g, "_");
+  if (!/^[a-zA-Z_]/.test(moveName)) {
+    moveName = `pkg_${moveName}`;
+  }
+
+  return {
+    dirName,
+    npmName,
+    moveName,
+    sanitized: moveName !== npmName,
+  };
+}
+
 /**
  * Initialize a new Movehat project with template files
  *
@@ -49,8 +103,25 @@ export default async function initCommand(projectName?: string) {
     projectName = response.projectName;
   }
 
-  const targetDir = projectName!;
-  const projectPath = path.resolve(process.cwd(), targetDir);
+  let names: ProjectNames;
+  try {
+    names = resolveProjectNames(projectName!);
+  } catch (error) {
+    if (error instanceof InvalidProjectNameError) {
+      logger.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
+
+  const { dirName, npmName, moveName, sanitized } = names;
+  const projectPath = path.resolve(process.cwd(), dirName);
+
+  if (sanitized) {
+    logger.warning(
+      `'${npmName}' is not a valid Move identifier; using '${moveName}' for move/Move.toml. (package.json keeps '${npmName}'.)`
+    );
+  }
 
   logger.newline();
   logger.info(`Initializing new Movehat project in ${projectPath}...`);
@@ -67,7 +138,7 @@ export default async function initCommand(projectName?: string) {
       await copyFile(
         path.join(templatesDir, "package.json"),
         path.join(projectPath, "package.json"),
-        { projectName: projectName! }
+        { projectName: npmName }
       );
 
       await copyFile(
@@ -98,7 +169,7 @@ export default async function initCommand(projectName?: string) {
       await copyFile(
         path.join(templatesDir, "README.md"),
         path.join(projectPath, "README.md"),
-        { projectName: projectName! }
+        { projectName: npmName }
       );
     });
 
@@ -107,7 +178,7 @@ export default async function initCommand(projectName?: string) {
       await copyDir(
         path.join(templatesDir, "move"),
         path.join(projectPath, "move"),
-        { projectName: projectName! }
+        { projectName: npmName, movePackageName: moveName }
       );
     });
 
@@ -136,7 +207,7 @@ export default async function initCommand(projectName?: string) {
 
     // Next steps
     logger.section('Next steps');
-    logger.item(formatCommand(`cd ${projectName}`), 2);
+    logger.item(formatCommand(`cd ${dirName}`), 2);
     logger.item(formatCommand('cp .env.example .env'), 2);
     logger.plain('     # Edit .env with your credentials');
     logger.item(formatCommand('npm install'), 2);
