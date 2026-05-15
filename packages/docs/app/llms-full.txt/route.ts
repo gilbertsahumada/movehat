@@ -4,7 +4,7 @@ import path from 'node:path';
 
 export const dynamic = 'force-static';
 
-const SITE_URL = 'https://movehat.dev';
+const SITE_URL = process.env.NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL ?? 'https://movehat.dev';
 
 export async function GET() {
   const pages = source.getPages();

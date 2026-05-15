@@ -48,6 +48,10 @@ jobs:
           # Base path for GitHub Pages project site
           # (gilbertsahumada.github.io/movehat/).
           MOVEHAT_DOCS_BASE_PATH: /movehat
+          # Canonical site URL for og:metadata, llms.txt, copy-link
+          # actions. NEXT_PUBLIC_ prefix exposes it to client bundles
+          # (the llm-actions.tsx button uses it in the browser).
+          NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL: https://gilbertsahumada.github.io/movehat
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
