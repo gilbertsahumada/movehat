@@ -239,16 +239,29 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] Closes #140 (artifact integrity verification — `sha256sum -c` BEFORE `chmod +x`/`sudo mv`, fails the job on mismatch) (M5.3)
 - [x] Documents #146 reproduction + hypotheses in `MOVEMENT_CLI_COMPAT.md` "Known issues" section (M5.3)
 
-### M6 — Publish workflow with changelog gate + 0.1.0 release (~2 days, issue #73) — (KPI 2)
+### M6 — ✅ shipped — Publish workflow with changelog gate + 0.2.0 release (~2 days, issue #73) — (KPI 2)
 
 **Goal**: Establish a release pipeline that validates the changelog and publishes to npm.
 
-**Sub-PRs**:
+**Sub-PRs + commit hashes** (mirrors the M3 / M4 / M5 precedent):
 
-| Sub | Description | Status |
+| Sub | Description | PR | Commit |
+|---|---|---|---|
+| M6.1 | CHANGELOG gate + unit/integration tests in publish.yml + backfill (closes #165) | [#167](https://github.com/gilbertsahumada/movehat/pull/167) | `d62f7bb` |
+| M6.2 | Remove getMovehat() + bump to 0.2.0 (BREAKING; closes #166, #73 meta) | [#168](https://github.com/gilbertsahumada/movehat/pull/168) | `ca950e3` |
+| M6 batch | develop → main batch (M6.1 + M6.2) | [#169](https://github.com/gilbertsahumada/movehat/pull/169) | `3a26caf` |
+| Hotfix | fix(publish): allow same-version on npm version step | [#170](https://github.com/gilbertsahumada/movehat/pull/170) | `de4c626` |
+| Hotfix batch | develop → main batch (hotfix) | [#171](https://github.com/gilbertsahumada/movehat/pull/171) | `5dc86ce` |
+| TP migration | chore(publish): switch to npm Trusted Publishers + provenance | [#172](https://github.com/gilbertsahumada/movehat/pull/172) | `79321af` |
+| TP batch | develop → main batch (TP migration) | [#173](https://github.com/gilbertsahumada/movehat/pull/173) | `4b39b5b` |
+
+**Release**: [v0.2.0](https://github.com/gilbertsahumada/movehat/releases/tag/v0.2.0) (tag `v0.2.0`, published to npm 2026-05-15 via `workflow_dispatch` run [25901196103](https://github.com/gilbertsahumada/movehat/actions/runs/25901196103); SLSA v1 provenance attached via Trusted Publishers).
+
+**Follow-ups filed during M6** (deferred to later milestones):
+
+| Issue | Title | Reason for defer |
 |---|---|---|
-| M6.1 | `ci(release): CHANGELOG gate + unit/integration tests in publish.yml + backfill` (issue #165) | ✅ shipped in PR #167 |
-| M6.2 | `feat(api)!: remove getMovehat() + bump to 0.2.0` (issue #166, closes #73 meta) | 🔄 in-flight |
+| [#174](https://github.com/gilbertsahumada/movehat/issues/174) | `[publish.yml] Post-publish commit step is brittle (dirty package-lock.json after npm@latest upgrade)` | Cosmetic — `npm publish` already succeeded; the post-publish bookkeeping step failed but the artifact is live. Likely simplest fix: remove the step entirely (the M6.2-onward convention is "bump version in the PR that ships the release", which makes the step redundant). |
 
 **Definition of Done — Publish workflow**:
 - [x] `.github/workflows/publish.yml` triggers on GitHub release publish + `workflow_dispatch` (M6.1 — the original "v* tags" wording was specced before the workflow shipped; `release.published` is a higher-level wrapper that fires on tag-bound release creation. Functionally equivalent for the gate-on-release semantics.)
@@ -262,8 +275,15 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] `getMovehat` no longer exported from `packages/movehat/src/index.ts` (M6.2 — meta-issue #73's "mh" was renamed to `getMovehat` in M1.5; removed the export + the function body in `runtime.ts` + the template `.d.ts` shim declaration + all README/example callers (migrated to `Harness.createLive()`).)
 - [N/A] Remove `MovehatRuntime` legacy types — meta-issue #73 was wrong on this. `MovehatRuntime` is the **live** runtime type used by `Harness.runtime`, `initRuntime()`, and all harness helpers. Removing it would break the live public surface. Only `getMovehat()` itself goes; `MovehatRuntime` stays exported.
 - [x] `packages/movehat/package.json` version bumped to `0.2.0` (M6.2 — meta-issue's "0.1.0" target was stale; package was already at 0.1.9 with 9 published 0.1.x versions. `getMovehat()` removal is breaking → semver bump to 0.2.0.)
-- [ ] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — pending release create + workflow trigger sequence; verified post-merge.)
-- [ ] `npm pack` output does not contain `getMovehat` symbol (M6.2 — pending tarball verification post-merge.)
+- [x] `npm view movehat@0.2.0` returns the new version after publish (M6.2 — confirmed 2026-05-15: `latest` dist-tag flipped from 0.1.9 → 0.2.0; SLSA v1 provenance attached via Trusted Publishers — verified `attestations.provenance.predicateType: https://slsa.dev/provenance/v1`.)
+- [x] `npm pack` output does not contain `getMovehat` symbol (M6.2 — verified against the published tarball: `tar -xzOf movehat-0.2.0.tgz package/dist/index.js | grep -c getMovehat` = 0; `tar -tzf | grep -ic getMovehat` = 0.)
+
+**Migration to Trusted Publishers** (out-of-scope per original M6 plan but driven by NPM_TOKEN expiry during release):
+
+- [x] `publish.yml` migrated from `NPM_TOKEN` secret to GitHub Actions OIDC via npm Trusted Publishers (PR #172).
+- [x] Trusted Publisher configured on npmjs.com for the `movehat` package (out-of-band by maintainer; verified by the successful OIDC-authenticated publish in run #25901196103).
+- [x] `--provenance` flag added; SLSA v1 attestations now ship with every release.
+- [ ] **TODO (post-M6 cleanup)**: delete the `NPM_TOKEN` secret from repo settings — no longer consumed.
 
 ### M7 — Maintenance quota (continuous) — (KPI 2)
 
