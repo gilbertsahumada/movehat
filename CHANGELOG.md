@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-05-15
+
+### Fixed
+
+- npm registry README was stuck on the pre-reorg version because `packages/movehat/README.md` had drifted ~6 months behind the workspace-root `README.md`. The package's README has been resynced with the current root README (aggressively reorganized in [#178](https://github.com/gilbertsahumada/movehat/pull/178) + [#187](https://github.com/gilbertsahumada/movehat/pull/187)), and a `prepack` lifecycle script now auto-syncs the file on every `npm pack` / `npm publish` so drift cannot recur. Closes [#189](https://github.com/gilbertsahumada/movehat/pull/189).
+
+### Changed
+
+- Docs site migrated to the custom domain `https://movehat.org` (was `gilbertsahumada.github.io/movehat`). All README + in-package documentation links updated. ([#184](https://github.com/gilbertsahumada/movehat/pull/184))
+- README aggressively reorganized: 873 → 214 lines (-75%). Replaced the dump-style feature list with a Quick Start + one canonical Harness test + one canonical deployment script + CLI reference table + troubleshooting table. Long-form content lives on the docs site. ([#178](https://github.com/gilbertsahumada/movehat/pull/178), [#187](https://github.com/gilbertsahumada/movehat/pull/187))
+- Docs landing + intro page redesigned with Fumadocs Cards / Tabs / Callout components, mobile-first responsive layout, terminal preview, and copy buttons on all code snippets. ([#187](https://github.com/gilbertsahumada/movehat/pull/187))
+- Deployment example in README modernized from the legacy `harness.runtime.deployContract()` path to `harness.deployCodeObject({ moduleName })` to match the shipped template. ([#187](https://github.com/gilbertsahumada/movehat/pull/187))
+- CI workflow narrowed to fire only on `push:main` + PRs targeting `main` (was `push: [main, develop, feature/*]` + PRs to both). The `develop → main` batch PR is now the single internal-CI checkpoint; sub-PRs to develop rely on local Tier-1 + §8 self-review. `workflow_dispatch` added as manual escape hatch. ([#186](https://github.com/gilbertsahumada/movehat/pull/186))
+- Minimum Node version aligned to `>= 20` (was inconsistent — package.json `engines.node` already required 20+ but contributor docs / docker-compose said 18). Dropped the `test-node18` Docker service and the `pnpm docker:test:node18` script. ([#184](https://github.com/gilbertsahumada/movehat/pull/184))
+
+---
+
 ## [0.2.0] - 2026-05-15
 
 ### Removed
