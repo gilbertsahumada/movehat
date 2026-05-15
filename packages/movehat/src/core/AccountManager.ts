@@ -6,9 +6,6 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "f
 import { join } from "path";
 import { MovehatConfig } from "../types/config.js";
 
-/**
- * Represents a stored account in the pool
- */
 export interface StoredAccount {
   label?: string | undefined;
   privateKey: string;
@@ -16,9 +13,6 @@ export interface StoredAccount {
   createdAt: number;
 }
 
-/**
- * Account pool storage structure
- */
 interface AccountPool {
   accounts: StoredAccount[];
   labelMap: Record<string, string>; // label → address
@@ -49,7 +43,6 @@ export class AccountManager {
    * const randomAccount = AccountManager.getTestAccount();
    */
   static getTestAccount(label?: string): Account {
-    // If label provided, try to get existing labeled account
     if (label) {
       const existingAccount = this.getAccountByLabel(label);
       if (existingAccount) {
@@ -57,7 +50,6 @@ export class AccountManager {
       }
     }
 
-    // Create new account with optional label
     return this.createAccount(label, false);
   }
 
@@ -76,13 +68,9 @@ export class AccountManager {
     const account = Account.generate();
     const address = account.accountAddress.toString();
 
-    // Add to pool
     this.pool.set(address, account);
-
-    // Store private key
     this.privateKeys.set(address, account.privateKey.toString());
 
-    // If label provided, add to label map
     if (label) {
       this.labelMap.set(label, address);
     }
