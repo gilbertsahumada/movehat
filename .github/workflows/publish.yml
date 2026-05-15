@@ -33,6 +33,13 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
+      - name: Upgrade npm to >= 11.5.1 for Trusted Publishers
+        # Trusted Publishers require npm >= 11.5.1 — the OIDC exchange
+        # and provenance attestation paths only ship in that line.
+        # Node 20 bundles npm ~10.x, so the upgrade is mandatory.
+        # See https://docs.npmjs.com/trusted-publishers.
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install
 
@@ -106,19 +113,22 @@ jobs:
           echo "Build verification passed"
           ls -la dist/
 
-      - name: Publish to npm
+      - name: Publish to npm (Trusted Publishers + provenance)
+        # Authenticates via the GitHub Actions OIDC token (job already
+        # has `id-token: write`). Requires a Trusted Publisher
+        # configured on npmjs.com for the movehat package — see
+        # `MOVEMENT_CLI_COMPAT.md`-style operational doc / PR body.
+        # No NPM_TOKEN secret consumed.
         run: |
           cd packages/movehat
           VERSION=${{ steps.get_version.outputs.version }}
 
-          # If version is alpha/beta/rc , publish with tag
+          # If version is alpha/beta/rc, publish with the `next` tag
           if [[ "$VERSION" == *"-alpha"* || "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
-            npm publish --access public --tag next
+            npm publish --access public --provenance --tag next
           else
-            npm publish --access public
+            npm publish --access public --provenance
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit version bump back to repository
         if: github.event_name == 'release'
