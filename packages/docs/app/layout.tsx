@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import './global.css';
 
-const siteUrl = 'https://movehat.dev';
+const siteUrl = process.env.NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL ?? 'https://movehat.dev';
 const description =
   'A Hardhat-like development framework for Movement L1 smart contracts. Write tests and deployment scripts in TypeScript.';
 

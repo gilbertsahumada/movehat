@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const SITE_URL = 'https://movehat.dev';
+const SITE_URL = process.env.NEXT_PUBLIC_MOVEHAT_DOCS_SITE_URL ?? 'https://movehat.dev';
 
 function buildProviderUrl(provider: 'chatgpt' | 'claude' | 'gemini', docUrl: string) {
   const prompt = `Read this Movehat documentation page and help me understand it: ${docUrl}`;
