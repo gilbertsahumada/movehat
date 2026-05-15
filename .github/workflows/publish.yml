@@ -49,9 +49,15 @@ jobs:
           echo "Publishing version: $VERSION"
 
       - name: Update package version
+        # `--allow-same-version` makes this step a no-op when the in-repo
+        # manifest already declares the release tag's version (i.e. the
+        # version bump shipped in the PR that landed before the tag was
+        # cut, rather than relying on the workflow to do the bump).
+        # Without it, npm errors with "Version not changed" and the
+        # release fails — see v0.2.0 attempt at 2026-05-15 (run 25900063511).
         run: |
           cd packages/movehat
-          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Verify CHANGELOG section exists for release version
         # Codified CHANGELOG gate per M6 (issue #73, sub-issue #165). Blocks
