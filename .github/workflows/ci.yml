@@ -1,10 +1,16 @@
 name: CI
 
 on:
+  # Runs only on the merge to main and on PRs targeting main.
+  # Sub-PRs to develop don't get CI — the batch develop→main PR is
+  # the validation gate. Maintainers running `pnpm test`,
+  # `pnpm check:example`, and Tier-2 smoke before merging sub-PRs to
+  # develop is the operational equivalent (see CLAUDE.md §6 / §8).
   push:
-    branches: [ main, develop, feature/* ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   # Build and type check
