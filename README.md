@@ -14,10 +14,11 @@
 
 ## Features
 
+- **Hardhat-style Harness API** - `Harness.createLocal`, `createFork`, `createLive` factory methods with explicit lifecycle (`cleanup()`) and use-after-cleanup safety (Proxy/Poisoning)
 - **Local Node Testing** - Run a real Movement blockchain locally for testing (just like Hardhat!)
 - **Dual Testing Modes** - Choose between `local-node` (full blockchain) or `fork` (read-only snapshot)
 - **Auto-Deploy in Tests** - Contracts deploy automatically when tests run - zero manual setup
-- **setupTestFixture Helper** - High-level API for test setup with type-safe contracts (no `!` operator needed)
+- **setupTestFixture Helper** - Lighter-weight alternative to Harness with type-safe contracts (no `!` operator needed)
 - **Zero Setup Testing** - Auto-generated test accounts funded from local faucet
 - **Auto-detection of Named Addresses** - Automatically detects and configures addresses from your Move code (like Hardhat)
 - **Native Fork System** - Create local snapshots of Movement L1 with actual network state (JSON-based, no BCS issues)
@@ -25,7 +26,6 @@
 - **Hardhat-style accounts** - Single `PRIVATE_KEY` works across all networks
 - **Multi-network support** - Configure multiple networks (testnet, mainnet, local)
 - **Hardhat-like workflow** - Familiar commands and project structure
-- **Movehat Runtime Environment** - Global context object similar to Hardhat's HRE
 - **Movement CLI integration** - Wraps Movement CLI for compilation and publishing
 - **Deployment tracking** - Automatic per-network deployment tracking (like hardhat-deploy)
 - **Security-focused** - Built-in protection against path traversal, command injection, and YAML injection
@@ -61,6 +61,8 @@ npm install -g movehat
 pnpm install -g movehat
 ```
 
+> Each release ships with **SLSA v1 provenance attestations** via [npm Trusted Publishers](https://docs.npmjs.com/trusted-publishers). Verify with `npm view movehat@<version>`.
+
 ## Quick Start (30 seconds)
 
 Get started with Movehat in 4 commands:
@@ -89,6 +91,8 @@ That's it! No manual setup needed - local blockchain starts automatically.
 **Ready to deploy?** Set `PRIVATE_KEY` in `.env` and run deployment scripts. See detailed guide below.
 
 **Want more details?** Check out the [complete Quick Start guide](./QUICKSTART.md).
+
+**Browse the full docs:** [https://gilbertsahumada.github.io/movehat/](https://gilbertsahumada.github.io/movehat/) — guides, CLI reference, and auto-generated API reference (50 pages from TypeDoc).
 
 ---
 
@@ -518,102 +522,59 @@ movehat test:move
 
 ### 2. TypeScript Integration Tests (Local Blockchain)
 
-Write tests in TypeScript that run on a **real local Movement blockchain** (just like Hardhat!). Perfect for end-to-end testing with real transactions:
+Write tests in TypeScript that run on a **real local Movement blockchain** (just like Hardhat!). The canonical pattern uses `Harness`:
 
 ```typescript
 // tests/Counter.test.ts
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, type TestFixture } from "movehat/helpers";
+import { Harness } from "movehat";
+import type { MoveContract } from "movehat/helpers";
 
 describe("Counter Contract", () => {
-  let fixture: TestFixture<'counter'>;
+  let harness: Harness;
+  let counter: MoveContract;
+  let counterAddr: string;
 
   before(async function () {
-    this.timeout(60000); // Allow time for local node startup + deployment
+    this.timeout(60000); // Local node startup + autoDeploy
 
-    // Setup local testing environment with auto-deployment
-    // This will:
-    // 1. Start a local Movement blockchain node
-    // 2. Generate and fund test accounts from local faucet
-    // 3. Auto-deploy the counter module
-    // 4. Return everything ready to use
-    //
-    // By default uses 'local-node' mode (full blockchain)
-    // For faster tests on existing state, pass { mode: 'fork' }
-    fixture = await setupTestFixture(['counter'] as const, ['alice', 'bob']);
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice", "bob"],
+      autoDeploy: ["counter"],
+    });
 
-    console.log(`\n✅ Testing on local blockchain`);
-    console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
-    console.log(`   Alice: ${fixture.accounts.alice.accountAddress.toString()}`);
-    console.log(`   Bob: ${fixture.accounts.bob.accountAddress.toString()}\n`);
-  });
-
-  it("should initialize with value 0", async () => {
-    const counter = fixture.contracts.counter; // Type-safe, no `!` needed
-    const deployer = fixture.accounts.deployer;
-
-    // Read counter value (returns string from view function)
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
-
-    console.log(`   Counter value: ${value}`);
-
-    // Assert the counter is 0 (note: values from view are strings)
-    expect(parseInt(value)).to.equal(0);
-  });
-
-  it("should increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const deployer = fixture.accounts.deployer;
-
-    // Increment the counter (real transaction on local blockchain!)
-    const tx = await counter.call(deployer, "increment", []);
-    console.log(`   Transaction: ${tx.hash}`);
-
-    // Read new value
-    const value = await counter.view<string>("get", [
-      deployer.accountAddress.toString()
-    ]);
-
-    console.log(`   New counter value: ${value}`);
-
-    // Should be 1 now
-    expect(parseInt(value)).to.equal(1);
-  });
-
-  it("alice can also increment counter", async () => {
-    const counter = fixture.contracts.counter;
-    const alice = fixture.accounts.alice;
-
-    // Alice increments her own counter
-    const tx = await counter.call(alice, "increment", []);
-    console.log(`   Alice's transaction: ${tx.hash}`);
-
-    // Read counter value for Alice (each user has their own counter)
-    const aliceValue = await counter.view<string>("get", [
-      alice.accountAddress.toString()
-    ]);
-
-    console.log(`   Alice's counter value: ${aliceValue}`);
-    expect(parseInt(aliceValue)).to.equal(1);
-
-    // Deployer's counter should still be 1 (unchanged)
-    const deployerValue = await counter.view<string>("get", [
-      fixture.accounts.deployer.accountAddress.toString()
-    ]);
-
-    console.log(`   Deployer's counter value: ${deployerValue}`);
-    expect(parseInt(deployerValue)).to.equal(1);
+    counterAddr = harness.runtime.getDeploymentAddress("counter");
+    counter = harness.runtime.getContract(counterAddr, "counter");
   });
 
   after(async () => {
-    // Cleanup: Stop local node
-    await fixture.teardown();
+    await harness.cleanup();
+  });
+
+  it("should initialize with value 0", async () => {
+    const deployer = harness.runtime.account;
+    const [value] = await harness.runViewFunction({
+      function: `${counterAddr}::counter::get`,
+      functionArguments: [deployer.accountAddress.toString()],
+    });
+    expect(parseInt(value as string)).to.equal(0);
+  });
+
+  it("alice can increment her own counter", async () => {
+    const alice = harness.runtime.getAccountByLabel("alice");
+    await counter.call(alice, "increment", []);
+
+    const [value] = await harness.runViewFunction({
+      function: `${counterAddr}::counter::get`,
+      functionArguments: [alice.accountAddress.toString()],
+    });
+    expect(parseInt(value as string)).to.equal(1);
   });
 });
 ```
+
+> The lighter-weight `setupTestFixture` helper still works for tests that don't need Harness's lifecycle guarantees — see [`/docs/api/harness`](https://gilbertsahumada.github.io/movehat/docs/api/harness) for both styles.
 
 **When to use TypeScript tests:**
 - Testing real transaction flows with actual state changes
@@ -665,17 +626,10 @@ Test result: OK. Total tests: 1; passed: 1; failed: 0
 ------------------------------------------------------------
 
   Counter Contract
-    Counter functionality
-[TESTNET] Using auto-generated test account (safe for testing only)
-[TESTNET] For mainnet, set PRIVATE_KEY in .env
+      ✓ should initialize with value 0
+      ✓ alice can increment her own counter
 
-Testing on testnet
-Account: 0x1234...
-
-      ✓ should initialize counter using simulation
-      ✓ should increment counter using simulation
-
-  2 passing (3s)
+  2 passing (15s)
 
 ✓ TypeScript tests passed
 
@@ -907,8 +861,8 @@ MIT
 - [Fork System Guide](./FORK_GUIDE.md) - Complete fork system documentation
 - [GitHub Repository](https://github.com/gilbertsahumada/movehat)
 - [NPM Package](https://www.npmjs.com/package/movehat)
-- [Movement Documentation](https://docs.movementlabs.xyz/)
-- [Movement TypeScript SDK](https://docs.movementnetwork.xyz/)
+- [Movement Documentation](https://docs.movementnetwork.xyz/)
+- [Aptos TypeScript SDK](https://www.npmjs.com/package/@aptos-labs/ts-sdk) (the SDK Movehat builds on)
 
 ## Author
 
