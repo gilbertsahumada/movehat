@@ -5,4 +5,4 @@ contact_links:
     about: Please report security issues privately, not as a public issue. See SECURITY.md.
   - name: Documentation
     url: https://github.com/gilbertsahumada/movehat#readme
-    about: Read the README and QUICKSTART before opening a question.
+    about: Read the README and docs site before opening a question.

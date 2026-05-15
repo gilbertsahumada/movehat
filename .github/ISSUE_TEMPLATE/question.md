@@ -12,8 +12,7 @@ labels: [question]
 ## What you've already checked
 
 - [ ] [README](../../README.md)
-- [ ] [Docs site](../../packages/docs/content/docs/)
-- [ ] [QUICKSTART](../../QUICKSTART.md)
+- [ ] [Docs site](https://movehat.org/)
 - [ ] Existing issues
 
 ## Environment (if relevant)

@@ -1,10 +1,10 @@
 import { createMDX } from 'fumadocs-mdx/next';
 
-// Set MOVEHAT_DOCS_BASE_PATH=/movehat when building for GitHub Pages
-// (the published URL is gilbertsahumada.github.io/movehat/, so all
-// internal links + asset URLs need the /movehat prefix). Local
-// `pnpm dev:docs` and unsuffixed `pnpm build:docs` leave it empty so
-// preview / Vercel / Netlify hosts keep working unchanged.
+// Custom domain (movehat.org) serves the site at root, so no basePath
+// is needed in production. The env var is kept conditional in case a
+// future deployment needs a sub-path (e.g. preview deploys on Vercel
+// under /docs/preview). Leave it unset for the default root-serving
+// behavior.
 const basePath = process.env.MOVEHAT_DOCS_BASE_PATH ?? '';
 
 /** @type {import('next').NextConfig} */
