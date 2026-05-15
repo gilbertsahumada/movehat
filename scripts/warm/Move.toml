@@ -1,0 +1,11 @@
+[package]
+name = "warm"
+version = "1.0.0"
+
+[addresses]
+warm = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "movement"
+subdir = "aptos-move/framework/aptos-framework"

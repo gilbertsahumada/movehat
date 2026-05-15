@@ -54,6 +54,28 @@ services:
         npm test
       "
 
+  # Tier B dogfood test — full end-to-end user journey with real Movement CLI
+  # (install + scaffold + user-authored Move edit + compile + test on local
+  # node + fork-mode invariants). Run via `pnpm docker:test:dogfood`.
+  #
+  # `platform: linux/amd64` is required because the Movement CLI binary is
+  # x86_64-only (no ARM64 Linux build exists upstream). On Apple Silicon
+  # this forces Docker Desktop to use Rosetta emulation; on amd64 hosts
+  # (CI, Intel Macs, Linux PCs) it's a no-op. Without this, Apple Silicon
+  # hits "rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2"
+  # during Movement CLI install.
+  test-dogfood:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.dogfood
+      platforms:
+        - linux/amd64
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: bash /workspace/scripts/dogfood-test.sh
+
   # Test de integración completa
   test-integration:
     build:

@@ -177,6 +177,28 @@ This simulates:
 5. Running movehat commands
 6. Creating and testing a project
 
+### Tier B end-to-end dogfood test
+
+Validates the **full user journey** including a user-authored Move edit and fork-mode invariants:
+
+```bash
+pnpm docker:test:dogfood
+```
+
+What it does (~2–3 min):
+
+1. Builds + packs movehat from current source.
+2. Installs the tarball globally inside the container.
+3. Scaffolds a new project via `movehat init`.
+4. **Extends the template Counter module with a user-authored `reset()` function** (and a matching mocha test) — proves the framework supports real contributor edits, not just the canned template.
+5. Compiles with the real Movement CLI (SHA256-pinned, same revision as CI).
+6. Runs the mocha test suite against a **real local Movement node** spawned by `Harness.createLocal`.
+7. Creates a testnet fork via `Harness.createFork("testnet")` and verifies fork-mode invariants: deploy attempts must be rejected; post-`cleanup()` property access must throw `HarnessDisposedError`.
+
+Files: `Dockerfile.dogfood`, `scripts/dogfood-test.sh`, `scripts/dogfood-fork-test.ts`.
+
+The fork system is intentionally read-only today. Tracking writable-fork support: [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+
 ### Test All Configurations
 
 ```bash

@@ -25,6 +25,7 @@
     "docker:test": "docker-compose -f docker-compose.test.yml up --abort-on-container-exit",
     "docker:test:node20": "docker-compose -f docker-compose.test.yml up test-node20",
     "docker:test:node22": "docker-compose -f docker-compose.test.yml up test-node22",
+    "docker:test:dogfood": "docker-compose -f docker-compose.test.yml build test-dogfood && docker-compose -f docker-compose.test.yml run --rm test-dogfood",
     "docker:clean": "docker-compose -f docker-compose.test.yml down --rmi local --volumes",
     "build:docs": "pnpm --filter docs build",
     "dev:docs": "pnpm --filter docs dev",
