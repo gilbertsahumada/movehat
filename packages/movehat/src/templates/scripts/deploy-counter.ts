@@ -31,6 +31,16 @@ async function main() {
     // Interact with the freshly deployed module via the runtime helper.
     const counter = harness.runtime.getContract(deployment.address, "counter");
 
+    // Counter is a Move resource — it must be created explicitly per
+    // account before any method that reads or mutates it. The dedicated
+    // `init` entry function does this once per signer. (The module also
+    // auto-inits inside `increment` as defense in depth, so this call is
+    // technically optional today, but kept for pedagogy: real-world Move
+    // modules usually require an explicit init step.)
+    console.log("\n🔧 Initializing counter resource for this account...");
+    const initTx = await counter.call(harness.runtime.account, "init", []);
+    console.log(`   Init tx: ${initTx.hash}`);
+
     console.log("\n📝 Incrementing counter...");
     const txResult = await counter.call(harness.runtime.account, "increment", []);
     console.log(`✅ Transaction hash: ${txResult.hash}`);

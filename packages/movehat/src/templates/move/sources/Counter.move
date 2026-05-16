@@ -33,7 +33,16 @@ module counter::counter {
 
     public entry fun increment(account: &signer) acquires Counter {
         let account_addr = signer::address_of(account);
-        assert!(exists<Counter>(account_addr), E_NOT_INITIALIZED);
+
+        // Auto-init: create Counter if it doesn't exist yet. Defense in
+        // depth so the module stays usable even if a caller skips the
+        // dedicated `init` entry function.
+        if (!exists<Counter>(account_addr)) {
+            move_to(account, Counter {
+                value: 0,
+                increment_events: account::new_event_handle<IncrementEvent>(account),
+            });
+        };
 
         let counter = borrow_global_mut<Counter>(account_addr);
         let old_value = counter.value;
@@ -56,14 +65,32 @@ module counter::counter {
     public fun test_increment(account: &signer) acquires Counter {
         let addr = signer::address_of(account);
         aptos_framework::account::create_account_for_test(addr);
-        
+
         init(account);
         assert!(get(addr) == 0, 0);
-        
+
         increment(account);
         assert!(get(addr) == 1, 1);
-        
+
         increment(account);
         assert!(get(addr) == 2, 2);
+    }
+
+    /// Regression guard: increment must auto-create the Counter resource
+    /// when called against a never-initialized account. Locks the
+    /// defense-in-depth behavior so a future refactor can't accidentally
+    /// remove it.
+    #[test(account = @0x2)]
+    public fun test_increment_auto_inits(account: &signer) acquires Counter {
+        let addr = signer::address_of(account);
+        aptos_framework::account::create_account_for_test(addr);
+
+        // Skip init entirely — increment must create the resource.
+        increment(account);
+        assert!(get(addr) == 1, 0);
+
+        // Idempotent: a second increment uses the now-existing resource.
+        increment(account);
+        assert!(get(addr) == 2, 1);
     }
 }
