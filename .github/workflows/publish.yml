@@ -143,12 +143,41 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Closes #174: skip cleanly when main already has the version
+          # bump (the typical flow: release PR landed the bump before
+          # the tag was created, so the tag's `package.json` and
+          # `origin/main`'s `package.json` agree on version, and there's
+          # literally nothing to commit back).
+          #
+          # The previous unconditional `git stash push → checkout main →
+          # rebase → stash pop` dance produced "No stash entries found"
+          # when there was no diff to stash, then failed on pop and
+          # failed the whole job — even though npm publish (the actual
+          # job purpose) had already succeeded.
+          git fetch origin main
+          TAG_VERSION=$(grep -m1 '"version"' packages/movehat/package.json \
+            | sed 's/.*"version": "\([^"]*\)".*/\1/')
+          MAIN_VERSION=$(git show origin/main:packages/movehat/package.json \
+            | grep -m1 '"version"' \
+            | sed 's/.*"version": "\([^"]*\)".*/\1/')
+
+          if [ "$TAG_VERSION" = "$MAIN_VERSION" ]; then
+            echo "main is already at v$TAG_VERSION; no commit-back needed."
+            exit 0
+          fi
+
+          echo "main is at v$MAIN_VERSION; tag is v$TAG_VERSION. Committing bump back..."
+
+          # Below: original stash/rebase/pop dance — preserved for the
+          # edge case where a tag was created from a commit whose
+          # version bump never landed on main (e.g., release created
+          # from a feature branch).
+
           # Stash the version changes before switching branches
           git add packages/movehat/package.json packages/movehat/src/templates/package.json
           git stash push -m "Version bump to ${{ steps.get_version.outputs.version }}"
 
           # Fetch and checkout main branch (exit detached HEAD state)
-          git fetch origin main
           git checkout main
 
           # Rebase onto latest main to avoid non-fast-forward rejections
