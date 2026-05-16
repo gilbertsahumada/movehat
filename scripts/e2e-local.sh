@@ -288,11 +288,48 @@ else
 fi
 
 # ===========================================
+# Test: Canonical deploy-counter.ts end-to-end against Movement testnet
+# ===========================================
+# Catches the class of bug where the template's deploy script is
+# type-valid but fails at runtime (e.g., skipping a required `init`
+# call). Uses Movement testnet because:
+#   - It matches the path real users hit on first install.
+#   - The runtime auto-generates and faucet-funds a test account for
+#     testnet, so this works without any CI secret.
+#   - Avoids the upstream MintFunder bug on Linux x86_64 that gates
+#     the local-node spawn behind MOVEHAT_SKIP_LOCAL_NODE.
+#
+# The step is NOT gated by --quick. The whole point of this gate is
+# to run on every PR, since unit tests can't catch a missing init()
+# in a template script.
+step "Testing: canonical deploy-counter.ts against Movement testnet"
+
+DEPLOY_LOG="$TEST_DIR/deploy.log"
+
+if MOVEHAT_NETWORK=testnet npx movehat run scripts/deploy-counter.ts > "$DEPLOY_LOG" 2>&1; then
+    # Exit code 0 is necessary but not sufficient — assert the script
+    # actually reached the final view-function call. The "Counter
+    # value: 1" line is emitted only after deploy + init + increment
+    # + view all succeed.
+    if grep -q "Counter value: 1" "$DEPLOY_LOG"; then
+        pass "Canonical deploy script succeeded end-to-end (deploy + init + increment + view)"
+    else
+        fail "Deploy script exited 0 but did not print 'Counter value: 1'"
+        echo "--- deploy.log (tail) ---"
+        tail -30 "$DEPLOY_LOG"
+    fi
+else
+    fail "Canonical deploy-counter.ts failed at runtime"
+    echo "--- deploy.log (tail) ---"
+    tail -30 "$DEPLOY_LOG"
+fi
+
+# ===========================================
 # Test: npm test (Move unit tests)
 # ===========================================
 if [ "$QUICK_MODE" = false ]; then
     step "Testing: movehat test --move"
-    
+
     if npx movehat test --move 2>&1; then
         pass "Move unit tests passed"
     else
