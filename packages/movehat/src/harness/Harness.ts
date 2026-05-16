@@ -92,19 +92,28 @@ export class Harness {
    * and `runMoveScript` throw with a message pointing at `createLocal`.
    * `runViewFunction` works (read-only path).
    *
-   * @param network - Network to fork (e.g. `"testnet"`).
+   * @param network - Network to fork. Built-ins: `"testnet"`, `"mainnet"`.
+   *   Any other name requires `rpcUrl`.
    * @param apiKey - Optional Movement API key. When set, every upstream
    *   request from the fork's `MovementApiClient` carries
    *   `Authorization: Bearer <apiKey>`. Use for rate-limited public
    *   endpoints or auth-gated nodes. The key stays in process memory
    *   (not persisted to the fork's on-disk metadata).
+   * @param rpcUrl - Required when forking a non-built-in network.
+   *   Ignored when a fork already exists on disk (the saved metadata's
+   *   nodeUrl is reused).
    */
-  static async createFork(network: string, apiKey?: string): Promise<Harness> {
+  static async createFork(
+    network: string,
+    apiKey?: string,
+    rpcUrl?: string
+  ): Promise<Harness> {
     const setupOpts: import("../types/config.js").LocalTestOptions = {
       mode: "fork",
       forkNetwork: network,
     };
     if (apiKey !== undefined) setupOpts.forkApiKey = apiKey;
+    if (rpcUrl !== undefined) setupOpts.forkRpcUrl = rpcUrl;
     const ctx = await setupLocalTesting(setupOpts);
     const init: HarnessInit = {
       mode: "fork",

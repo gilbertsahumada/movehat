@@ -55,7 +55,14 @@ export interface LocalTestOptions {
     nodeSilent?: boolean;               // Suppress node output (default: false)
 
     // Fork options (when mode='fork')
-    forkNetwork?: 'testnet' | string;   // Network to fork from (default: 'testnet')
+    forkNetwork?: 'testnet' | 'mainnet' | string;   // Network to fork from (default: 'testnet')
+    /**
+     * RPC URL override used when forking a non-built-in network.
+     * Required when `forkNetwork` is not one of the built-in names
+     * (`'testnet'`, `'mainnet'`). Ignored when a fork already exists
+     * on disk (the saved metadata's nodeUrl is reused).
+     */
+    forkRpcUrl?: string;
     forkName?: string;                  // Name for the fork (default: 'test-local')
     forkPort?: number;                  // Fork server port (default: 8080)
     forkResetState?: boolean;           // Clear fork state before tests (default: true)
