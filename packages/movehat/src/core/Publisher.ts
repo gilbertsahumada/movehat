@@ -1,7 +1,4 @@
-import { homedir } from "os";
-import { join } from "path";
-import { randomUUID } from "crypto";
-import { Account } from "@aptos-labs/ts-sdk";
+import { Account, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
 import {
@@ -10,16 +7,14 @@ import {
   DeploymentInfo,
   validateSafeName,
 } from "./deployments.js";
-import { validatePathSafety, validateProfileSafety } from "./shell.js";
+import { validatePathSafety } from "./shell.js";
 import { CliExecutionError, ModuleAlreadyDeployedError, PostPublishError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { logger } from "../ui/index.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 import {
-  withYamlLock,
-  addProfile,
-  removeProfile,
-  removeProfileSync,
+  writeTempKeyFile,
+  removeKeyFileSync,
   ensureSignalHandler,
   cleanupCallbacks,
 } from "./movementProfile.js";
@@ -98,18 +93,10 @@ export class Publisher {
 
     const dir = input.packageDir || config.moveDir;
 
-    // Bug #37: use a UUID-suffixed profile name per deploy so concurrent
-    // Publisher.deploy() calls in the same process don't fight over the
-    // same key in ~/.aptos/config.yaml. The previous code reused
-    // config.profile (default "default"), which meant two parallel
-    // deploys would clobber each other's profile data mid-publish.
-    const profile = `movehat-deploy-${randomUUID().slice(0, 8)}`;
-
     // Validate (no shell escape — runCli uses spawn, which takes args
     // verbatim and would treat the single-quote wrapping as part of the
-    // literal path/profile, breaking Movement CLI argument parsing).
+    // literal path, breaking Movement CLI argument parsing).
     const safeDir = validatePathSafety(dir, "package directory");
-    const safeProfile = validateProfileSafety(profile);
 
     logger.step(`Publishing module "${moduleName}" from ${dir}...`);
 
@@ -148,54 +135,47 @@ export class Publisher {
       // Publish using direct parameters (avoid config file issues)
       logger.step("Publishing to blockchain...");
 
-      // Use parameters directly instead of relying on config file
-      // Strip any ed25519-priv- prefix if present
-      let cleanPrivateKey = config.privateKey;
-      if (cleanPrivateKey.startsWith("ed25519-priv-")) {
-        cleanPrivateKey = cleanPrivateKey.replace("ed25519-priv-", "");
-      }
+      // Format the private key into AIP-80 shape so the Movement CLI
+      // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
+      // is idempotent for already-prefixed inputs.
+      const formattedPrivateKey = PrivateKey.formatPrivateKey(
+        config.privateKey,
+        PrivateKeyVariants.Ed25519,
+      );
 
-      // Bug #38: Move.toml is NOT mutated. All address overrides flow
-      // through the `--named-addresses` flag above, which Movement CLI
-      // applies during build + publish. The previous regex rewrite +
-      // restore-in-finally was destructive: if the process died between
-      // write and restore, the user's Move.toml stayed mutated.
+      // Move.toml is NOT mutated. All address overrides flow through
+      // the `--named-addresses` flag above, which Movement CLI applies
+      // during build + publish. Rewriting Move.toml on disk would risk
+      // leaving the user's file mutated if the process died before the
+      // restore step.
 
       let publishOut = "";
       let publishErr = "";
 
-      // Setup Movement CLI config with private key securely.
-      // Movement CLI uses .aptos config directory (not .movement).
-      const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
+      // Pass the private key to Movement CLI via a 0o600 temp file
+      // (`--private-key-file <path>`) and the on-chain address via
+      // `--sender-account <addr>`. This avoids the CLI's profile-yaml
+      // lookup chain entirely — no CWD / HOME / .aptos / .movement
+      // dance, no CLI-variant dependency.
+      const keyFilePath = writeTempKeyFile(formattedPrivateKey);
 
-      // Register a sync cleanup hook BEFORE writing the private key.
-      // If the user Ctrl+C's (or the process is SIGTERM'd) between the
-      // yaml write and our async finally, the SIGINT handler iterates
-      // every registered callback and removes this deploy's profile
-      // synchronously — closes bug #36 (private key persisting on disk
-      // after abnormal exit).
+      // Register a sync cleanup hook BEFORE invoking the CLI. If the
+      // user Ctrl+C's (or the process is SIGTERM'd) between the file
+      // write and our finally, the SIGINT handler iterates every
+      // registered callback and unlinks this deploy's key file
+      // synchronously so the private key never persists on disk after
+      // an abnormal exit.
       ensureSignalHandler();
-      const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
+      const syncCleanup = () => removeKeyFileSync(keyFilePath);
       cleanupCallbacks.add(syncCleanup);
 
-      // Add our deploy profile under the unique key. The mutex serializes
-      // read-modify-write cycles so concurrent deploys in the same process
-      // can't drop each other's profiles. Other user profiles in the same
-      // file are preserved untouched.
-      await withYamlLock(() =>
-        addProfile(movementConfigPath, profile, {
-          private_key: cleanPrivateKey,
-          public_key: account.publicKey.toString(),
-          account: deployerAddress,
-          rest_url: config.rpc,
-        })
-      );
-
       try {
-        // Execute publish command without exposing private key in CLI.
-        // Routed through runCli so stdout/stderr are redacted of any
-        // `ed25519-priv-…` shape before reaching console.log/console.error
-        // or the thrown CliExecutionError — that's bug #43.
+        // Execute publish command. Private key reaches the CLI via the
+        // temp key file path (--private-key-file) — never on the
+        // command line — so it can't leak through `ps aux`. runCli's
+        // stdout/stderr redaction still applies as defense in depth
+        // for any `ed25519-priv-…` substring that surfaces in CLI
+        // output (Movement CLI sometimes echoes the key on error).
         const publishResult = await runCli(
           {
             command: "movement",
@@ -206,8 +186,10 @@ export class Publisher {
               safeDir,
               "--url",
               config.rpc,
-              "--profile",
-              safeProfile,
+              "--private-key-file",
+              keyFilePath,
+              "--sender-account",
+              deployerAddress,
               "--assume-yes",
               ...namedAddrArgs,
             ],
@@ -220,26 +202,12 @@ export class Publisher {
         if (publishOut) console.log(publishOut.trim());
         if (publishErr) console.error(publishErr.trim());
       } finally {
-        // Always remove our profile from the shared yaml — never restore
-        // a "snapshot" of the whole file (that's what the old code did,
-        // and that's the bug #37 race). Removing only our key leaves
-        // other concurrent deploys' profiles intact.
-        //
-        // CRITICAL: catch + log instead of throwing. `await` in a finally
-        // block that throws will clobber both the try block's successful
-        // return value AND any error already propagating. Without this
-        // catch, a yaml-write failure here would mask a successful
-        // publish (making the deploy look failed and inviting a redeploy)
-        // or mask the real publish error.
-        await withYamlLock(() => removeProfile(movementConfigPath, profile)).catch((err) => {
-          const cleanupMsg = err instanceof Error ? err.message : String(err);
-          logger.warning(
-            `Failed to remove deploy profile "${profile}" from ${movementConfigPath}: ${cleanupMsg}. ` +
-            `Run 'movement config delete-profile --profile ${profile}' to clean up manually.`
-          );
-        });
-        // Unregister the sync cleanup hook — normal path. (The signal
-        // handler stays installed for the process lifetime; cheap.)
+        // Unlink the temp key file. The sync cleanup callback registered
+        // above also runs on SIGINT/SIGTERM; both paths are idempotent
+        // (unlink of a missing file is swallowed in removeKeyFileSync).
+        // Unregister the callback so we don't leak entries in
+        // cleanupCallbacks across many deploys.
+        removeKeyFileSync(keyFilePath);
         cleanupCallbacks.delete(syncCleanup);
       }
 
