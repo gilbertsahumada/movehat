@@ -1,6 +1,8 @@
 import {
   Account,
   Ed25519PrivateKey,
+  PrivateKey,
+  PrivateKeyVariants,
 } from "@aptos-labs/ts-sdk";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -131,7 +133,14 @@ export class AccountManager {
    * const account = AccountManager.loadAccountFromPrivateKey("0xabc123...");
    */
   static loadAccountFromPrivateKey(privateKeyHex: string): Account {
-    const privateKey = new Ed25519PrivateKey(privateKeyHex);
+    // Format into AIP-80 shape (`ed25519-priv-0x…`) before constructing
+    // the SDK type. Without this, raw-hex inputs trigger a noisy
+    // deprecation warning from `@aptos-labs/ts-sdk` on every call.
+    const formatted = PrivateKey.formatPrivateKey(
+      privateKeyHex,
+      PrivateKeyVariants.Ed25519,
+    );
+    const privateKey = new Ed25519PrivateKey(formatted);
     const account = Account.fromPrivateKey({ privateKey });
     const address = account.accountAddress.toString();
 
