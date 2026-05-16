@@ -10,8 +10,9 @@ interface ConfigCacheEntry {
 }
 
 // Keyed by resolved absolute path. One entry per config file the process
-// has loaded. Closes #62 — the previous `?t=Date.now()` cache-bust
-// created a fresh Node loader module per call.
+// has loaded. We rely on Node's loader cache + mtime invalidation rather
+// than a `?t=Date.now()` query-string cache-bust, which would create a
+// fresh loader module per call and leak memory.
 //
 // Note on concurrency: two `loadUserConfig()` calls racing on a cold
 // cache may both invoke `import()`. Node's loader cache deduplicates by

@@ -22,12 +22,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 /**
- * Guards against the bug-#43 leak path: when `movement move publish`
+ * Guards against the private-key leak path: when `movement move publish`
  * echoes `ed25519-priv-…` material in stdout/stderr, neither the
  * thrown error nor anything reaching `console.error` may carry the
  * raw key. The redaction is structurally guaranteed by runCli today
  * — these tests make the guarantee *directly* asserted so a future
- * PR adding a non-runCli code path can't silently re-leak.
+ * change adding a non-runCli code path can't silently re-leak.
  */
 describe("runtime.deployContract — secret redaction", () => {
   let tmpHome: string;
@@ -149,14 +149,15 @@ version = "0.0.1"
     expect(existsSync(join(tmpHome, ".aptos", "config.yaml"))).toBe(false);
   });
 
-  it("two concurrent deploys do not corrupt ~/.aptos/config.yaml (#37)", async () => {
-    // Pre-fix #37: both deploys overwrote ~/.aptos/config.yaml with the
-    // SAME profile name ("default" by default), then both restored
-    // independently. The second deploy's restore would overwrite the
-    // first's profile mid-publish → potential cross-contamination of
-    // private keys / accounts. Post-fix: each deploy uses a unique
-    // movehat-deploy-<uuid> profile name and only deletes its own key
-    // on cleanup. The user's other profiles never get touched.
+  it("two concurrent deploys do not corrupt ~/.aptos/config.yaml", async () => {
+    // Without unique profile names, both deploys would overwrite
+    // ~/.aptos/config.yaml with the SAME profile name ("default" by
+    // default), then both restore independently. The second deploy's
+    // restore would overwrite the first's profile mid-publish → potential
+    // cross-contamination of private keys / accounts. With unique
+    // profile names, each deploy uses a unique movehat-deploy-<uuid>
+    // profile name and only deletes its own key on cleanup. The user's
+    // other profiles never get touched.
     //
     // The mutex is what makes this safe — without it, the
     // read-modify-write cycles would race and silently drop a profile.
@@ -253,8 +254,8 @@ version = "0.0.1"
     );
   });
 
-  it("SIGINT mid-deploy cleans the profile from ~/.aptos/config.yaml (#36)", async () => {
-    // Pre-fix #36: between the yaml write (private key persisted) and the
+  it("SIGINT mid-deploy cleans the profile from ~/.aptos/config.yaml", async () => {
+    // Without sync SIGINT cleanup: between the yaml write (private key persisted) and the
     // finally block, a SIGINT would skip cleanup and leave the user's
     // private key sitting in ~/.aptos/config.yaml at mode 0o600.
     // Post-fix: a sync signal handler runs synchronously before exit,
@@ -356,8 +357,8 @@ version = "0.0.1"
     expect(finalYaml.profiles.user_main.private_key).toBe("0x" + "a".repeat(64));
   }, 15000);
 
-  it("does not mutate Move.toml during deploy (#38)", async () => {
-    // Pre-fix #38: deployContract overwrote every entry under [addresses]
+  it("does not mutate Move.toml during deploy", async () => {
+    // Without --named-addresses: deployContract overwrote every entry under [addresses]
     // with the deployer address, then relied on `finally` to restore.
     // Post-fix: Move.toml is never touched — `--named-addresses` carries
     // the overrides on the CLI line for both build and publish.

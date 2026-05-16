@@ -40,8 +40,7 @@ export interface AccountResource {
   /**
    * Move resource payload — structurally a JSON-shaped object whose
    * schema depends on the resource type (CoinStore, AggregatorSnapshot, etc).
-   * unknown forces callers to narrow before access; the boundary-validation
-   * follow-up of #57 will add per-resource type guards.
+   * Typed as `unknown` to force callers to narrow before access.
    */
   data: unknown;
 }

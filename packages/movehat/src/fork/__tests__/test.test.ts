@@ -6,12 +6,11 @@ import { snapshot, viewForkResource } from '../test.js';
 import type { ChildProcessAdapter, RunResult } from '../../utils/childProcessAdapter.js';
 
 /**
- * Guards the exitCode-failure path that CodeRabbit flagged on PR #100:
- * before this hardening, an `aptos` command that exited non-zero with a
- * stderr containing the word "Success" (or no stderr at all) could slip
- * past the stderr-defense check in `snapshot`, and a non-JSON stderr from
- * `view-resource` produced a cryptic JSON parse error instead of the
- * actual aptos failure.
+ * Guards the exitCode-failure path: an `aptos` command that exits non-zero
+ * with a stderr containing the word "Success" (or no stderr at all) must
+ * not slip past the stderr-defense check in `snapshot`, and a non-JSON
+ * stderr from `view-resource` must surface the actual aptos failure
+ * rather than a cryptic JSON parse error.
  */
 describe('fork/test — exitCode failure paths', () => {
   let tmpCwd: string;

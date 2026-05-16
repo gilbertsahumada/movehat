@@ -222,8 +222,8 @@ async function executeMovementMoveObject(
 
     const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
 
-    // Register SIGINT-safe sync cleanup BEFORE writing the key (same
-    // pattern as Publisher — closes bug #36).
+    // Register SIGINT-safe sync cleanup BEFORE writing the key so the
+    // private key never persists on disk after an abnormal exit.
     ensureSignalHandler();
     const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
     cleanupCallbacks.add(syncCleanup);
@@ -275,7 +275,7 @@ async function executeMovementMoveObject(
     } finally {
       // Best-effort profile removal. CRITICAL: catch + log instead of
       // re-throwing — an await-in-finally that throws would clobber the
-      // try block's success/error (the bug-#37 lesson from Publisher).
+      // try block's success/error.
       await withYamlLock(() => removeProfile(movementConfigPath, profile)).catch(
         (err) => {
           const cleanupMsg = err instanceof Error ? err.message : String(err);

@@ -41,8 +41,8 @@ export interface HarnessTestFixtureOptions {
 
   /**
    * When `true`, manage a separate `process.env.HOME` directory for
-   * the test. Used by tests that exercise `~/.aptos/config.yaml`
-   * profile writes (codeObject.* and script.* test suites).
+   * the test. Required by tests that exercise `~/.aptos/config.yaml`
+   * profile writes so they don't touch the developer's real config.
    */
   withTmpHome?: boolean;
 }

@@ -98,11 +98,10 @@ export class Publisher {
 
     const dir = input.packageDir || config.moveDir;
 
-    // Bug #37: use a UUID-suffixed profile name per deploy so concurrent
-    // Publisher.deploy() calls in the same process don't fight over the
-    // same key in ~/.aptos/config.yaml. The previous code reused
-    // config.profile (default "default"), which meant two parallel
-    // deploys would clobber each other's profile data mid-publish.
+    // UUID-suffixed profile name per deploy so concurrent Publisher.deploy()
+    // calls in the same process don't fight over the same key in
+    // ~/.aptos/config.yaml. Reusing a fixed profile name would let two
+    // parallel deploys clobber each other's profile data mid-publish.
     const profile = `movehat-deploy-${randomUUID().slice(0, 8)}`;
 
     // Validate (no shell escape — runCli uses spawn, which takes args
@@ -155,11 +154,10 @@ export class Publisher {
         cleanPrivateKey = cleanPrivateKey.replace("ed25519-priv-", "");
       }
 
-      // Bug #38: Move.toml is NOT mutated. All address overrides flow
-      // through the `--named-addresses` flag above, which Movement CLI
-      // applies during build + publish. The previous regex rewrite +
-      // restore-in-finally was destructive: if the process died between
-      // write and restore, the user's Move.toml stayed mutated.
+      // Move.toml is NOT mutated. All address overrides flow through the
+      // `--named-addresses` flag above, which Movement CLI applies during
+      // build + publish. Rewriting Move.toml on disk would risk leaving the
+      // user's file mutated if the process died before the restore step.
 
       let publishOut = "";
       let publishErr = "";
@@ -172,8 +170,8 @@ export class Publisher {
       // If the user Ctrl+C's (or the process is SIGTERM'd) between the
       // yaml write and our async finally, the SIGINT handler iterates
       // every registered callback and removes this deploy's profile
-      // synchronously — closes bug #36 (private key persisting on disk
-      // after abnormal exit).
+      // synchronously so the private key never persists on disk after
+      // an abnormal exit.
       ensureSignalHandler();
       const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
       cleanupCallbacks.add(syncCleanup);
@@ -195,7 +193,7 @@ export class Publisher {
         // Execute publish command without exposing private key in CLI.
         // Routed through runCli so stdout/stderr are redacted of any
         // `ed25519-priv-…` shape before reaching console.log/console.error
-        // or the thrown CliExecutionError — that's bug #43.
+        // or the thrown CliExecutionError.
         const publishResult = await runCli(
           {
             command: "movement",
@@ -221,9 +219,10 @@ export class Publisher {
         if (publishErr) console.error(publishErr.trim());
       } finally {
         // Always remove our profile from the shared yaml — never restore
-        // a "snapshot" of the whole file (that's what the old code did,
-        // and that's the bug #37 race). Removing only our key leaves
-        // other concurrent deploys' profiles intact.
+        // a "snapshot" of the whole file: a snapshot-based approach loses
+        // concurrent deploys' profiles when this deploy's restore wins
+        // the write race. Removing only our key leaves other concurrent
+        // deploys' profiles intact.
         //
         // CRITICAL: catch + log instead of throwing. `await` in a finally
         // block that throws will clobber both the try block's successful

@@ -1,10 +1,10 @@
 /**
  * Address normalization helpers shared across the fork code.
  *
- *   - `normalizeAddress`      → lowercase + `0x` + left-pad to 64 hex chars.
- *                                Used by `fork/manager.ts` for storage keys.
- *   - `normalizeAddressShort` → lowercase + `0x`, no padding.
- *                                Used by `fork/api.ts` for HTTP paths.
+ *   - `normalizeAddress`      → lowercase + `0x` + left-pad to 64 hex chars
+ *                                (canonical form for storage keys).
+ *   - `normalizeAddressShort` → lowercase + `0x`, no padding
+ *                                (the form Movement REST URLs expect).
  */
 
 /**

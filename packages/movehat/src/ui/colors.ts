@@ -64,8 +64,7 @@ export const rgbToAnsi = (r: number, g: number, b: number): string => {
 };
 
 /**
- * Apply gradient to text using RGB palette
- * Migrated from banner.ts for reuse across the application
+ * Apply gradient to text using RGB palette.
  *
  * @param text - Text to colorize with gradient
  * @param palette - Array of RGB color values

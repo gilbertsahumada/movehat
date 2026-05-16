@@ -16,10 +16,10 @@ vi.mock("../../utils/runCli.js", () => ({
 const { default: runCommand } = await import("../run.js");
 
 /**
- * Direct coverage for the signal-forwarding branch added to fix the
- * CodeRabbit finding on PR #100 — `process.kill(process.pid, signal)`
- * cannot run inside vitest without killing the runner, so the helper is
- * exported and `process.kill` / `process.exit` are spied.
+ * Direct coverage for the signal-forwarding branch.
+ * `process.kill(process.pid, signal)` cannot run inside vitest without
+ * killing the runner, so the helper is exported and `process.kill` /
+ * `process.exit` are spied.
  */
 describe("propagateRunResultExit", () => {
   let killSpy: ReturnType<typeof vi.spyOn>;

@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   }
   if (!writeRejected) {
     throw new Error(
-      "INVARIANT BROKEN: fork-mode deployCodeObject did NOT throw — writable forks are not supported (see issue #192)"
+      "INVARIANT BROKEN: fork-mode deployCodeObject did NOT throw — writable forks are not supported in this version"
     );
   }
 

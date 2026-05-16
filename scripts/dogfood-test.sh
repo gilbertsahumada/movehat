@@ -58,8 +58,8 @@ log "movehat version: $(movehat --version)"
 step "4/9 — Scaffold a new project via movehat init"
 # `movehat init <path>` accepts a full path; the Move package name is
 # auto-derived from the basename and sanitized into a valid Move
-# identifier (closes #195 — previously this path leaked into Move.toml
-# unchanged and broke compile with a cryptic "No such file or directory").
+# identifier. Without sanitization the path would leak verbatim into
+# Move.toml and break compile with a cryptic "No such file or directory".
 rm -rf "${PROJECT_DIR}"
 movehat init "${PROJECT_DIR}" 2>&1 | tail -10
 cd "${PROJECT_DIR}"

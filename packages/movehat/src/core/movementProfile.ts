@@ -16,18 +16,13 @@ import * as yaml from "js-yaml";
  * Shared helpers for working with the Movement CLI's `~/.aptos/config.yaml`
  * profile file and the SIGINT/SIGTERM cleanup pipeline.
  *
- * Extracted from `core/Publisher.ts` so both the existing `move publish`
- * flow (`Publisher`) and the new `move deploy-object` / `upgrade-object`
- * flows (`harness/codeObject.ts`) can share the bug #36 / #37 / #43
- * hardening without duplicating it.
- *
  * @internal — not exported from `src/index.ts`.
  */
 
 /**
  * In-process serializer for `~/.aptos/config.yaml` mutations. Without it,
  * two concurrent profile writes would race in the read-modify-write cycle
- * and the second writer would silently drop the first's profile. See #37.
+ * and the second writer would silently drop the first's profile.
  */
 let yamlLock: Promise<unknown> = Promise.resolve();
 export function withYamlLock<T>(fn: () => Promise<T>): Promise<T> {

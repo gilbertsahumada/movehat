@@ -30,7 +30,7 @@ const CONFIG_B = `export default {
 };
 `;
 
-describe("loadUserConfig — mtime cache (#81, #62)", () => {
+describe("loadUserConfig — mtime cache", () => {
   let tmpCwd: string;
   let origCwd: string;
 
@@ -111,7 +111,7 @@ describe("loadUserConfig — mtime cache (#81, #62)", () => {
     }
   });
 
-  it("source file no longer contains the `?t=` cache-bust (#62 regression guard)", () => {
+  it("source file does not contain the `?t=` cache-bust pattern", () => {
     const configSrc = readFileSync(join(__dirname, "..", "config.ts"), "utf-8");
 
     expect(configSrc).not.toMatch(/\?t=['"]\s*\+\s*Date\.now/);

@@ -11,8 +11,8 @@ import { logger } from '../ui/index.js';
  * for Ed25519; the fork has no public key material, so we hash the address
  * itself. This is NOT a real auth key — downstream code must not treat it as
  * trustworthy key material. Distinguishable from the address by construction
- * (#63 — prior code used `address.padEnd(66, '0')` which was a no-op since
- * normalized addresses are already 66 chars).
+ * (hashing produces a value that, while same length as the address, cannot
+ * collide with it for any well-formed normalized input).
  */
 function forkAuthKeyPlaceholder(normalizedAddress: string): string {
   const stripped = normalizedAddress.startsWith('0x') ? normalizedAddress.slice(2) : normalizedAddress;
@@ -207,8 +207,8 @@ export class ForkManager {
     // Try to get existing coin store. The coin store is a CoinStore<T>
     // resource whose `data` is Movement-side untyped JSON; we shape it
     // locally as a structural object with `coin.value: string`.
-    // any: full CoinStore schema lives at the Movement REST boundary —
-    // proper validation deferred to the boundary-validation follow-up of #57.
+    // any: full CoinStore schema lives at the Movement REST boundary;
+    // structural typing on `.coin.value` is sufficient for current callers.
     let coinStore: any;
     try {
       coinStore = await this.getResource(normalizedAddress, resourceType);
