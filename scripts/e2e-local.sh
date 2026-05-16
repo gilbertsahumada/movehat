@@ -260,6 +260,22 @@ else
     exit 1
 fi
 
+# Force the user project's `node_modules/movehat` to point at the
+# freshly-built local tarball, not the version on the npm registry.
+# Without this, `npm install` resolves `"movehat": "..."` from the
+# template's package.json against the registry, leaving the test
+# running against the previously-published version (not the code we
+# just changed). The Step 8 "canonical deploy script" check would
+# then be exercising stale code — exactly the failure mode that
+# allowed the original #208 regression to re-surface in CI even after
+# the local fix.
+if npm install "$PACKAGE_PATH" > /dev/null 2>&1; then
+    pass "Local tarball overridden into node_modules/movehat"
+else
+    fail "npm install of local tarball failed"
+    exit 1
+fi
+
 # Verify node_modules
 if [ -d "node_modules" ] && [ -d "node_modules/movehat" ]; then
     pass "node_modules/movehat exists"
