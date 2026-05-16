@@ -23,7 +23,8 @@ import { parseTxHash } from "../utils/parseCliOutput.js";
 import { logger } from "../ui/index.js";
 import {
   writeTempKeyFile,
-  removeKeyFileSync,
+  removeKeyFile,
+  removeKeyFileSyncBestEffort,
   ensureSignalHandler,
   cleanupCallbacks,
 } from "../core/movementProfile.js";
@@ -223,8 +224,10 @@ async function executeMovementMoveObject(
 
     // Register SIGINT-safe sync cleanup BEFORE invoking the CLI so
     // the private key never persists on disk after an abnormal exit.
+    // The signal-handler path uses the best-effort variant because the
+    // event loop is dead and we cannot logger.warning.
     ensureSignalHandler();
-    const syncCleanup = () => removeKeyFileSync(keyFilePath);
+    const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
     cleanupCallbacks.add(syncCleanup);
 
     let deployOut = "";
@@ -265,9 +268,17 @@ async function executeMovementMoveObject(
       if (result.stdout) console.log(result.stdout.trim());
       if (result.stderr) console.error(result.stderr.trim());
     } finally {
-      // Unlink the temp key file. The sync cleanup callback registered
-      // above also runs on SIGINT/SIGTERM; both paths are idempotent.
-      removeKeyFileSync(keyFilePath);
+      // Unlink via the observable helper — emit a warning if the file
+      // could not be removed AND still exists on disk (private key
+      // would persist silently otherwise). ENOENT and races are
+      // treated as benign success.
+      const cleanupErr = removeKeyFile(keyFilePath);
+      if (cleanupErr) {
+        logger.warning(
+          `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+            `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+        );
+      }
       cleanupCallbacks.delete(syncCleanup);
     }
 

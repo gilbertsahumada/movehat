@@ -1,4 +1,4 @@
-import { chmodSync, unlinkSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -48,20 +48,48 @@ export function writeTempKeyFile(privateKey: string): string {
 }
 
 /**
- * Synchronous unlink of a temp key file. Idempotent — a missing
- * file is a no-op. Used both by the async finally-block path and
- * by the SIGINT/SIGTERM handler (where the event loop is dead and
- * we cannot await).
+ * Sync unlink for SIGINT/SIGTERM handlers — never throws, never logs.
+ * The event loop is dead by the time this runs; observability isn't
+ * possible. Worst case: a stale 0o600 temp file in `os.tmpdir()`
+ * that the OS reaps eventually.
  *
- * Signal handlers must never throw, so all filesystem errors are
- * swallowed. The worst case is a stale temp file in `os.tmpdir()`,
- * which the OS will clean up on its own schedule.
+ * **Do not use this from a normal `finally` cleanup path** — failures
+ * become invisible there, hiding the case where a private-key temp
+ * file persists on disk after a deploy. Use {@link removeKeyFile}
+ * instead for those paths.
  */
-export function removeKeyFileSync(path: string): void {
+export function removeKeyFileSyncBestEffort(path: string): void {
   try {
     unlinkSync(path);
   } catch {
-    // best-effort
+    // event loop dead — best-effort
+  }
+}
+
+/**
+ * Sync unlink for the normal cleanup path (a `finally` block after the
+ * Movement CLI invocation returns). Returns `null` on success — either
+ * the file was removed, or it was already gone (ENOENT is treated as
+ * benign success). Returns an `Error` only when the file **still
+ * exists on disk** after the unlink attempt failed (EPERM, EACCES,
+ * EBUSY, EISDIR if the path collided with a directory, etc.).
+ *
+ * Callers SHOULD `logger.warning` when a non-null Error is returned —
+ * a private-key temp file would otherwise persist silently.
+ */
+export function removeKeyFile(path: string): Error | null {
+  try {
+    unlinkSync(path);
+    return null;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return null;
+    // The unlink call failed but verify the file actually still exists
+    // before declaring this preocupante — some races (parallel cleanup,
+    // tmpdir reaper) can race with us and the file may already be gone
+    // despite the syscall reporting an unexpected error.
+    if (!existsSync(path)) return null;
+    return err instanceof Error ? err : new Error(String(err));
   }
 }
 

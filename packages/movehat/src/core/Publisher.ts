@@ -14,7 +14,8 @@ import { logger } from "../ui/index.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 import {
   writeTempKeyFile,
-  removeKeyFileSync,
+  removeKeyFile,
+  removeKeyFileSyncBestEffort,
   ensureSignalHandler,
   cleanupCallbacks,
 } from "./movementProfile.js";
@@ -164,9 +165,11 @@ export class Publisher {
       // write and our finally, the SIGINT handler iterates every
       // registered callback and unlinks this deploy's key file
       // synchronously so the private key never persists on disk after
-      // an abnormal exit.
+      // an abnormal exit. The signal-handler path uses the
+      // best-effort variant because the event loop is dead and we
+      // cannot logger.warning.
       ensureSignalHandler();
-      const syncCleanup = () => removeKeyFileSync(keyFilePath);
+      const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
       cleanupCallbacks.add(syncCleanup);
 
       try {
@@ -202,12 +205,22 @@ export class Publisher {
         if (publishOut) console.log(publishOut.trim());
         if (publishErr) console.error(publishErr.trim());
       } finally {
-        // Unlink the temp key file. The sync cleanup callback registered
-        // above also runs on SIGINT/SIGTERM; both paths are idempotent
-        // (unlink of a missing file is swallowed in removeKeyFileSync).
-        // Unregister the callback so we don't leak entries in
-        // cleanupCallbacks across many deploys.
-        removeKeyFileSync(keyFilePath);
+        // Unlink the temp key file via the observable cleanup helper.
+        // ENOENT and other already-gone outcomes are benign (null).
+        // A non-null Error means the unlink failed AND the file still
+        // exists on disk — the private key would persist silently
+        // otherwise, so we emit a warning with the manual-cleanup
+        // hint. The SIGINT signal handler's sync callback below also
+        // tries to remove the same file; if SIGINT fires before this
+        // finally runs the file is gone and the next finally call
+        // sees ENOENT (benign).
+        const cleanupErr = removeKeyFile(keyFilePath);
+        if (cleanupErr) {
+          logger.warning(
+            `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+              `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+          );
+        }
         cleanupCallbacks.delete(syncCleanup);
       }
 
