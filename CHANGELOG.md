@@ -49,6 +49,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Template `scripts/deploy-counter.ts` previously attempted
+  `counter::increment` immediately after deploy, before the required
+  `counter::init` call. New users running the canonical happy path
+  (`movehat init <name>` → `movehat run scripts/deploy-counter.ts`)
+  hit `E_NOT_INITIALIZED(0x2)` on their first script execution. The
+  script now calls `init` before `increment` with an explanatory
+  comment about the Move resource pattern.
+- Template `move/sources/Counter.move` hardened with auto-init in
+  `increment` as defense in depth. A new Move-level test
+  (`test_increment_auto_inits`) locks the auto-init behavior so a
+  future refactor can't accidentally remove the defense.
+- `[Aptos SDK]` AIP-80 deprecation warning suppressed in
+  `AccountManager.loadAccountFromPrivateKey` and `core/config.ts`
+  `deriveAccountAddress` by formatting raw hex private keys with
+  `PrivateKey.formatPrivateKey` before passing them to
+  `Ed25519PrivateKey`. Cosmetic; no behavior change.
+- `scripts/e2e-local.sh` (which feeds `pnpm test:e2e:quick` on every
+  PR and `scripts/pre-publish.sh` for releases) now actually executes
+  `deploy-counter.ts` against Movement testnet and asserts that
+  "Counter value: 1" appears in the output. Previously the script
+  only validated template files exist, which is how the
+  `E_NOT_INITIALIZED` regression slipped through.
+
 ### Security
 
 ---

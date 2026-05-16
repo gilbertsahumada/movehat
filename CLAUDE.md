@@ -100,6 +100,8 @@ Two scripts, both run before opening / re-requesting review on every sub-PR that
 
 - **`pnpm test:smoke`** — packs movehat into a tarball, installs it globally, exercises `movehat --version` / `--help` / `init`. ~20s. Catches packaging issues that the workspace symlink hides: missing files in `dist/`, missing `bin` shim, missing template files. Mandatory because Tier 1 cannot see "what's actually in the tarball" — only what's in the workspace.
 
+- **Mandatory end-to-end execution of canonical template scripts** — Any PR that adds or modifies a file under `packages/movehat/src/templates/scripts/**` MUST be exercised end-to-end via `pnpm test:e2e:quick` before merge. The script in `scripts/e2e-local.sh` runs `MOVEHAT_NETWORK=testnet movehat run scripts/deploy-counter.ts` from a freshly-initialized project and asserts the script reaches its terminal "Counter value: 1" line. Type-validity is necessary but not sufficient: the script must actually run successfully against a real Movement node, with assertions on its observable output. This rule exists because a `deploy-counter.ts` template shipped with a runtime-breaking missing-init bug despite passing all unit tests and Tier 1 typecheck — caught only on a user smoke test of the canonical happy path.
+
 What Tier 2 still doesn't cover: the end-to-end install-then-use flow against the published artifact (e.g. would `pnpm install movehat` followed by `movehat compile` + `mocha tests/*` actually work?). That's Tier 3.
 
 ### 6.3 Tier 3 — Full install-experience E2E (slow, before publish or develop→main batch)
