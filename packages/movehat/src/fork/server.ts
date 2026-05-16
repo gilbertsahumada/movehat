@@ -2,6 +2,19 @@ import http from 'http';
 import { URL } from 'url';
 import { ForkManager } from './manager.js';
 
+export interface ForkServerOptions {
+  /**
+   * Origins allowed to make cross-origin requests. When unset (default),
+   * no `Access-Control-Allow-Origin` header is emitted — any browser
+   * cross-origin read is rejected by the user agent. Setting this to a
+   * non-empty list opts into echoing matching `Origin` request headers
+   * back. Wildcard `'*'` is intentionally NOT supported: cached fork
+   * state may include resources that should not be readable by every
+   * page in the dev's browser.
+   */
+  corsAllowOrigins?: readonly string[];
+}
+
 /**
  * Fork Server - Serves fork data via Movement L1 RPC API
  * Emulates a Movement L1 node using local fork storage
@@ -11,16 +24,38 @@ export class ForkServer {
   private forkManager: ForkManager;
   private port: number;
   private host: string;
+  private readonly corsAllowOrigins: ReadonlySet<string>;
 
   /**
    * @param host Interface to bind. Defaults to `127.0.0.1` so cached fork
    *   state (which may include sensitive resources) is not exposed on the LAN.
    *   Pass `'0.0.0.0'` only if you intentionally need to expose the server.
+   * @param options Optional CORS allowlist (see {@link ForkServerOptions}).
    */
-  constructor(forkPath: string, port: number = 8080, host: string = '127.0.0.1') {
+  constructor(
+    forkPath: string,
+    port: number = 8080,
+    host: string = '127.0.0.1',
+    options: ForkServerOptions = {}
+  ) {
     this.forkManager = new ForkManager(forkPath);
     this.port = port;
     this.host = host;
+    this.corsAllowOrigins = new Set(options.corsAllowOrigins ?? []);
+  }
+
+  /**
+   * Set CORS headers for a request when the request's `Origin` is in
+   * the allowlist. No-op otherwise.
+   */
+  private applyCors(req: http.IncomingMessage, res: http.ServerResponse): void {
+    const origin = req.headers.origin;
+    if (typeof origin === 'string' && this.corsAllowOrigins.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
   }
 
   /**
@@ -44,10 +79,7 @@ export class ForkServer {
 
         // Only send response if headers haven't been sent yet
         if (!res.headersSent) {
-          // Add CORS headers (same as in handleRequest)
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          this.applyCors(req, res);
 
           // Send generic error response (no internal details exposed)
           this.sendJSON(res, 500, {
@@ -143,10 +175,7 @@ export class ForkServer {
     // Log request
     console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    this.applyCors(req, res);
 
     // Handle OPTIONS for CORS preflight
     if (req.method === 'OPTIONS') {
