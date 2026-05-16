@@ -9,6 +9,25 @@ import { AccountManager } from "../core/AccountManager.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
 
+const BUILTIN_FORK_RPCS: Record<string, string> = {
+  testnet: "https://testnet.movementnetwork.xyz/v1",
+  mainnet: "https://mainnet.movementnetwork.xyz/v1",
+};
+
+function resolveForkRpcUrl(
+  network: string,
+  override: string | undefined
+): string {
+  if (override !== undefined) return override;
+  const builtin = BUILTIN_FORK_RPCS[network];
+  if (builtin !== undefined) return builtin;
+  throw new Error(
+    `Cannot fork unknown network "${network}" without a forkRpcUrl. ` +
+      `Either pass forkRpcUrl in LocalTestOptions or use one of: ` +
+      `${Object.keys(BUILTIN_FORK_RPCS).join(", ")}.`
+  );
+}
+
 /**
  * Context returned by {@link setupLocalTesting}.
  *
@@ -264,8 +283,8 @@ async function setupWithFork(
 
   if (!forkExists) {
     logger.step(`Creating fork from ${forkNetwork}...`);
-    const testnetRpc = "https://testnet.movementnetwork.xyz/v1";
-    await forkManager.initialize(testnetRpc, forkNetwork, options.forkApiKey);
+    const rpcUrl = resolveForkRpcUrl(forkNetwork, options.forkRpcUrl);
+    await forkManager.initialize(rpcUrl, forkNetwork, options.forkApiKey);
     logger.success(`Fork created at ${forkPath}`);
     logger.newline();
   } else {
@@ -277,6 +296,21 @@ async function setupWithFork(
       forkManager.setApiKey(options.forkApiKey);
     }
     forkManager.load();
+
+    // Guard against the audit-f1 follow-up case: the default forkName
+    // ("test-local") doesn't encode the network, so a fork created for
+    // testnet would silently serve mainnet requests. Refuse to load
+    // when the saved metadata's network doesn't match what the caller
+    // asked for — the user must either pass a network-specific
+    // `forkName` or delete the stale directory.
+    const savedNetwork = forkManager.getMetadata().network;
+    if (savedNetwork !== forkNetwork) {
+      throw new Error(
+        `Fork at ${forkPath} was created for network "${savedNetwork}" but ` +
+          `you requested "${forkNetwork}". Use a different forkName ` +
+          `(e.g. "${forkNetwork}-local") or delete ${forkPath} to recreate.`
+      );
+    }
 
     if (forkResetState) {
       logger.step("Resetting fork state...");

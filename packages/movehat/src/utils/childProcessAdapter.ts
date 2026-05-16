@@ -38,7 +38,16 @@ export interface RunInput {
    * Default: `false`.
    */
   inheritStdio?: boolean;
+  /**
+   * Maximum combined bytes (stdout + stderr) the captured Buffers may
+   * grow to before the child is killed and the promise rejects. Defaults
+   * to 64 MiB. Set to `Infinity` to disable. Ignored when
+   * `inheritStdio` is `true` (no buffering happens).
+   */
+  maxBuffer?: number;
 }
+
+const DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
 
 export interface RunResult {
   /**
@@ -114,10 +123,31 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
 
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
+      let totalBytes = 0;
+      let overflowed = false;
+      const maxBuffer = input.maxBuffer ?? DEFAULT_MAX_BUFFER;
+
+      const onChunk = (chunks: Buffer[]) => (chunk: Buffer) => {
+        if (overflowed) return;
+        totalBytes += chunk.length;
+        if (totalBytes > maxBuffer) {
+          overflowed = true;
+          clearTimer();
+          input.signal?.removeEventListener('abort', onAbort);
+          child.kill('SIGTERM');
+          reject(
+            new Error(
+              `Command output exceeded maxBuffer (${maxBuffer} bytes): ${input.command}`
+            )
+          );
+          return;
+        }
+        chunks.push(chunk);
+      };
 
       // Streams are null when stdio is 'inherit'; the `?.` covers that.
-      child.stdout?.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-      child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+      child.stdout?.on('data', onChunk(stdoutChunks));
+      child.stderr?.on('data', onChunk(stderrChunks));
 
       let timeoutHandle: NodeJS.Timeout | undefined;
       const clearTimer = () => {

@@ -4,6 +4,16 @@ import { URL } from 'url';
 import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js';
 import { normalizeAddressShort } from '../utils/address.js';
 
+export interface MovementApiClientOptions {
+  /** Abort the request after this many ms (default: 30_000). */
+  timeoutMs?: number;
+  /** Reject responses larger than this many bytes (default: 16 MiB). */
+  maxBytes?: number;
+}
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
+
 /**
  * Client for interacting with Movement L1 JSON API.
  *
@@ -15,8 +25,14 @@ import { normalizeAddressShort } from '../utils/address.js';
 export class MovementApiClient {
   private nodeUrl: string;
   private readonly apiKey?: string;
+  private readonly timeoutMs: number;
+  private readonly maxBytes: number;
 
-  constructor(nodeUrl: string, apiKey?: string) {
+  constructor(
+    nodeUrl: string,
+    apiKey?: string,
+    options: MovementApiClientOptions = {}
+  ) {
     // Remove trailing slash
     let normalized = nodeUrl.replace(/\/$/, '');
 
@@ -28,6 +44,8 @@ export class MovementApiClient {
 
     this.nodeUrl = normalized;
     if (apiKey !== undefined) this.apiKey = apiKey;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   }
 
   /**
@@ -52,31 +70,72 @@ export class MovementApiClient {
       requestOptions.headers = { Authorization: `Bearer ${this.apiKey}` };
     }
 
-    return new Promise((resolve, reject) => {
-      const req = client.get(fullUrl, requestOptions, (res) => {
-        let data = '';
+    const timeoutMs = this.timeoutMs;
+    const maxBytes = this.maxBytes;
 
-        res.on('data', (chunk) => {
-          data += chunk;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+
+      const req = client.get(fullUrl, requestOptions, (res) => {
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+
+        res.on('data', (chunk: Buffer | string) => {
+          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += buf.length;
+          if (totalBytes > maxBytes) {
+            req.destroy();
+            settle(() =>
+              reject(
+                new Error(
+                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
+                )
+              )
+            );
+            return;
+          }
+          chunks.push(buf);
         });
 
         res.on('end', () => {
+          if (settled) return;
+          const data = Buffer.concat(chunks).toString('utf8');
           if (res.statusCode !== 200) {
-            reject(new Error(`API request failed with status ${res.statusCode}: ${data}`));
+            settle(() =>
+              reject(
+                new Error(
+                  `API request failed with status ${res.statusCode}: ${data}`
+                )
+              )
+            );
             return;
           }
 
           try {
             const parsed = JSON.parse(data);
-            resolve(parsed);
+            settle(() => resolve(parsed));
           } catch (err) {
-            reject(new Error(`Failed to parse JSON response: ${err}`));
+            settle(() =>
+              reject(new Error(`Failed to parse JSON response: ${err}`))
+            );
           }
         });
       });
 
+      req.setTimeout(timeoutMs, () => {
+        req.destroy();
+        settle(() =>
+          reject(new Error(`API request timed out after ${timeoutMs}ms`))
+        );
+      });
+
       req.on('error', (err) => {
-        reject(new Error(`API request failed: ${err.message}`));
+        settle(() => reject(new Error(`API request failed: ${err.message}`)));
       });
 
       req.end();
