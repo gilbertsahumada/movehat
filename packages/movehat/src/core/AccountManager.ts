@@ -27,10 +27,18 @@ interface AccountPool {
  * Provides a pool of reusable test accounts with labels for better test readability.
  */
 export class AccountManager {
+  // Class-static maps: shared across every consumer in the same Node
+  // process (e.g. two Harness instances). Re-using a label across
+  // "sessions" overwrites the labelMap entry. Documented + fixed by
+  // contract in `AccountManager.global-state.test.ts` (audit F8).
   private static pool: Map<string, Account> = new Map(); // address → Account
   private static privateKeys: Map<string, string> = new Map(); // address → privateKey hex
   private static labelMap: Map<string, string> = new Map(); // label → address
   private static poolLoaded = false;
+  // `defaultPoolPath` is captured ONCE at module-import time. A later
+  // `process.chdir(...)` does NOT redirect the save destination — pass
+  // an explicit `poolPath` to `saveAccountPool`/`loadAccountPool` when
+  // per-test isolation matters. See audit finding F8.
   private static defaultPoolPath = join(process.cwd(), ".movehat", "accounts");
 
   /**
