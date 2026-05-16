@@ -76,10 +76,10 @@ module counter::counter {
         assert!(get(addr) == 2, 2);
     }
 
-    /// Regression guard: increment must auto-create the Counter resource
-    /// when called against a never-initialized account. Locks the
-    /// defense-in-depth behavior so a future refactor can't accidentally
-    /// remove it.
+    // Regression guard: increment must auto-create the Counter resource
+    // when called against a never-initialized account. Locks the
+    // defense-in-depth behavior so a future refactor can't accidentally
+    // remove it.
     #[test(account = @0x2)]
     public fun test_increment_auto_inits(account: &signer) acquires Counter {
         let addr = signer::address_of(account);
