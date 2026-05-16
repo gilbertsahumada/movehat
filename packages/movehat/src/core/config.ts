@@ -1,7 +1,7 @@
 import { pathToFileURL } from "url";
 import { join } from "path";
 import { existsSync, statSync } from "fs";
-import { Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";
+import { Account, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 
 interface ConfigCacheEntry {
@@ -258,11 +258,15 @@ export async function resolveNetworkConfig(
 function deriveAccountAddress(privateKeyHex: string | undefined): string {
   if (!privateKeyHex) return "";
   try {
-    const stripped = privateKeyHex.startsWith("ed25519-priv-")
-      ? privateKeyHex.slice("ed25519-priv-".length)
-      : privateKeyHex;
+    // Format into AIP-80 shape so the SDK doesn't emit a deprecation
+    // warning on each derivation. `formatPrivateKey` is idempotent for
+    // already-prefixed inputs.
+    const formatted = PrivateKey.formatPrivateKey(
+      privateKeyHex,
+      PrivateKeyVariants.Ed25519,
+    );
     const account = Account.fromPrivateKey({
-      privateKey: new Ed25519PrivateKey(stripped),
+      privateKey: new Ed25519PrivateKey(formatted),
     });
     return account.accountAddress.toString();
   } catch (err) {
