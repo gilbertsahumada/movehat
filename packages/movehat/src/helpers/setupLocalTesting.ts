@@ -297,6 +297,21 @@ async function setupWithFork(
     }
     forkManager.load();
 
+    // Guard against the audit-f1 follow-up case: the default forkName
+    // ("test-local") doesn't encode the network, so a fork created for
+    // testnet would silently serve mainnet requests. Refuse to load
+    // when the saved metadata's network doesn't match what the caller
+    // asked for — the user must either pass a network-specific
+    // `forkName` or delete the stale directory.
+    const savedNetwork = forkManager.getMetadata().network;
+    if (savedNetwork !== forkNetwork) {
+      throw new Error(
+        `Fork at ${forkPath} was created for network "${savedNetwork}" but ` +
+          `you requested "${forkNetwork}". Use a different forkName ` +
+          `(e.g. "${forkNetwork}-local") or delete ${forkPath} to recreate.`
+      );
+    }
+
     if (forkResetState) {
       logger.step("Resetting fork state...");
       await forkManager.resetState();

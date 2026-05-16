@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,6 +10,10 @@ import { join } from "node:path";
  * code path picks. Strategy mirrors the pattern in
  * src/fork/__tests__/manager.test.ts: replace the manager module with
  * a stub that records every call to `initialize`.
+ *
+ * The mock also implements `load()` + `getMetadata()` so the
+ * "fork-exists, wrong network" case (audit-f1 follow-up) can exercise
+ * the metadata-mismatch guard in the `else` branch of `setupWithFork`.
  */
 
 interface InitCall {
@@ -19,17 +23,32 @@ interface InitCall {
 }
 const initializeCalls: InitCall[] = [];
 
-vi.mock("../../fork/manager.js", () => {
+vi.mock("../../fork/manager.js", async () => {
+  const fs = await import("node:fs");
   return {
     ForkManager: class {
-      constructor(_forkPath: string) {}
+      forkPath: string;
+      metadata: { network: string; nodeUrl: string } | null = null;
+      constructor(forkPath: string) {
+        this.forkPath = forkPath;
+      }
       async initialize(nodeUrl: string, networkName?: string, apiKey?: string) {
         const entry: InitCall = { nodeUrl };
         if (networkName !== undefined) entry.networkName = networkName;
         if (apiKey !== undefined) entry.apiKey = apiKey;
         initializeCalls.push(entry);
+        this.metadata = { network: networkName ?? "custom", nodeUrl };
       }
-      load() {}
+      load() {
+        const raw = fs.readFileSync(`${this.forkPath}/metadata.json`, "utf-8");
+        this.metadata = JSON.parse(raw);
+      }
+      getMetadata() {
+        if (!this.metadata) {
+          throw new Error("Fork not initialized");
+        }
+        return this.metadata;
+      }
       setApiKey() {}
       async resetState() {}
       async fundAccount() {}
@@ -152,6 +171,42 @@ describe("F1 — setupLocalTesting honors forkNetwork", () => {
         autoFund: false,
       })
     ).rejects.toThrow(/forkRpcUrl/i);
+    expect(initializeCalls).toHaveLength(0);
+  });
+
+  it("rejects when an existing fork's saved network does not match the requested one (audit-f1 follow-up)", async () => {
+    // Pre-seed `.movehat/forks/test-local/metadata.json` with the
+    // wrong network so the `forkExists` branch fires and loads stale
+    // metadata. Without the metadata-mismatch guard, setupLocalTesting
+    // would silently serve a testnet snapshot while the caller thinks
+    // it's reading mainnet.
+    const forkDir = join(tmpRoot, ".movehat", "forks", "test-local");
+    mkdirSync(forkDir, { recursive: true });
+    writeFileSync(
+      join(forkDir, "metadata.json"),
+      JSON.stringify({
+        network: "testnet",
+        nodeUrl: "https://testnet.movementnetwork.xyz/v1",
+        chainId: 250,
+        ledgerVersion: "0",
+        timestamp: "0",
+        epoch: "0",
+        blockHeight: "0",
+        createdAt: new Date().toISOString(),
+      }),
+    );
+
+    await expect(
+      setupLocalTesting({
+        mode: "fork",
+        forkNetwork: "mainnet",
+        accountLabels: ["deployer"],
+        autoFund: false,
+      })
+    ).rejects.toThrow(/network mismatch|created for|requested/i);
+    // Must not have re-initialized — the existing dir is what poisons
+    // the load path, and silently reinitializing would clobber the
+    // user's saved snapshot.
     expect(initializeCalls).toHaveLength(0);
   });
 });
