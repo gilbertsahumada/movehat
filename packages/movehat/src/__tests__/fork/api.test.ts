@@ -77,6 +77,11 @@ function setupGetCapture(): {
 
     const fakeReq = new EventEmitter() as unknown as ClientRequest;
     (fakeReq as unknown as { end: () => void }).end = () => {};
+    // F3: api.ts now installs a setTimeout on the request and may call
+    // destroy() on overflow / timeout. Stub both so this happy-path
+    // capture mock still satisfies the new contract.
+    (fakeReq as unknown as { setTimeout: (ms: number, cb?: () => void) => void }).setTimeout = () => {};
+    (fakeReq as unknown as { destroy: () => void }).destroy = () => {};
 
     if (callback) {
       const body = JSON.stringify({

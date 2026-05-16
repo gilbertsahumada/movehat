@@ -28,6 +28,13 @@ import * as yaml from "js-yaml";
  * In-process serializer for `~/.aptos/config.yaml` mutations. Without it,
  * two concurrent profile writes would race in the read-modify-write cycle
  * and the second writer would silently drop the first's profile. See #37.
+ *
+ * Scope: PROCESS-LOCAL ONLY. The lock is an in-memory Promise chain — it
+ * cannot serialize across separate `movehat` (or `mocha`/`tsx`) processes
+ * that mutate the same YAML file. Two parallel `movehat deploy` invocations
+ * against `~/.aptos/config.yaml` can still race and drop a profile.
+ * Cross-process hardening is tracked as audit finding F5; the contract gap
+ * is exercised by an `it.skip` in `movementProfile.test.ts`.
  */
 let yamlLock: Promise<unknown> = Promise.resolve();
 export function withYamlLock<T>(fn: () => Promise<T>): Promise<T> {
