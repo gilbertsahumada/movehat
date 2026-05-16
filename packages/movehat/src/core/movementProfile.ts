@@ -1,161 +1,102 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "fs";
-import { readFile } from "fs/promises";
-import { dirname } from "path";
+import { chmodSync, existsSync, unlinkSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { randomUUID } from "crypto";
-import * as yaml from "js-yaml";
 
 /**
- * Shared helpers for working with the Movement CLI's `~/.aptos/config.yaml`
- * profile file and the SIGINT/SIGTERM cleanup pipeline.
+ * Per-deploy private-key file management and SIGINT/SIGTERM cleanup
+ * infrastructure shared across the Movement CLI invocations (`move
+ * publish`, `move deploy-object`, `move upgrade-object`, `move
+ * run-script`).
  *
- * Extracted from `core/Publisher.ts` so both the existing `move publish`
- * flow (`Publisher`) and the new `move deploy-object` / `upgrade-object`
- * flows (`harness/codeObject.ts`) can share the bug #36 / #37 / #43
- * hardening without duplicating it.
+ * **Why a temp key file rather than the CLI's profile yaml?** The
+ * Movement CLI's `--profile <name>` flag requires a config.yaml to
+ * exist in the working directory (older Movement CLI variants look
+ * for `<cwd>/.aptos/config.yaml`; newer variants look for
+ * `<cwd>/.movement/config.yaml`). On fresh user installs neither
+ * directory exists, and the CLI errors out before it would otherwise
+ * fall back to `~/.aptos/config.yaml`. Writing to a temp file and
+ * passing `--private-key-file <path> --sender-account <addr>`
+ * directly avoids the entire profile-yaml lookup chain — no CWD
+ * dependency, no CLI-variant dependency.
+ *
+ * The same SIGINT-safe cleanup pattern applies as the old profile
+ * flow: the temp key file persists private key material on disk and
+ * MUST be removed before process exit even on abnormal termination.
  *
  * @internal — not exported from `src/index.ts`.
  */
 
 /**
- * In-process serializer for `~/.aptos/config.yaml` mutations. Without it,
- * two concurrent profile writes would race in the read-modify-write cycle
- * and the second writer would silently drop the first's profile. See #37.
+ * Write the private key to a `mode 0o600` file in the system temp
+ * directory and return the path. The filename is UUID-suffixed so
+ * concurrent deploys don't collide.
  *
- * Scope: PROCESS-LOCAL ONLY. The lock is an in-memory Promise chain — it
- * cannot serialize across separate `movehat` (or `mocha`/`tsx`) processes
- * that mutate the same YAML file. Two parallel `movehat deploy` invocations
- * against `~/.aptos/config.yaml` can still race and drop a profile.
- * Cross-process hardening is tracked as audit finding F5; the contract gap
- * is exercised by an `it.skip` in `movementProfile.test.ts`.
+ * The key string is written verbatim — callers should format to
+ * AIP-80 before calling (see `PrivateKey.formatPrivateKey` from
+ * `@aptos-labs/ts-sdk`).
  */
-let yamlLock: Promise<unknown> = Promise.resolve();
-export function withYamlLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = yamlLock;
-  // .then(success, failure) — continue even if the previous holder rejected,
-  // so a failure in one deploy doesn't poison the lock for the others.
-  const next = prev.then(
-    () => fn(),
-    () => fn()
-  );
-  yamlLock = next.catch(() => {}); // swallow on the shared chain; caller still gets the original
-  return next;
-}
-
-export interface ProfileData {
-  private_key: string;
-  public_key: string;
-  account: string;
-  rest_url: string;
-}
-
-interface AptosConfigYaml {
-  profiles?: Record<string, ProfileData>;
-  [key: string]: unknown;
+export function writeTempKeyFile(privateKey: string): string {
+  const path = join(tmpdir(), `movehat-key-${randomUUID()}`);
+  // mode in the open() call may be filtered by the process umask
+  // (typically 0o022 → resulting perms 0o644). chmod after write
+  // is defense in depth so the file can never be observable as
+  // group-/world-readable while it carries the private key.
+  writeFileSync(path, privateKey, { mode: 0o600 });
+  chmodSync(path, 0o600);
+  return path;
 }
 
 /**
- * Atomic write: write payload to a temp sibling → chmod the temp to 0o600
- * → rename over the target. The chmod-before-rename order eliminates a
- * window where the target file could be observable with default umask
- * perms (typically 0o644) while carrying the private key.
+ * Sync unlink for SIGINT/SIGTERM handlers — never throws, never logs.
+ * The event loop is dead by the time this runs; observability isn't
+ * possible. Worst case: a stale 0o600 temp file in `os.tmpdir()`
+ * that the OS reaps eventually.
+ *
+ * **Do not use this from a normal `finally` cleanup path** — failures
+ * become invisible there, hiding the case where a private-key temp
+ * file persists on disk after a deploy. Use {@link removeKeyFile}
+ * instead for those paths.
  */
-function atomicWriteYaml(path: string, content: string): void {
-  const tmpPath = `${path}.tmp.${randomUUID().slice(0, 8)}`;
-  writeFileSync(tmpPath, content, { mode: 0o600 });
-  chmodSync(tmpPath, 0o600); // defense in depth in case umask filtered the open mode
-  renameSync(tmpPath, path);
-}
-
-/** Add the deploy's profile to ~/.aptos/config.yaml. Creates the file if absent. */
-export async function addProfile(
-  configPath: string,
-  name: string,
-  data: ProfileData
-): Promise<void> {
-  const configDir = dirname(configPath);
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
-  }
-  let yamlObj: AptosConfigYaml = {};
-  if (existsSync(configPath)) {
-    const raw = await readFile(configPath, "utf-8");
-    yamlObj = (yaml.load(raw) as AptosConfigYaml) || {};
-  }
-  if (!yamlObj.profiles) yamlObj.profiles = {};
-  yamlObj.profiles[name] = data;
-  atomicWriteYaml(configPath, yaml.dump(yamlObj));
-}
-
-/**
- * Remove the deploy's profile from ~/.aptos/config.yaml. Idempotent —
- * a missing file or missing profile is a no-op. If removal leaves the
- * yaml with only an empty `profiles:` block, the whole file is unlinked
- * to preserve the "didn't exist before" semantic for the first-ever deploy.
- */
-export async function removeProfile(configPath: string, name: string): Promise<void> {
-  if (!existsSync(configPath)) return;
-  const raw = await readFile(configPath, "utf-8");
-  const yamlObj: AptosConfigYaml = (yaml.load(raw) as AptosConfigYaml) || {};
-  if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
-  delete yamlObj.profiles[name];
-
-  const profilesEmpty = Object.keys(yamlObj.profiles).length === 0;
-  const onlyProfilesKey =
-    Object.keys(yamlObj).length === 1 && "profiles" in yamlObj;
-  if (profilesEmpty && onlyProfilesKey) {
-    // We created this file fresh; remove it.
-    try {
-      unlinkSync(configPath);
-    } catch {
-      // best-effort
-    }
-    return;
-  }
-  atomicWriteYaml(configPath, yaml.dump(yamlObj));
-}
-
-/**
- * Synchronous twin of `removeProfile` for the SIGINT/SIGTERM handler.
- * The event loop is dead by the time the handler runs — we cannot
- * await. Bypasses the async mutex because signal handlers are
- * sequential by construction; the operation is idempotent so a
- * benign double-delete (handler then finally, or vice versa) is fine.
- */
-export function removeProfileSync(configPath: string, name: string): void {
+export function removeKeyFileSyncBestEffort(path: string): void {
   try {
-    if (!existsSync(configPath)) return;
-    const raw = readFileSync(configPath, "utf-8");
-    const yamlObj: AptosConfigYaml = (yaml.load(raw) as AptosConfigYaml) || {};
-    if (!yamlObj.profiles || !(name in yamlObj.profiles)) return;
-    delete yamlObj.profiles[name];
-
-    const profilesEmpty = Object.keys(yamlObj.profiles).length === 0;
-    const onlyProfilesKey =
-      Object.keys(yamlObj).length === 1 && "profiles" in yamlObj;
-    if (profilesEmpty && onlyProfilesKey) {
-      unlinkSync(configPath);
-      return;
-    }
-    atomicWriteYaml(configPath, yaml.dump(yamlObj));
+    unlinkSync(path);
   } catch {
-    // Signal handlers should never throw — swallow and exit. Better to
-    // leave a stale profile (recoverable by re-running the deploy) than
-    // to crash the parent process mid-shutdown.
+    // event loop dead — best-effort
+  }
+}
+
+/**
+ * Sync unlink for the normal cleanup path (a `finally` block after the
+ * Movement CLI invocation returns). Returns `null` on success — either
+ * the file was removed, or it was already gone (ENOENT is treated as
+ * benign success). Returns an `Error` only when the file **still
+ * exists on disk** after the unlink attempt failed (EPERM, EACCES,
+ * EBUSY, EISDIR if the path collided with a directory, etc.).
+ *
+ * Callers SHOULD `logger.warning` when a non-null Error is returned —
+ * a private-key temp file would otherwise persist silently.
+ */
+export function removeKeyFile(path: string): Error | null {
+  try {
+    unlinkSync(path);
+    return null;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return null;
+    // The unlink call failed but verify the file actually still exists
+    // before declaring this preocupante — some races (parallel cleanup,
+    // tmpdir reaper) can race with us and the file may already be gone
+    // despite the syscall reporting an unexpected error.
+    if (!existsSync(path)) return null;
+    return err instanceof Error ? err : new Error(String(err));
   }
 }
 
 /**
  * Process-level signal handling. A single registered handler iterates
- * the per-deploy cleanup callbacks. Install-once because multiple
- * concurrent deploys share the same parent process — installing per
+ * the per-deploy cleanup callbacks. Installed once per process because
+ * multiple concurrent deploys share the same parent — installing per
  * deploy would re-add the listener and exceed Node's max-listeners
  * warning threshold under heavy parallelism.
  */
@@ -166,7 +107,7 @@ export function ensureSignalHandler(): void {
   if (signalHandlerInstalled) return;
   signalHandlerInstalled = true;
   const handler = (sig: NodeJS.Signals) => {
-    // Synchronous cleanup of every active deploy's profile entry.
+    // Synchronous cleanup of every active deploy's resources.
     for (const cb of [...cleanupCallbacks]) {
       try {
         cb();

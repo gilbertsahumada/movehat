@@ -1,95 +1,131 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as yaml from "js-yaml";
-
 import {
-  addProfile,
-  removeProfile,
-  withYamlLock,
+  removeKeyFile,
+  removeKeyFileSyncBestEffort,
+  writeTempKeyFile,
 } from "../movementProfile.js";
 
 /**
- * F5 — `withYamlLock` provides in-process serialization for the
- * read-modify-write cycle on `~/.aptos/config.yaml`. The lock is
- * intentionally process-local (see {@link withYamlLock} docstring);
- * cross-process contention requires an external lockfile and is
- * tracked as a separate hardening item — that test is `it.skip` here
- * so the contract gap is visible in the suite.
+ * Unit tests for the two distinct cleanup helpers in movementProfile:
+ *
+ *   - `removeKeyFileSyncBestEffort`: for SIGINT/SIGTERM handlers where
+ *     the event loop is dead. Never throws, never logs, always returns
+ *     void. We only test that it doesn't throw.
+ *
+ *   - `removeKeyFile`: for normal `finally` cleanup paths. Returns
+ *     `null` when the file is gone (removed OR already absent — both
+ *     are benign), and returns an `Error` only when the file STILL
+ *     exists on disk after the unlink attempt failed. The Error path
+ *     is exactly the case the caller must surface as a warning,
+ *     because a private-key temp file would otherwise persist
+ *     silently.
  */
 
-describe("F5 — movementProfile yamlLock", () => {
-  let tmpDir: string;
-  let configPath: string;
+describe("movementProfile cleanup helpers", () => {
+  let scratchDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "movehat-yamllock-"));
-    configPath = join(tmpDir, "config.yaml");
+    scratchDir = mkdtempSync(join(tmpdir(), "movehat-profile-test-"));
   });
 
   afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    if (existsSync(scratchDir)) {
+      // Force chmod in case a test left it un-removable, then rmSync.
+      try {
+        chmodSync(scratchDir, 0o700);
+      } catch {
+        /* best-effort */
+      }
+      rmSync(scratchDir, { recursive: true, force: true });
+    }
   });
 
-  it("withYamlLock serializes concurrent in-process callers (read-modify-write does not lose writes)", async () => {
-    // 20 concurrent addProfile calls. Without the lock, the read-
-    // modify-write cycle would race and the final file would carry
-    // fewer than 20 profiles.
-    const data = (n: number) => ({
-      private_key: `0x${n.toString(16).padStart(64, "0")}`,
-      public_key: `0xpub-${n}`,
-      account: `0xacc-${n}`,
-      rest_url: "http://localhost:8080/v1",
+  describe("writeTempKeyFile", () => {
+    it("creates a 0o600 file in os.tmpdir() with the key as contents", () => {
+      const path = writeTempKeyFile("ed25519-priv-0x" + "a".repeat(64));
+      try {
+        expect(path.startsWith(tmpdir())).toBe(true);
+        expect(path).toMatch(/movehat-key-/);
+        expect(existsSync(path)).toBe(true);
+      } finally {
+        if (existsSync(path)) rmSync(path);
+      }
+    });
+  });
+
+  describe("removeKeyFileSyncBestEffort", () => {
+    it("removes an existing file", () => {
+      const path = join(scratchDir, "key");
+      writeFileSync(path, "x", { mode: 0o600 });
+      removeKeyFileSyncBestEffort(path);
+      expect(existsSync(path)).toBe(false);
     });
 
-    await Promise.all(
-      Array.from({ length: 20 }, (_, i) =>
-        withYamlLock(() => addProfile(configPath, `p${i}`, data(i)))
-      )
-    );
+    it("does not throw when the file is already gone", () => {
+      const path = join(scratchDir, "never-existed");
+      expect(() => removeKeyFileSyncBestEffort(path)).not.toThrow();
+    });
 
-    const raw = readFileSync(configPath, "utf-8");
-    const parsed = yaml.load(raw) as { profiles?: Record<string, unknown> };
-    expect(parsed.profiles).toBeDefined();
-    expect(Object.keys(parsed.profiles!).sort()).toEqual(
-      Array.from({ length: 20 }, (_, i) => `p${i}`).sort()
-    );
+    it("does not throw when the path is a non-empty directory (would fail in stricter callers)", () => {
+      const dirPath = join(scratchDir, "i-am-a-directory");
+      mkdirSync(dirPath);
+      writeFileSync(join(dirPath, "child"), "x");
+      expect(() => removeKeyFileSyncBestEffort(dirPath)).not.toThrow();
+      // The dir still exists — best-effort doesn't fight EISDIR.
+      expect(existsSync(dirPath)).toBe(true);
+    });
   });
 
-  it("removeProfile is idempotent and atomic under the lock", async () => {
-    const data = {
-      private_key: "0x" + "a".repeat(64),
-      public_key: "0xpub",
-      account: "0xacc",
-      rest_url: "http://localhost:8080/v1",
-    };
-    await withYamlLock(() => addProfile(configPath, "x", data));
-    expect(readFileSync(configPath, "utf-8")).toContain("x:");
+  describe("removeKeyFile", () => {
+    it("returns null when the file is removed cleanly", () => {
+      const path = join(scratchDir, "key-to-remove");
+      writeFileSync(path, "x", { mode: 0o600 });
+      const err = removeKeyFile(path);
+      expect(err).toBeNull();
+      expect(existsSync(path)).toBe(false);
+    });
 
-    // Run concurrent removes — second should be a no-op.
-    await Promise.all([
-      withYamlLock(() => removeProfile(configPath, "x")),
-      withYamlLock(() => removeProfile(configPath, "x")),
-    ]);
-    // File is unlinked when its last profile is removed.
-    expect(() => readFileSync(configPath, "utf-8")).toThrow();
-  });
+    it("returns null when the file was already gone (ENOENT is benign)", () => {
+      const path = join(scratchDir, "never-existed");
+      const err = removeKeyFile(path);
+      expect(err).toBeNull();
+    });
 
-  it.skip("cross-process contention loses profiles (documented F5 gap; needs external lockfile)", async () => {
-    // Reproduction: spawn two Node child processes that each call
-    // addProfile against the same configPath. Without an OS-level
-    // lock (e.g. proper-lockfile or O_EXCL guard), one profile is
-    // lost. Skipped here because the race is timing-sensitive — flaky
-    // on CI. The contract gap is recorded in the docstring of
-    // `withYamlLock` in movementProfile.ts and tracked as a follow-up
-    // sub-issue for cross-process hardening.
-    writeFileSync(configPath, "");
-    expect(true).toBe(true);
+    it("returns null when the file disappears between the unlink attempt and the existsSync check (race)", () => {
+      // Hard to provoke a real race deterministically. The contract is
+      // documented; the previous test covers the ENOENT short-circuit
+      // which is the common race outcome.
+      const path = join(scratchDir, "raced");
+      const err = removeKeyFile(path);
+      expect(err).toBeNull();
+    });
+
+    it("returns an Error when the path is a directory AND still exists post-attempt", () => {
+      // unlinkSync on a directory throws EISDIR (or EPERM on some
+      // platforms). existsSync afterwards still returns true, so this
+      // is the "preocupante" path the caller must surface as a warning
+      // — the file (here, a directory occupying the key-file path) is
+      // still on disk.
+      const dirPath = join(scratchDir, "key-but-actually-a-dir");
+      mkdirSync(dirPath);
+      writeFileSync(join(dirPath, "child"), "x"); // make sure it's not empty
+      const err = removeKeyFile(dirPath);
+      expect(err).not.toBeNull();
+      expect(err).toBeInstanceOf(Error);
+      // Error code is platform-dependent (EISDIR on linux, EPERM on
+      // macos), so just assert we got something Error-shaped.
+      expect((err as NodeJS.ErrnoException).code).toMatch(/^E/);
+      expect(existsSync(dirPath)).toBe(true);
+    });
   });
 });

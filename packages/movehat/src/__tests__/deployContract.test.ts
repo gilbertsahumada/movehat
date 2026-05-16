@@ -149,19 +149,19 @@ version = "0.0.1"
     expect(existsSync(join(tmpHome, ".aptos", "config.yaml"))).toBe(false);
   });
 
-  it("two concurrent deploys do not corrupt ~/.aptos/config.yaml (#37)", async () => {
-    // Pre-fix #37: both deploys overwrote ~/.aptos/config.yaml with the
-    // SAME profile name ("default" by default), then both restored
-    // independently. The second deploy's restore would overwrite the
-    // first's profile mid-publish → potential cross-contamination of
-    // private keys / accounts. Post-fix: each deploy uses a unique
-    // movehat-deploy-<uuid> profile name and only deletes its own key
-    // on cleanup. The user's other profiles never get touched.
-    //
-    // The mutex is what makes this safe — without it, the
-    // read-modify-write cycles would race and silently drop a profile.
+  it("two concurrent deploys use distinct temp key files and never touch ~/.aptos/config.yaml", async () => {
+    // Each deploy writes its private key to a UUID-named temp file
+    // (see `core/movementProfile.ts:writeTempKeyFile`) and passes
+    // `--private-key-file <path>` to Movement CLI. Concurrent deploys
+    // have no shared state — no profile YAML, no mutex, no race.
+    // Asserts:
+    //   1. Each invocation records a DISTINCT --private-key-file path.
+    //   2. After both deploys finish, neither temp key file remains on
+    //      disk (cleanup ran on both happy paths).
+    //   3. ~/.aptos/config.yaml is byte-identical to what was on disk
+    //      before — the new flow doesn't touch the user's CLI config.
 
-    // Seed the yaml with an unrelated user profile that MUST survive.
+    // Seed an unrelated user profile that MUST survive untouched.
     const aptosDir = join(tmpHome, ".aptos");
     mkdirSync(aptosDir, { recursive: true });
     const preExisting = {
@@ -176,10 +176,11 @@ version = "0.0.1"
     };
     const configPath = join(aptosDir, "config.yaml");
     writeFileSync(configPath, yaml.dump(preExisting), { mode: 0o600 });
+    const initialConfigBytes = readFileSync(configPath, "utf8");
 
-    // Set up two Publisher instances with fake adapters that record their
-    // own --profile argument and inject a small delay on publish so the
-    // critical sections overlap.
+    // Set up two Publisher instances with fake adapters that record
+    // their --private-key-file argument and inject a small delay on
+    // publish so the critical sections overlap.
     function makeDelayedAdapter(label: string): {
       adapter: ChildProcessAdapter;
       captured: { publishCall?: RunInput };
@@ -234,38 +235,41 @@ version = "0.0.1"
       }),
     ]);
 
-    // Both publish calls captured distinct --profile args.
+    // Both publish calls captured distinct --private-key-file args.
     const argsA = a.captured.publishCall!.args;
     const argsB = b.captured.publishCall!.args;
-    const profileArgA = argsA[argsA.indexOf("--profile") + 1];
-    const profileArgB = argsB[argsB.indexOf("--profile") + 1];
-    expect(profileArgA).toMatch(/^movehat-deploy-/);
-    expect(profileArgB).toMatch(/^movehat-deploy-/);
-    expect(profileArgA).not.toBe(profileArgB);
+    const keyFileArgA = argsA[argsA.indexOf("--private-key-file") + 1] as string;
+    const keyFileArgB = argsB[argsB.indexOf("--private-key-file") + 1] as string;
+    expect(keyFileArgA).toMatch(/movehat-key-/);
+    expect(keyFileArgB).toMatch(/movehat-key-/);
+    expect(keyFileArgA).not.toBe(keyFileArgB);
 
-    // After both deploys finish, ~/.aptos/config.yaml contains the
-    // user's original profile and zero movehat-deploy-* profiles.
-    const finalYaml: any = yaml.load(readFileSync(configPath, "utf8"));
-    expect(finalYaml.profiles).toBeDefined();
-    expect(Object.keys(finalYaml.profiles)).toEqual(["user_main"]);
-    expect(finalYaml.profiles.user_main.private_key).toBe(
-      preExisting.profiles.user_main.private_key
-    );
+    // Cleanup ran on both — neither temp file persists after the
+    // deploys finished normally.
+    expect(existsSync(keyFileArgA)).toBe(false);
+    expect(existsSync(keyFileArgB)).toBe(false);
+
+    // ~/.aptos/config.yaml byte-identical to pre-deploy state — the new
+    // flow never touches the user's CLI config.
+    expect(readFileSync(configPath, "utf8")).toBe(initialConfigBytes);
   });
 
-  it("SIGINT mid-deploy cleans the profile from ~/.aptos/config.yaml (#36)", async () => {
-    // Pre-fix #36: between the yaml write (private key persisted) and the
-    // finally block, a SIGINT would skip cleanup and leave the user's
-    // private key sitting in ~/.aptos/config.yaml at mode 0o600.
-    // Post-fix: a sync signal handler runs synchronously before exit,
-    // removing the deploy's unique profile from the yaml.
+  it("SIGINT mid-deploy unlinks the temp key file", async () => {
+    // Without sync SIGINT cleanup, the temp private-key file written
+    // by `writeTempKeyFile` would persist on disk after an abnormal
+    // exit (chmod 0o600 prevents other users from reading it, but
+    // forensic recovery from /tmp is still possible). The sync signal
+    // handler runs synchronously before process.exit and unlinks
+    // every active deploy's key file.
     //
     // This test spawns a child process running a harness that drives
     // Publisher.deploy() with a 3-second-delayed publish, then sends
     // SIGINT mid-flight. Vitest's own process is unaffected because
     // the SIGINT goes to the child.
 
-    // Seed an unrelated user profile that MUST survive.
+    // Seed an unrelated user profile that MUST be left untouched —
+    // the new flow doesn't read or write ~/.aptos/config.yaml at all,
+    // so this is an invariant check.
     const aptosDir = join(tmpHome, ".aptos");
     mkdirSync(aptosDir, { recursive: true });
     const configPath = join(aptosDir, "config.yaml");
@@ -283,6 +287,7 @@ version = "0.0.1"
       }),
       { mode: 0o600 }
     );
+    const initialConfigBytes = readFileSync(configPath, "utf8");
 
     const harnessPath = join(__dirname, "fixtures", "sigint-deploy-harness.ts");
     // Resolve tsx's CLI binary by absolute path — the test's tmp cwd has
@@ -302,8 +307,8 @@ version = "0.0.1"
       }
     );
 
-    // Wait for the harness to announce its unique profile name via stdout
-    // (it writes a JSON line `{"profile":"movehat-deploy-XXXX"}` just
+    // Wait for the harness to announce its temp key file path via stdout
+    // (it writes a JSON line `{"keyFile":"/tmp/movehat-key-XXXX"}` just
     // before entering the slow publish step).
     let announced: string | undefined;
     let stdoutBuf = "";
@@ -315,7 +320,7 @@ version = "0.0.1"
         if (!trimmed.startsWith("{")) continue;
         try {
           const parsed = JSON.parse(trimmed);
-          if (typeof parsed.profile === "string") announced = parsed.profile;
+          if (typeof parsed.keyFile === "string") announced = parsed.keyFile;
         } catch {
           /* not a JSON line we care about */
         }
@@ -333,12 +338,17 @@ version = "0.0.1"
     if (!announced) {
       child.kill("SIGKILL");
       throw new Error(
-        `harness never announced profile in 8s.\n` +
+        `harness never announced keyFile in 8s.\n` +
           `stdout so far:\n${stdoutBuf}\n---\nstderr so far:\n${stderrBuf}`
       );
     }
 
-    expect(announced).toMatch(/^movehat-deploy-/);
+    expect(announced).toMatch(/movehat-key-/);
+    // The temp key file is present on disk while the harness is in
+    // the middle of the slow publish (the JSON announcement is emitted
+    // right before the simulated 3s wait, and the file is unlinked
+    // only on cleanup).
+    expect(existsSync(announced)).toBe(true);
 
     // Deliver SIGINT mid-publish and wait for the harness to exit.
     child.kill("SIGINT");
@@ -347,13 +357,12 @@ version = "0.0.1"
     });
     expect(exitCode).toBe(130);
 
-    // The yaml on disk contains the user's original profile and NO
-    // movehat-deploy-* leftovers.
-    expect(existsSync(configPath)).toBe(true);
-    const finalYaml: any = yaml.load(readFileSync(configPath, "utf8"));
-    expect(finalYaml.profiles).toBeDefined();
-    expect(Object.keys(finalYaml.profiles).sort()).toEqual(["user_main"]);
-    expect(finalYaml.profiles.user_main.private_key).toBe("0x" + "a".repeat(64));
+    // The temp key file has been unlinked by the SIGINT handler.
+    expect(existsSync(announced)).toBe(false);
+
+    // The user's ~/.aptos/config.yaml is byte-identical to pre-deploy
+    // — the new flow never touches it.
+    expect(readFileSync(configPath, "utf8")).toBe(initialConfigBytes);
   }, 15000);
 
   it("does not mutate Move.toml during deploy (#38)", async () => {

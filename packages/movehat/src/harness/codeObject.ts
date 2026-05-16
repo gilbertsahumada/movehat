@@ -1,6 +1,4 @@
-import { homedir } from "os";
-import { join } from "path";
-import { randomUUID } from "crypto";
+import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   DeployCodeObjectOptions,
@@ -14,7 +12,7 @@ import {
   validateSafeName,
   type DeploymentInfo,
 } from "../core/deployments.js";
-import { validatePathSafety, validateProfileSafety } from "../core/shell.js";
+import { validatePathSafety } from "../core/shell.js";
 import {
   CliExecutionError,
   ModuleAlreadyDeployedError,
@@ -24,10 +22,9 @@ import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
 import { logger } from "../ui/index.js";
 import {
-  withYamlLock,
-  addProfile,
-  removeProfile,
-  removeProfileSync,
+  writeTempKeyFile,
+  removeKeyFile,
+  removeKeyFileSyncBestEffort,
   ensureSignalHandler,
   cleanupCallbacks,
 } from "../core/movementProfile.js";
@@ -170,9 +167,7 @@ async function executeMovementMoveObject(
   }
 
   const dir = opts.packageDir || config.moveDir;
-  const profile = `movehat-deploy-${randomUUID().slice(0, 8)}`;
   const safeDir = validatePathSafety(dir, "package directory");
-  const safeProfile = validateProfileSafety(profile);
 
   logger.step(
     `${subcommand === "deploy-object" ? "Deploying" : "Upgrading"} module "${moduleName}" from ${dir}...`
@@ -213,29 +208,27 @@ async function executeMovementMoveObject(
     );
     if (buildResult.stdout) console.log(buildResult.stdout.trim());
 
-    // Strip `ed25519-priv-` prefix if present — Movement CLI expects the
-    // raw hex.
-    let cleanPrivateKey = config.privateKey;
-    if (cleanPrivateKey.startsWith("ed25519-priv-")) {
-      cleanPrivateKey = cleanPrivateKey.replace("ed25519-priv-", "");
-    }
-
-    const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
-
-    // Register SIGINT-safe sync cleanup BEFORE writing the key (same
-    // pattern as Publisher — closes bug #36).
-    ensureSignalHandler();
-    const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
-    cleanupCallbacks.add(syncCleanup);
-
-    await withYamlLock(() =>
-      addProfile(movementConfigPath, profile, {
-        private_key: cleanPrivateKey,
-        public_key: account.publicKey.toString(),
-        account: deployerAddress,
-        rest_url: config.rpc,
-      })
+    // Format the private key into AIP-80 shape so the Movement CLI
+    // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
+    // is idempotent for already-prefixed inputs.
+    const formattedPrivateKey = PrivateKey.formatPrivateKey(
+      config.privateKey,
+      PrivateKeyVariants.Ed25519,
     );
+
+    // Pass the private key via a 0o600 temp file (--private-key-file)
+    // and the on-chain address via --sender-account. This avoids the
+    // CLI's profile-yaml lookup entirely — no CWD / HOME / .aptos /
+    // .movement dance, no CLI-variant dependency.
+    const keyFilePath = writeTempKeyFile(formattedPrivateKey);
+
+    // Register SIGINT-safe sync cleanup BEFORE invoking the CLI so
+    // the private key never persists on disk after an abnormal exit.
+    // The signal-handler path uses the best-effort variant because the
+    // event loop is dead and we cannot logger.warning.
+    ensureSignalHandler();
+    const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
+    cleanupCallbacks.add(syncCleanup);
 
     let deployOut = "";
     try {
@@ -258,8 +251,10 @@ async function executeMovementMoveObject(
             safeDir,
             "--url",
             config.rpc,
-            "--profile",
-            safeProfile,
+            "--private-key-file",
+            keyFilePath,
+            "--sender-account",
+            deployerAddress,
             "--assume-yes",
             ...includedArtifacts,
             ...namedAddrArgs,
@@ -273,18 +268,17 @@ async function executeMovementMoveObject(
       if (result.stdout) console.log(result.stdout.trim());
       if (result.stderr) console.error(result.stderr.trim());
     } finally {
-      // Best-effort profile removal. CRITICAL: catch + log instead of
-      // re-throwing — an await-in-finally that throws would clobber the
-      // try block's success/error (the bug-#37 lesson from Publisher).
-      await withYamlLock(() => removeProfile(movementConfigPath, profile)).catch(
-        (err) => {
-          const cleanupMsg = err instanceof Error ? err.message : String(err);
-          logger.warning(
-            `Failed to remove deploy profile "${profile}" from ${movementConfigPath}: ${cleanupMsg}. ` +
-              `Run 'movement config delete-profile --profile ${profile}' to clean up manually.`
-          );
-        }
-      );
+      // Unlink via the observable helper — emit a warning if the file
+      // could not be removed AND still exists on disk (private key
+      // would persist silently otherwise). ENOENT and races are
+      // treated as benign success.
+      const cleanupErr = removeKeyFile(keyFilePath);
+      if (cleanupErr) {
+        logger.warning(
+          `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+            `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+        );
+      }
       cleanupCallbacks.delete(syncCleanup);
     }
 

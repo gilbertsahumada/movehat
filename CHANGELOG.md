@@ -71,6 +71,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Counter value: 1" appears in the output. Previously the script
   only validated template files exist, which is how the
   `E_NOT_INITIALIZED` regression slipped through.
+- `movement move deploy-object` / `move upgrade-object` / `move
+  publish` / `move run-script` no longer require `~/.aptos/config.yaml`
+  (or `~/.movement/config.yaml` on newer CLI variants) to exist on the
+  user's machine. Previously movehat wrote a temporary profile to that
+  yaml and passed `--profile <name>` to the CLI, which forced a fresh
+  install to hit `Unable to find config <cwd>/.aptos/config.yaml, have
+  you run aptos init?`. The new flow writes the private key to a
+  `mode 0o600` temp file in `os.tmpdir()` and passes
+  `--private-key-file <path>` + `--sender-account <addr>` directly to
+  the CLI — no yaml lookup chain, no CWD dependency, no CLI-variant
+  dependency. Profile management code in `core/movementProfile.ts`
+  was refactored accordingly; the SIGINT/SIGTERM cleanup pipeline still
+  applies (the temp key file is unlinked on both normal exit and on
+  abnormal exit). Closes
+  [#208](https://github.com/gilbertsahumada/movehat/issues/208).
+- Template `move/sources/Counter.move` regression-test docblock
+  switched from `///` (Move doc-comment, only valid on items the
+  compiler recognizes) to `//` (regular comment) so it doesn't
+  trigger `invalid documentation comment` warnings on
+  `movement move test`.
 
 ### Security
 

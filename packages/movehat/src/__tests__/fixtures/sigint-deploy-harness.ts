@@ -9,9 +9,10 @@
  *      send SIGINT mid-flight.
  *   2. Drive `Publisher.deploy()` against the fake adapter using a
  *      synthetic MovehatConfig + Account read from env vars.
- *   3. Write the chosen `movehat-deploy-<uuid>` profile name to stdout
- *      as JSON (`{"profile": "..."}`) before the slow publish so the
- *      parent test knows which key to look for after SIGINT.
+ *   3. Write the temp key file path to stdout as JSON
+ *      (`{"keyFile": "/tmp/movehat-key-<uuid>"}`) before the slow
+ *      publish so the parent test knows which file to look for after
+ *      SIGINT.
  *   4. If the deploy completes naturally (test failure case), exit 0.
  *   5. When SIGINT arrives, Publisher's signal handler runs synchronous
  *      cleanup and `setImmediate(() => process.exit(130))`.
@@ -61,10 +62,10 @@ async function main() {
         return { exitCode: 0, stdout: "built", stderr: "" };
       }
       if (input.args[1] === "publish") {
-        // Surface the unique profile name to the parent BEFORE blocking.
-        const profileIdx = input.args.indexOf("--profile");
-        const profile = profileIdx >= 0 ? input.args[profileIdx + 1] : "";
-        process.stdout.write(JSON.stringify({ profile }) + "\n");
+        // Surface the temp key file path to the parent BEFORE blocking.
+        const keyFileIdx = input.args.indexOf("--private-key-file");
+        const keyFile = keyFileIdx >= 0 ? input.args[keyFileIdx + 1] : "";
+        process.stdout.write(JSON.stringify({ keyFile }) + "\n");
         // Hold long enough for the parent to deliver SIGINT.
         await new Promise((r) => setTimeout(r, 3000));
         return {

@@ -1,22 +1,20 @@
 import { existsSync } from "fs";
-import { homedir } from "os";
-import { extname, join } from "path";
-import { randomUUID } from "crypto";
+import { extname } from "path";
+import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   RunMoveScriptOptions,
   MoveScriptResult,
 } from "../types/harness.js";
-import { validatePathSafety, validateProfileSafety } from "../core/shell.js";
+import { validatePathSafety } from "../core/shell.js";
 import { CliExecutionError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
 import { logger } from "../ui/index.js";
 import {
-  withYamlLock,
-  addProfile,
-  removeProfile,
-  removeProfileSync,
+  writeTempKeyFile,
+  removeKeyFile,
+  removeKeyFileSyncBestEffort,
   ensureSignalHandler,
   cleanupCallbacks,
 } from "../core/movementProfile.js";
@@ -29,9 +27,9 @@ import {
  *   - `.mv` compiled bytecode → `--compiled-script-path`
  *
  * Reuses Publisher's security model via the shared `movementProfile`
- * helpers: per-deploy unique profile, atomic 0o600 yaml writes under
- * the mutex, SIGINT-safe sync cleanup, `--profile` auth (key never
- * appears in `ps` output).
+ * helpers: per-invocation temp key file (0o600), SIGINT-safe sync
+ * cleanup, `--private-key-file` auth (key never appears in `ps`
+ * output or in the user's `~/.aptos/config.yaml`).
  *
  * Returns {@link MoveScriptResult}. `txHash` is guaranteed; `success`
  * and `vmStatus` are best-effort parsed from the CLI's Result JSON.
@@ -70,8 +68,6 @@ export async function runMoveScript(
   }
 
   const safeScriptPath = validatePathSafety(options.scriptPath, "script path");
-  const profile = `movehat-script-${randomUUID().slice(0, 8)}`;
-  const safeProfile = validateProfileSafety(profile);
 
   logger.step(
     `Running Move script '${options.scriptPath}' on ${config.network}...`
@@ -80,25 +76,27 @@ export async function runMoveScript(
   try {
     const deployerAddress = account.accountAddress.toString();
 
-    let cleanPrivateKey = config.privateKey;
-    if (cleanPrivateKey.startsWith("ed25519-priv-")) {
-      cleanPrivateKey = cleanPrivateKey.replace("ed25519-priv-", "");
-    }
-
-    const movementConfigPath = join(homedir(), ".aptos", "config.yaml");
-
-    ensureSignalHandler();
-    const syncCleanup = () => removeProfileSync(movementConfigPath, profile);
-    cleanupCallbacks.add(syncCleanup);
-
-    await withYamlLock(() =>
-      addProfile(movementConfigPath, profile, {
-        private_key: cleanPrivateKey,
-        public_key: account.publicKey.toString(),
-        account: deployerAddress,
-        rest_url: config.rpc,
-      })
+    // Format the private key into AIP-80 shape before writing to the
+    // temp key file. `formatPrivateKey` is idempotent for already-
+    // prefixed inputs.
+    const formattedPrivateKey = PrivateKey.formatPrivateKey(
+      config.privateKey,
+      PrivateKeyVariants.Ed25519,
     );
+
+    // Pass the private key via a 0o600 temp file (--private-key-file)
+    // and the on-chain address via --sender-account. Avoids the CLI's
+    // profile-yaml lookup chain entirely (no CWD / HOME / .aptos /
+    // .movement dance, no CLI-variant dependency).
+    const keyFilePath = writeTempKeyFile(formattedPrivateKey);
+
+    // SIGINT-safe sync cleanup BEFORE the CLI call so the private key
+    // never persists on disk after an abnormal exit. The signal-handler
+    // path uses the best-effort variant because the event loop is dead
+    // and we cannot logger.warning.
+    ensureSignalHandler();
+    const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
+    cleanupCallbacks.add(syncCleanup);
 
     let scriptOut = "";
     try {
@@ -117,8 +115,10 @@ export async function runMoveScript(
           args: [
             "move",
             "run-script",
-            "--profile",
-            safeProfile,
+            "--private-key-file",
+            keyFilePath,
+            "--sender-account",
+            deployerAddress,
             "--url",
             config.rpc,
             "--assume-yes",
@@ -135,15 +135,16 @@ export async function runMoveScript(
       if (result.stdout) console.log(result.stdout.trim());
       if (result.stderr) console.error(result.stderr.trim());
     } finally {
-      await withYamlLock(() => removeProfile(movementConfigPath, profile)).catch(
-        (err) => {
-          const cleanupMsg = err instanceof Error ? err.message : String(err);
-          logger.warning(
-            `Failed to remove script profile "${profile}" from ${movementConfigPath}: ${cleanupMsg}. ` +
-              `Run 'movement config delete-profile --profile ${profile}' to clean up manually.`
-          );
-        }
-      );
+      // Observable cleanup — emit a warning if the unlink failed and
+      // the file is still on disk (private key would persist silently
+      // otherwise).
+      const cleanupErr = removeKeyFile(keyFilePath);
+      if (cleanupErr) {
+        logger.warning(
+          `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+            `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+        );
+      }
       cleanupCallbacks.delete(syncCleanup);
     }
 
