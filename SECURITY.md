@@ -66,10 +66,18 @@ Tracked advisories (2026-05-16):
 - **path-to-regexp** — DoS. Transitive via Next.js.
 - **picomatch** — ReDoS via extglob. Transitive via Rollup/Vite.
 
-These will be resolved when Fumadocs releases a version compatible with
-Next.js 16+ (which patches the Next CVEs and pulls in patched Vite/Rollup).
-The repo cannot upgrade Fumadocs unilaterally because Next.js 16 requires
-`useEffectEvent` semantics that break the docs site's static-export build
-on Next.js 15.
+Resolution path (in order):
+
+1. Next.js ships a release that supports the docs site's
+   static-export configuration (today's Next.js 16 introduces
+   `useEffectEvent` semantics that break static export on Next.js 15
+   APIs).
+2. Fumadocs releases a version that depends on that Next.js.
+3. We upgrade Fumadocs, which pulls in patched Next.js / Vite /
+   Rollup transitively and clears all 13 high advisories above.
+
+The repo cannot shortcut this chain (e.g. pin Next.js via
+`pnpm.overrides`) because Fumadocs has tight version expectations
+that breaking would crash the docs site build.
 
 The published `packages/movehat` package has zero advisories.

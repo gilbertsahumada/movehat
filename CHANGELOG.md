@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+---
+
+## [0.2.2] - 2026-05-16
+
+### Added
+
 - Re-export six Harness option/result types from the root `movehat`
   entry point (`DeployCodeObjectOptions`, `UpgradeCodeObjectOptions`,
   `CodeObjectInfo`, `RunViewFunctionOptions`, `RunMoveScriptOptions`,
@@ -91,8 +107,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compiler recognizes) to `//` (regular comment) so it doesn't
   trigger `invalid documentation comment` warnings on
   `movement move test`.
+- Audit findings (10 items, TDD-validated, [#215](https://github.com/gilbertsahumada/movehat/pull/215)):
+  - F1: `Harness.createFork` now honors the `network` argument (was silently routing all callers to testnet).
+  - F2: Fork server closes CORS by default; opt-in via `corsAllowOrigins` config.
+  - F3: `MovementApiClient` adds request timeout + `maxBytes` guard.
+  - F4: `ChildProcessAdapter.run` adds a `maxBuffer` guard.
+  - F5: `withYamlLock` docstring tightened to make process-local scope explicit, with an `it.skip` test pinning the cross-process gap (the originally-shipped fix). The follow-up [#210](https://github.com/gilbertsahumada/movehat/pull/210) refactor in this same release subsequently removed `withYamlLock` entirely (replaced with per-deploy temp key files), which resolves the cross-process race incidentally — no shared yaml file remains to race on. Cross-process lock hardening for the yaml flow is therefore obsolete; the issue stays open at [#211](https://github.com/gilbertsahumada/movehat/issues/211) for any future code path that revives shared-file state.
+  - F6: Removed stale `packages/movehat/package-lock.json` left over from a prior tooling change.
+  - F7: Pinned `movehat compile` Move.toml mutation behavior with a regression test; product decision tracked in [#212](https://github.com/gilbertsahumada/movehat/issues/212).
+  - F8: AccountManager's static-state lifecycle + import-time cwd capture documented + locked by behavioral tests; instance-per-Harness refactor tracked in [#213](https://github.com/gilbertsahumada/movehat/issues/213).
+  - F9: `LocalNodeManager` refuses to misreport the REST API port; deprecated the misleading `apiPort` option.
+  - F10: CI audit gate hardened; publish workflow validates version input for both `release: published` and `workflow_dispatch` triggers.
+- CI E2E gate now installs the freshly-built tarball into the
+  user-project under test (previously `npm install` resolved
+  `"movehat"` from the npm registry, so the gate exercised stale
+  published code instead of the diff under review). This fix is
+  what let CI on the second batch confirm that PR
+  [#210](https://github.com/gilbertsahumada/movehat/pull/210)
+  actually resolves
+  [#208](https://github.com/gilbertsahumada/movehat/issues/208) on
+  Linux CI. ([#217](https://github.com/gilbertsahumada/movehat/pull/217))
+- CI audit gate now triggers at `--audit-level critical` (was
+  default, which failed on any severity). 27 advisories in total
+  (13 rated high severity, the remainder moderate/low) in
+  `packages/docs` transitive dependencies (Fumadocs, Next.js,
+  Vite, Rollup) are documented in `SECURITY.md` as
+  known-not-impacting — none reach the published `movehat` package
+  on npm. **Resolution path**: Next.js must first ship a release
+  that supports the docs site's static-export configuration, then
+  Fumadocs must release a version that depends on that Next.js. The
+  repo cannot upgrade Fumadocs unilaterally because today's
+  Fumadocs depends on Next.js 16 features that break our static
+  build, and patched Next.js versions live downstream of that.
+  ([#217](https://github.com/gilbertsahumada/movehat/pull/217))
 
 ### Security
+
+- `SECURITY.md` adds a "Known advisories in development
+  dependencies" section enumerating the 13 high-severity
+  advisories in `packages/docs` build infrastructure that the
+  audit gate acknowledges. Resolution path: Next.js must ship a
+  static-export-compatible release first, then Fumadocs must
+  release a version that depends on it.
 
 ---
 
