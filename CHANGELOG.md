@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+---
+
+## [0.2.2] - 2026-05-16
+
+### Added
+
 - Re-export six Harness option/result types from the root `movehat`
   entry point (`DeployCodeObjectOptions`, `UpgradeCodeObjectOptions`,
   `CodeObjectInfo`, `RunViewFunctionOptions`, `RunMoveScriptOptions`,
@@ -91,8 +107,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compiler recognizes) to `//` (regular comment) so it doesn't
   trigger `invalid documentation comment` warnings on
   `movement move test`.
+- Audit findings (10 items, TDD-validated, [#215](https://github.com/gilbertsahumada/movehat/pull/215)):
+  - F1: `Harness.createFork` now honors the `network` argument (was silently routing all callers to testnet).
+  - F2: Fork server closes CORS by default; opt-in via `corsAllowOrigins` config.
+  - F3: `MovementApiClient` adds request timeout + `maxBytes` guard.
+  - F4: `ChildProcessAdapter.run` adds a `maxBuffer` guard.
+  - F5: `withYamlLock` docstring tightened to make process-local scope explicit (mooted by the temp-key-file refactor that removed yamlLock entirely; cross-process hardening tracked separately in [#211](https://github.com/gilbertsahumada/movehat/issues/211)).
+  - F6: Removed stale `packages/movehat/package-lock.json` left over from a prior tooling change.
+  - F7: Pinned `movehat compile` Move.toml mutation behavior with a regression test; product decision tracked in [#212](https://github.com/gilbertsahumada/movehat/issues/212).
+  - F8: AccountManager's static-state lifecycle + import-time cwd capture documented + locked by behavioral tests; instance-per-Harness refactor tracked in [#213](https://github.com/gilbertsahumada/movehat/issues/213).
+  - F9: `LocalNodeManager` refuses to misreport the REST API port; deprecated the misleading `apiPort` option.
+  - F10: CI audit gate hardened; publish workflow validates version input for both `release: published` and `workflow_dispatch` triggers.
+- CI E2E gate now installs the freshly-built tarball into the
+  user-project under test (previously `npm install` resolved
+  `"movehat"` from the npm registry, so the gate exercised stale
+  published code instead of the diff under review). This is the
+  fix that let the second batch confirm #210 actually resolves
+  #208 on Linux CI. ([#217](https://github.com/gilbertsahumada/movehat/pull/217))
+- CI audit gate now triggers at `--audit-level critical` (was
+  default, which failed on any severity). 27 high/moderate/low
+  advisories in `packages/docs` transitive dependencies (Fumadocs,
+  Next.js, Vite, Rollup) are documented in `SECURITY.md` as
+  known-not-impacting — none reach the published `movehat` package
+  on npm. The repo cannot upgrade Fumadocs until Next.js 16 is
+  compatible with the docs site's static-export configuration.
+  ([#217](https://github.com/gilbertsahumada/movehat/pull/217))
 
 ### Security
+
+- `SECURITY.md` adds a "Known advisories in development
+  dependencies" section enumerating the 13 high CVEs in
+  `packages/docs` build infrastructure that the audit gate
+  acknowledges. Resolution path: Fumadocs releasing a version
+  compatible with Next.js 16.
 
 ---
 
