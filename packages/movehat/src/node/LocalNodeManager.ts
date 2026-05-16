@@ -12,7 +12,15 @@ export interface LocalNodeOptions {
   testDir?: string;           // Directory for node data (default: .movehat/local-node)
   forceRestart?: boolean;     // Clean state and start fresh
   faucetPort?: number;        // Faucet port (default: 8081)
-  apiPort?: number;           // API/RPC port (default: 8080)
+  /**
+   * REST API port. Movement CLI (`movement node run-localnet`) does
+   * not accept a flag to change this — the node always binds 8080.
+   * Passing any other value triggers a warning at construction time
+   * and is replaced with 8080. Field is kept for source compatibility.
+   *
+   * @deprecated Movement CLI does not honor this. Omit it.
+   */
+  apiPort?: number;
   readyPort?: number;         // Ready server port (default: 8070)
   silent?: boolean;           // Suppress node output
   /**
@@ -21,6 +29,8 @@ export interface LocalNodeOptions {
    */
   adapter?: ChildProcessAdapter;
 }
+
+const MOVEMENT_API_PORT = 8080;
 
 export interface LocalNodeInfo {
   rpcUrl: string;
@@ -47,11 +57,23 @@ export class LocalNodeManager {
 
   constructor(options: LocalNodeOptions = {}) {
     this.adapter = options.adapter ?? defaultChildProcessAdapter;
+    if (
+      options.apiPort !== undefined &&
+      options.apiPort !== MOVEMENT_API_PORT
+    ) {
+      // Movement CLI hardcodes the REST API port to 8080. Surfacing
+      // the requested port via getNodeInfo() would lie about where
+      // the node actually listens.
+      logger.warning(
+        `LocalNodeManager: apiPort=${options.apiPort} is not supported by ` +
+          `movement node run-localnet; forcing REST API port to 8080.`
+      );
+    }
     this.options = {
       testDir: options.testDir || join(process.cwd(), ".movehat", "local-node"),
       forceRestart: options.forceRestart ?? false,
       faucetPort: options.faucetPort || 8081,
-      apiPort: options.apiPort || 8080,
+      apiPort: MOVEMENT_API_PORT,
       readyPort: options.readyPort || 8070,
       silent: options.silent ?? false,
     };

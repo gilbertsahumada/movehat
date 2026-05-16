@@ -126,17 +126,18 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     expect(info.testDir).toBe(tmpDir);
   });
 
-  it("honors custom ports from constructor options", () => {
+  it("honors custom faucet/ready ports; apiPort is pinned to 8080 (see F9)", () => {
     const { adapter } = buildFakeAdapter();
     const mgr = new LocalNodeManager({
       adapter,
       testDir: tmpDir,
-      apiPort: 9000,
       faucetPort: 9001,
       readyPort: 9002,
     });
     const info = mgr.getNodeInfo();
-    expect(info.rpcUrl).toContain(":9000");
+    // Movement CLI does not accept a flag for the REST API port; see
+    // LocalNodeManager.api-port.test.ts for the F9 contract.
+    expect(info.rpcUrl).toBe("http://127.0.0.1:8080");
     expect(info.faucetUrl).toContain(":9001");
     expect(info.readyUrl).toContain(":9002");
   });
