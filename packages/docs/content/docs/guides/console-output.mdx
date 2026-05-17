@@ -1,0 +1,90 @@
+---
+title: Console output
+description: Understanding what Movehat prints and when
+icon: Terminal
+---
+
+Starting in v0.2.3 Movehat hides subprocess chatter by default, shows spinners during long phases, and groups output with phase headers. This page explains what you see and how to control it.
+
+## What you see in a normal run
+
+Run `movehat test --ts` against a fresh project:
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Setting up local testing environment
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mode: local-node
+  Accounts: deployer, alice, bob
+
+▸ Starting local Movement node
+  Test directory: ./.movehat/local-node
+  RPC port: 8080
+  Faucet port: 8081
+  Ready port: 8070
+
+⠼ Waiting for node to be ready — 14.2s
+✔ Waiting for node to be ready (15.1s)
+
+⠋ Funding 3 accounts from local faucet
+✔ Funded 3 accounts (1 MOVE each)
+
+▸ Initializing runtime for local network...
+✔ Runtime initialized
+```
+
+You'll see this kind of output during local-testing setup, deployment, and compilation. Spinners spin during long operations (10–30s) and convert to a green ✔ when the operation completes successfully or a red ✖ when it fails.
+
+## Five sources of output
+
+Every line in your terminal comes from one of these five sources. Each has a different visual treatment so you can tell at a glance who is talking.
+
+| Source | Looks like | When |
+|---|---|---|
+| **Movehat lifecycle** | `▸` `✔` `✖` `⚠` `i` with color | Movehat is doing something — starting a node, publishing a module, funding an account |
+| **Subprocess (`movement`, `aptos`)** | Hidden by default; `›` muted gray with `-v` | The `movement` CLI or `aptos move` is emitting status |
+| **Your code** | Whatever your `console.log` prints | A `.test.ts` or `scripts/` file you wrote is running |
+| **SDK warnings** | `⚠` yellow | The `@aptos-labs/ts-sdk` raises a deprecation or compatibility warning |
+| **Test framework** | Mocha's standard reporter (passing dots, failing tracebacks) | Inside `movehat test --ts`, mocha owns its own formatting |
+
+The "subprocess" row is the change you'll notice most. Pre-0.2.3, every `[Node] aptos_framework loaded` style line from the local node was printed to stdout. Now those lines are hidden so you can focus on the messages Movehat itself is sending you.
+
+## When you want the chatter back
+
+For debugging — when the local node won't start, when `aptos move build` is hanging on a git dependency, when a publish fails with a generic message — turn on verbose mode:
+
+```bash
+movehat test --ts -v
+movehat compile -v
+movehat run scripts/deploy-counter.ts -v
+```
+
+Or set the env var once for a shell session or CI step:
+
+```bash
+export MOVEHAT_VERBOSE=1
+movehat test --ts
+```
+
+With verbose enabled, subprocess output prints with a muted gray `›` prefix so it visually separates from Movehat's own lines.
+
+## Critical signals always surface
+
+Movehat never silences a real failure. Lines matching these patterns reach your terminal regardless of verbosity:
+
+- `panic` (movement subprocess panicked)
+- `fatal` (any fatal-level message)
+- `address already in use` / `EADDRINUSE` (port conflict — usually means a previous run left a node hanging)
+
+This is enforced by unit tests in `LocalNodeManager.test.ts` so a future refactor can't accidentally hide a real signal.
+
+## CI and non-TTY output
+
+When Movehat detects it isn't connected to an interactive terminal (the output is piped, redirected to a file, or running in CI), spinners disable automatically and output stays line-based. No carriage-return rewrites, nothing that breaks `grep` or `jq`. You can pipe a Movehat run through `tee log.txt` and the captured file will be clean.
+
+Setting `NO_COLOR=1` has the same effect plus disables ANSI colors.
+
+## Related
+
+- [Global flags](/docs/cli/global-flags) — the `-v` / `--verbose` flag and `MOVEHAT_VERBOSE` env var
+- The `§9 Console UX conventions` section of `CLAUDE.md` (in the repository) documents the implementation rules for contributors

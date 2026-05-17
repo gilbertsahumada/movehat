@@ -1,0 +1,58 @@
+---
+title: Global flags
+description: Flags that apply to every Movehat command
+icon: Settings
+---
+
+These flags are available on every `movehat` command. Pass them before or after the subcommand.
+
+## `-v`, `--verbose`
+
+Surface subprocess output that Movehat hides by default.
+
+```bash
+movehat test --ts          # quiet (default)
+movehat test --ts -v       # surface all subprocess output
+MOVEHAT_VERBOSE=1 movehat test --ts   # equivalent — useful in scripts
+```
+
+By default Movehat hides routine chatter from the `movement node run-localnet` and `aptos move build / publish` subprocesses to keep the console readable. With `-v` enabled, every line from those processes is printed with a muted gray `›` prefix so you can see exactly what they're doing.
+
+When to reach for `-v`:
+
+- The local node fails to start and the spinner times out — `-v` reveals what `movement` is saying.
+- `aptos move build` is slow on a fresh clone — `-v` shows the git-dependency download progress.
+- Investigating a publish failure where the error message is generic — `-v` shows the full CLI stdout/stderr.
+
+**Critical signals (panic, fatal, address already in use, EADDRINUSE) always surface regardless of verbosity.** You will never miss a real failure because the verbosity flag was off.
+
+## `--network <name>`
+
+Override the network for this invocation. Accepts `testnet`, `mainnet`, `local`, or any custom network name declared in `movehat.config.ts`.
+
+```bash
+movehat run scripts/deploy-counter.ts --network testnet
+movehat fork create --network mainnet
+```
+
+If you don't pass `--network`, Movehat falls back to (in order) `MOVEHAT_NETWORK` env var, then the `defaultNetwork` in `movehat.config.ts`.
+
+## `--redeploy`
+
+Force redeployment of modules that already have a deployment record on disk.
+
+```bash
+movehat test --ts --redeploy   # ignore deployments/local/*.json, redeploy from scratch
+```
+
+Useful when your Move source changed but the local node's deployment cache still points at the old bytecode.
+
+## Environment variables
+
+| Variable | Equivalent flag | Purpose |
+|---|---|---|
+| `MOVEHAT_VERBOSE=1` | `-v` / `--verbose` | Surface subprocess output |
+| `MOVEHAT_NETWORK=<name>` | `--network <name>` | Default network for this shell |
+| `NO_COLOR=1` | — | Disable all ANSI colors and spinners |
+
+`NO_COLOR=1` and non-TTY output (pipes, CI) auto-degrade gracefully — spinners disable, no carriage-return rewrites, output stays line-based and grep-friendly.
