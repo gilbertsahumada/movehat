@@ -2,6 +2,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { runCli } from '../utils/runCli.js';
 import type { ChildProcessAdapter } from '../utils/childProcessAdapter.js';
+import { logger } from '../ui/index.js';
 
 export interface SnapshotOptions {
   path?: string;
@@ -40,7 +41,7 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
   const name = options.name || `snapshot-${Date.now()}`;
   const snapshotPath = options.path || join(process.cwd(), '.movehat', 'snapshots', name);
 
-  console.log(`📸 Creating snapshot: ${name}...`);
+  logger.info(`Creating snapshot: ${name}...`);
 
   try {
     // Initialize fork/snapshot using aptos CLI.
@@ -68,7 +69,7 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
       throw new Error('Snapshot directory was not created');
     }
 
-    console.log(`   ✓ Snapshot created at ${snapshotPath}`);
+    logger.success(`Snapshot created at ${snapshotPath}`, 2);
     return snapshotPath;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
