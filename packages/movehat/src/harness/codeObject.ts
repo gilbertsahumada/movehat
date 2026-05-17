@@ -265,8 +265,11 @@ async function executeMovementMoveObject(
         { adapter: opts.adapter }
       );
       deployOut = result.stdout;
+      // Both streams gated behind isVerbose(); see §9 — stream channel
+      // is not by itself a failure signal. Real failures throw via
+      // CliExecutionError and are surfaced from the catch below.
       if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
-      if (result.stderr) logger.error(result.stderr.trim(), 2);
+      if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
     } finally {
       // Unlink via the observable helper — emit a warning if the file
       // could not be removed AND still exists on disk (private key

@@ -166,15 +166,20 @@ export class LocalNodeManager {
         this.spawned.stderr.on("data", (data: Buffer) => {
           const output = data.toString().trim();
           if (!output) return;
-          // WARN-only lines are noise from healthy startup; everything
-          // else on stderr is a real signal worth surfacing.
-          if (output.includes("WARN") && !CRITICAL_NODE_OUTPUT.test(output)) {
-            if (isVerbose()) {
-              console.error(colors.muted(`  ${symbols.pointer} ${output}`));
-            }
+          // Movement CLI uses stderr for both progress messages
+          // ("Applying post startup steps...", "Compiling...") and
+          // real errors. Stream channel alone isn't a reliable
+          // signal — gate routine lines behind verbosity, escalate
+          // anything matching CRITICAL_NODE_OUTPUT regardless.
+          if (CRITICAL_NODE_OUTPUT.test(output)) {
+            logger.error(output);
             return;
           }
-          logger.error(output);
+          if (isVerbose()) {
+            for (const line of output.split("\n")) {
+              if (line) console.error(`  ${colors.muted(symbols.pointer + " " + line)}`);
+            }
+          }
         });
       }
 

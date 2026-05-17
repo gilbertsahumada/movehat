@@ -132,8 +132,11 @@ export async function runMoveScript(
         { adapter: options.adapter }
       );
       scriptOut = result.stdout;
+      // Both streams gated behind isVerbose(); Movement CLI uses
+      // stderr for progress messages too. Real failures throw via
+      // CliExecutionError and are surfaced from the catch below.
       if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
-      if (result.stderr) logger.error(result.stderr.trim(), 2);
+      if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
     } finally {
       // Observable cleanup — emit a warning if the unlink failed and
       // the file is still on disk (private key would persist silently

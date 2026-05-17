@@ -191,17 +191,9 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const proc = spawned[0]!;
     expect(proc.stdout!.listenerCount("data")).toBeGreaterThan(0);
     expect(proc.stderr!.listenerCount("data")).toBeGreaterThan(0);
-
-    // stderr non-WARN line goes through console.error (real signal — always surfaced).
-    proc.stderr!.emit("data", Buffer.from("real error\n"));
-    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("real error"));
-
-    // stderr WARN-only line is filtered in quiet mode.
-    errSpy.mockClear();
-    proc.stderr!.emit("data", Buffer.from("WARN something\n"));
-    expect(errSpy).not.toHaveBeenCalledWith(expect.stringContaining("WARN"));
-    // Detailed quiet/verbose filter behavior lives in the §9 describe
-    // block below; this test just locks the listener-wiring contract.
+    // Detailed filter behavior — what passes through vs what's gated
+    // behind isVerbose() — lives in the "§9 console UX" describe block
+    // below. This test only locks the listener-wiring contract.
   });
 
   it("force-restart cleans the test directory before spawn", async () => {
@@ -549,7 +541,7 @@ describe("LocalNodeManager — subprocess output filtering (§9 console UX)", ()
     expect(stdoutCalls).toContain("Loading aptos framework module");
   });
 
-  it("always surfaces real stderr errors via logger.error", async () => {
+  it("always surfaces critical stderr (panic/EADDRINUSE) via logger.error", async () => {
     const { adapter, spawned } = buildFakeAdapter();
     stubFetchAlwaysOk();
     const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
@@ -558,13 +550,13 @@ describe("LocalNodeManager — subprocess output filtering (§9 console UX)", ()
     const proc = spawned[0]!;
     errSpy.mockClear();
 
-    proc.stderr!.emit("data", Buffer.from("ERROR: failed to bind socket"));
+    proc.stderr!.emit("data", Buffer.from("thread panicked: failed to bind socket"));
 
     const stderrCalls = errSpy.mock.calls.flat().join(" ");
-    expect(stderrCalls).toContain("failed to bind socket");
+    expect(stderrCalls).toContain("panicked");
   });
 
-  it("suppresses benign WARN-only stderr in quiet mode", async () => {
+  it("hides routine progress stderr in quiet mode (Movement CLI emits progress to stderr too)", async () => {
     const { adapter, spawned } = buildFakeAdapter();
     stubFetchAlwaysOk();
     const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
@@ -573,9 +565,15 @@ describe("LocalNodeManager — subprocess output filtering (§9 console UX)", ()
     const proc = spawned[0]!;
     errSpy.mockClear();
 
+    // The movement subprocess emits progress messages to stderr that
+    // are NOT errors: "Applying post startup steps...", "Compiling,
+    // may take a little while...". Hiding stream channel from the
+    // user keeps the console clean.
+    proc.stderr!.emit("data", Buffer.from("Applying post startup steps..."));
     proc.stderr!.emit("data", Buffer.from("[WARN] deprecated config field"));
 
     const stderrCalls = errSpy.mock.calls.flat().join(" ");
+    expect(stderrCalls).not.toContain("Applying post startup steps");
     expect(stderrCalls).not.toContain("deprecated config field");
   });
 });

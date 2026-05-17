@@ -211,8 +211,14 @@ export class Publisher {
         );
         publishOut = publishResult.stdout;
         publishErr = publishResult.stderr;
+        // Both stdout and stderr from the publish subprocess are gated
+        // behind isVerbose() — Movement CLI emits progress to both
+        // streams ("Compiling, may take a little while..."), so a
+        // visible stderr line is not by itself a failure signal. The
+        // surrounding withSpinner converts the runCli throw on real
+        // failure into the visible spinner.fail() output instead.
         if (isVerbose() && publishOut) logger.info(publishOut.trim(), 2);
-        if (publishErr) logger.error(publishErr.trim(), 2);
+        if (isVerbose() && publishErr) logger.info(publishErr.trim(), 2);
       } finally {
         // Unlink the temp key file via the observable cleanup helper.
         // ENOENT and other already-gone outcomes are benign (null).
