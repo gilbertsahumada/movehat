@@ -10,7 +10,7 @@ import { validatePathSafety } from "../core/shell.js";
 import { CliExecutionError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
-import { logger } from "../ui/index.js";
+import { logger, isVerbose } from "../ui/index.js";
 import {
   writeTempKeyFile,
   removeKeyFile,
@@ -132,8 +132,11 @@ export async function runMoveScript(
         { adapter: options.adapter }
       );
       scriptOut = result.stdout;
-      if (result.stdout) console.log(result.stdout.trim());
-      if (result.stderr) console.error(result.stderr.trim());
+      // Both streams gated behind isVerbose(); Movement CLI uses
+      // stderr for progress messages too. Real failures throw via
+      // CliExecutionError and are surfaced from the catch below.
+      if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
+      if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
     } finally {
       // Observable cleanup — emit a warning if the unlink failed and
       // the file is still on disk (private key would persist silently
@@ -167,7 +170,7 @@ export async function runMoveScript(
     return out;
   } catch (error) {
     if (error instanceof CliExecutionError) {
-      if (error.stdoutPreview) console.log(error.stdoutPreview);
+      if (error.stdoutPreview) logger.info(error.stdoutPreview, 2);
       logger.error(`Failed to run Move script: ${error.message}\n${error.stderr}`);
     } else {
       const err = error instanceof Error ? error : new Error(String(error));

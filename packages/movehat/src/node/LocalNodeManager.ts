@@ -6,7 +6,16 @@ import {
   type ChildProcessAdapter,
   type SpawnedProcess,
 } from "../utils/childProcessAdapter.js";
-import { logger } from "../ui/index.js";
+import { logger, isVerbose, colors, symbols } from "../ui/index.js";
+import { withTimedSpinner, withSpinner } from "../ui/spinner.js";
+
+/**
+ * Substrings that always surface from the movement subprocess regardless
+ * of verbosity. These are signals the user must see to debug a stuck
+ * startup (panic, fatal, address-in-use). Tested in
+ * __tests__/LocalNodeManager.test.ts to guard against silent regressions.
+ */
+const CRITICAL_NODE_OUTPUT = /panic|fatal|address already in use|EADDRINUSE/i;
 
 export interface LocalNodeOptions {
   testDir?: string;           // Directory for node data (default: .movehat/local-node)
@@ -86,7 +95,7 @@ export class LocalNodeManager {
    */
   async start(): Promise<LocalNodeInfo> {
     if (this.spawned) {
-      console.log("Local node already running");
+      logger.info("Local node already running");
       return this.getNodeInfo();
     }
 
@@ -98,11 +107,11 @@ export class LocalNodeManager {
 
     try {
       logger.newline();
-      logger.step("Starting local Movement node...");
-      logger.plain(`   Test directory: ${this.options.testDir}`);
-      logger.plain(`   RPC port: ${this.options.apiPort}`);
-      logger.plain(`   Faucet port: ${this.options.faucetPort}`);
-      logger.plain(`   Ready port: ${this.options.readyPort}`);
+      logger.step("Starting local Movement node");
+      logger.kv("Test directory", this.options.testDir, 2);
+      logger.kv("RPC port", String(this.options.apiPort), 2);
+      logger.kv("Faucet port", String(this.options.faucetPort), 2);
+      logger.kv("Ready port", String(this.options.readyPort), 2);
       logger.newline();
 
       // Clean state if force restart
@@ -133,19 +142,43 @@ export class LocalNodeManager {
         stdio: this.options.silent ? "ignore" : "pipe",
       });
 
-      // Handle process output
+      // Subprocess output handling (see §9 Console UX in CLAUDE.md):
+      //   - stdout chatter is hidden by default; gated by isVerbose()
+      //   - lines matching CRITICAL_NODE_OUTPUT always surface as warnings
+      //     so the user is never silenced through a real failure
+      //   - stderr is always surfaced (real signal), modulo benign WARN
+      //     lines that the movement binary emits during normal startup
       if (!this.options.silent && this.spawned.stdout && this.spawned.stderr) {
         this.spawned.stdout.on("data", (data: Buffer) => {
           const output = data.toString().trim();
-          if (output) {
-            console.log(`[Node] ${output}`);
+          if (!output) return;
+          if (CRITICAL_NODE_OUTPUT.test(output)) {
+            logger.warning(output);
+            return;
+          }
+          if (isVerbose()) {
+            for (const line of output.split("\n")) {
+              if (line) console.log(`  ${colors.muted(symbols.pointer + " " + line)}`);
+            }
           }
         });
 
         this.spawned.stderr.on("data", (data: Buffer) => {
           const output = data.toString().trim();
-          if (output && !output.includes("WARN")) {
-            console.error(`[Node Error] ${output}`);
+          if (!output) return;
+          // Movement CLI uses stderr for both progress messages
+          // ("Applying post startup steps...", "Compiling...") and
+          // real errors. Stream channel alone isn't a reliable
+          // signal — gate routine lines behind verbosity, escalate
+          // anything matching CRITICAL_NODE_OUTPUT regardless.
+          if (CRITICAL_NODE_OUTPUT.test(output)) {
+            logger.error(output);
+            return;
+          }
+          if (isVerbose()) {
+            for (const line of output.split("\n")) {
+              if (line) console.error(`  ${colors.muted(symbols.pointer + " " + line)}`);
+            }
           }
         });
       }
@@ -161,11 +194,13 @@ export class LocalNodeManager {
         this.spawned = null;
       });
 
-      // Wait for node to be ready
-      logger.step("Waiting for node to be ready...");
-      await this.waitForReady(60000); // 60 second timeout
+      // Wait for node to be ready — wrapped in withTimedSpinner so the
+      // user sees live elapsed-time feedback while subprocess chatter is
+      // hidden in non-verbose mode.
+      await withTimedSpinner("Waiting for node to be ready", () =>
+        this.waitForReady(60000)
+      );
 
-      logger.success("Local Movement node is ready!");
       logger.newline();
 
       this.starting = false;
@@ -303,7 +338,9 @@ export class LocalNodeManager {
       }
 
       const result = await response.json();
-      logger.success(`Funded ${address} with ${amount} octas`, 2);
+      if (isVerbose()) {
+        logger.success(`Funded ${address} with ${amount} octas`, 2);
+      }
 
       return result;
     } catch (error) {
@@ -317,13 +354,15 @@ export class LocalNodeManager {
    */
   async fundAccounts(accounts: (Account | string)[], amount: number = 100_000_000): Promise<void> {
     logger.newline();
-    logger.step(`Funding ${accounts.length} accounts from local faucet...`);
-
-    for (const account of accounts) {
-      await this.fundAccount(account, amount);
-    }
-
-    logger.success("All accounts funded successfully");
+    await withSpinner(
+      `Funding ${accounts.length} accounts from local faucet`,
+      async () => {
+        for (const account of accounts) {
+          await this.fundAccount(account, amount);
+        }
+      },
+      `Funded ${accounts.length} accounts (${(amount / 1e8).toFixed(0)} APT each)`,
+    );
     logger.newline();
   }
 

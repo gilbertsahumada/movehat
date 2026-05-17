@@ -1,6 +1,7 @@
 import http from 'http';
 import { URL } from 'url';
 import { ForkManager } from './manager.js';
+import { logger } from '../ui/index.js';
 
 export interface ForkServerOptions {
   /**
@@ -66,16 +67,17 @@ export class ForkServer {
     this.forkManager.load();
     const metadata = this.forkManager.getMetadata();
 
-    console.log(`\nStarting Fork Server...`);
-    console.log(`  Network: ${metadata.network}`);
-    console.log(`  Chain ID: ${metadata.chainId}`);
-    console.log(`  Ledger Version: ${metadata.ledgerVersion}`);
-    console.log(`  Forked at: ${metadata.createdAt}`);
+    logger.newline();
+    logger.phase("Fork Server");
+    logger.kv("Network", metadata.network, 2);
+    logger.kv("Chain ID", String(metadata.chainId), 2);
+    logger.kv("Ledger Version", String(metadata.ledgerVersion), 2);
+    logger.kv("Forked at", metadata.createdAt, 2);
 
     this.server = http.createServer((req, res) => {
       this.handleRequest(req, res).catch((error) => {
         // Log full error server-side for diagnostics
-        console.error(`Error handling request:`, error);
+        logger.error(`Error handling request: ${error instanceof Error ? error.message : String(error)}`);
 
         // Only send response if headers haven't been sent yet
         if (!res.headersSent) {
@@ -124,13 +126,15 @@ export class ForkServer {
             : isIpv6
               ? `[${this.host}]`
               : this.host;
-        console.log(`\nFork Server listening on http://${displayHost}:${this.port}`);
-        console.log(`  Bound interface: ${this.host}`);
-        console.log(`  Ledger Info: http://${displayHost}:${this.port}/v1/`);
+        logger.newline();
+        logger.success(`Fork Server listening on http://${displayHost}:${this.port}`);
+        logger.kv("Bound interface", this.host, 2);
+        logger.kv("Ledger Info", `http://${displayHost}:${this.port}/v1/`, 2);
         if (this.host === '0.0.0.0') {
-          console.warn(`  Server is bound to 0.0.0.0 — fork state is reachable from the LAN.`);
+          logger.warning("Server is bound to 0.0.0.0 — fork state is reachable from the LAN.", 2);
         }
-        console.log(`\nPress Ctrl+C to stop`);
+        logger.newline();
+        logger.info("Press Ctrl+C to stop");
         resolve();
       });
     });
@@ -143,7 +147,8 @@ export class ForkServer {
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(() => {
-          console.log('\nFork Server stopped');
+          logger.newline();
+          logger.success("Fork Server stopped");
           resolve();
         });
       } else {
@@ -172,8 +177,9 @@ export class ForkServer {
     const url = new URL(req.url || '/', `http://localhost:${this.port}`);
     const pathname = url.pathname;
 
-    // Log request
-    console.log(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
+    // Log request — plain so the fork-server access log retains its
+    // grep-friendly line shape (timestamp + method + path, no symbol).
+    logger.plain(`[${new Date().toISOString()}] ${req.method} ${pathname}`);
 
     this.applyCors(req, res);
 
@@ -216,7 +222,7 @@ export class ForkServer {
       }
     } catch (error) {
       // Log full error server-side for diagnostics
-      console.error('Error handling request:', error);
+      logger.error(`Error handling request: ${error instanceof Error ? error.message : String(error)}`);
 
       // Send generic error to client (don't expose internal details)
       this.sendError(res, 500, 'Internal server error');

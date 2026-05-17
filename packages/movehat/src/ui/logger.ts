@@ -7,6 +7,14 @@ import { coloredSymbol, symbols } from './symbols.js';
 export type LogLevel = 'info' | 'success' | 'error' | 'warning' | 'debug';
 
 /**
+ * Verbosity level for subprocess output and gray-prefixed chatter.
+ * - `quiet`   — reserved; currently behaves like `normal`
+ * - `normal`  — default; system logs only, subprocess chatter hidden
+ * - `verbose` — surface subprocess stdout with a muted gray `›` prefix
+ */
+export type Verbosity = 'quiet' | 'normal' | 'verbose';
+
+/**
  * Logger configuration options
  */
 export interface LoggerConfig {
@@ -16,6 +24,8 @@ export interface LoggerConfig {
   level?: LogLevel;
   /** Include timestamps in log messages */
   timestamp?: boolean;
+  /** Verbosity level for subprocess output */
+  verbosity?: Verbosity;
 }
 
 /**
@@ -25,7 +35,17 @@ let config: LoggerConfig = {
   silent: false,
   level: 'info',
   timestamp: false,
+  verbosity: process.env.MOVEHAT_VERBOSE === '1' ? 'verbose' : 'normal',
 };
+
+/**
+ * Whether subprocess chatter should reach the user's terminal.
+ * Honors both the in-process config (set by the `-v` CLI flag's
+ * preAction hook) and the `MOVEHAT_VERBOSE=1` env var (which lets
+ * callers opt in before the CLI parses args, e.g. in shell scripts).
+ */
+export const isVerbose = (): boolean =>
+  config.verbosity === 'verbose' || process.env.MOVEHAT_VERBOSE === '1';
 
 /**
  * Configure logger globally
@@ -187,6 +207,45 @@ export const section = (title: string): void => {
 };
 
 /**
+ * Width of the `━` rule used by `phase` and `divider`. Matched to a
+ * comfortable terminal width that fits in a side-by-side dev layout.
+ */
+const PHASE_RULE_WIDTH = 52;
+
+/**
+ * Single muted horizontal rule. Use to close out a phase or to
+ * visually separate output sections.
+ */
+export const divider = (): void => {
+  if (config.silent) return;
+  console.log(colors.muted('━'.repeat(PHASE_RULE_WIDTH)));
+};
+
+/**
+ * Phase header — renders a muted top rule, a bold brand-colored title
+ * indented two spaces, and a muted bottom rule. Use at top-level phase
+ * boundaries (local node start, deploy flow, test orchestrator
+ * sections) so the user can visually anchor where one phase ends and
+ * the next begins.
+ *
+ * @param title - Phase title (e.g. "Local Movement node")
+ *
+ * @example
+ * logger.phase('Local Movement node');
+ * // Renders:
+ * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * //   Local Movement node
+ * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+export const phase = (title: string): void => {
+  if (config.silent) return;
+  const rule = colors.muted('━'.repeat(PHASE_RULE_WIDTH));
+  console.log(rule);
+  console.log(`  ${colors.brandBright(title)}`);
+  console.log(rule);
+};
+
+/**
  * Key-value pair
  * Use for displaying structured data
  *
@@ -235,6 +294,7 @@ export const item = (text: string, indent: number = 0): void => {
  */
 export const logger = {
   configure: configureLogger,
+  isVerbose,
   info,
   success,
   error,
@@ -243,6 +303,8 @@ export const logger = {
   plain,
   newline,
   section,
+  phase,
+  divider,
   kv,
   item,
 };
