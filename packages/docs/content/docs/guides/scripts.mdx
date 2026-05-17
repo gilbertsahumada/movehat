@@ -34,7 +34,7 @@ async function main() {
     const contract = harness.runtime.getContract(deployment.address, "counter");
     await contract.call(harness.runtime.account, "init", []);
 
-    // 3. Verify via the SDK-backed view path
+    // 3. Verify
     const [value] = await harness.runViewFunction({
       function: `${deployment.address}::counter::getValue`,
     });

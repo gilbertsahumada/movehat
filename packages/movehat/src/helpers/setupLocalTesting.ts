@@ -31,10 +31,8 @@ function resolveForkRpcUrl(
 /**
  * Context returned by {@link setupLocalTesting}.
  *
- * Replaces the module-scoped singletons that previously tracked the
- * "current" local node / fork server / fork manager. Each invocation now
- * owns its own handles, so two parallel `setupLocalTesting` calls in the
- * same process do not trample each other.
+ * Each invocation owns its own handles, so two parallel `setupLocalTesting`
+ * calls in the same process do not trample each other.
  *
  * @public The `runtime` and `teardown` fields are the supported surface.
  *         `localNode`, `forkServer`, and `forkManager` are exposed for
