@@ -65,7 +65,7 @@ describe("logger.phase / logger.divider", () => {
     phase("Local Movement node");
     expect(logSpy).toHaveBeenCalledTimes(3);
 
-    const calls = logSpy.mock.calls.map((c) => String(c[0]));
+    const calls = logSpy.mock.calls.map((c: unknown[]) => String(c[0]));
     // The title line carries the supplied text after the two-space indent.
     expect(calls[1]).toContain("Local Movement node");
     // Top and bottom rules should be identical (same width, same color).

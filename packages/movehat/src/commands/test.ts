@@ -97,8 +97,7 @@ async function showTestMenu(): Promise<TestType | undefined> {
  */
 async function runMoveTestsOnly(filter?: string): Promise<void> {
   logger.newline();
-  console.log(colors.bold("Move Unit Tests"));
-  console.log(colors.muted("─".repeat(50)));
+  logger.phase("Move Unit Tests");
   logger.newline();
 
   try {
@@ -118,8 +117,7 @@ async function runMoveTestsOnly(filter?: string): Promise<void> {
  */
 async function runTypeScriptTestsOnly(watch: boolean = false): Promise<void> {
   logger.newline();
-  console.log(colors.bold("TypeScript Integration Tests"));
-  console.log(colors.muted("─".repeat(50)));
+  logger.phase("TypeScript Integration Tests");
 
   if (!watch) {
     logger.newline();
@@ -146,13 +144,11 @@ async function runTypeScriptTestsOnly(watch: boolean = false): Promise<void> {
  */
 async function runAllTests(filter?: string): Promise<void> {
   logger.newline();
-  console.log(colors.bold("Running All Tests"));
-  console.log(colors.muted("═".repeat(50)));
+  logger.phase("Running All Tests");
 
   // Section 1: Move Tests
   logger.newline();
-  console.log(`${colors.brandBright("1.")} ${colors.bold("Move Unit Tests")}`);
-  console.log(colors.muted("─".repeat(50)));
+  logger.phase("1. Move Unit Tests");
   logger.newline();
 
   try {
@@ -163,28 +159,25 @@ async function runAllTests(filter?: string): Promise<void> {
   } catch (error) {
     logger.newline();
     logger.error("Move tests failed");
-    console.log(colors.muted("═".repeat(50)));
+    logger.divider();
     process.exit(1);
   }
 
   // Section 2: TypeScript Tests
   logger.newline();
-  console.log(colors.muted("═".repeat(50)));
-  logger.newline();
-  console.log(`${colors.brandBright("2.")} ${colors.bold("TypeScript Integration Tests")}`);
-  console.log(colors.muted("─".repeat(50)));
+  logger.phase("2. TypeScript Integration Tests");
   logger.newline();
 
   try {
     await runTypeScriptTests(false);
     logger.newline();
-    console.log(colors.muted("═".repeat(50)));
+    logger.divider();
     logger.newline();
     logger.success("All tests passed!");
     logger.newline();
   } catch (error) {
     logger.newline();
-    console.log(colors.muted("═".repeat(50)));
+    logger.divider();
     const message = error instanceof Error ? error.message : String(error);
     logger.error(message);
     process.exit(1);
@@ -198,8 +191,8 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
   const testDir = join(process.cwd(), "tests");
 
   if (!existsSync(testDir)) {
-    console.log(`${colors.muted(symbols.info)} No TypeScript tests found ${colors.muted("(tests/ directory not found)")}`);
-    console.log(`   ${colors.muted("Skipping TypeScript tests...")}`);
+    logger.plain(`${colors.muted(symbols.info)} No TypeScript tests found ${colors.muted("(tests/ directory not found)")}`);
+    logger.plain(`   ${colors.muted("Skipping TypeScript tests...")}`);
     logger.newline();
     return;
   }
@@ -208,7 +201,7 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
 
   if (!existsSync(mochaPath)) {
     logger.error("Mocha not found in project dependencies");
-    console.log(`   ${colors.muted("Install it with:")} ${colors.info("npm install --save-dev mocha")}`);
+    logger.plain(`   ${colors.muted("Install it with:")} ${colors.info("npm install --save-dev mocha")}`);
     throw new Error("Mocha not found");
   }
 
@@ -232,7 +225,7 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
       process.exit(1);
     });
 
-    console.log(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
+    logger.plain(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
     logger.newline();
     return;
   }
