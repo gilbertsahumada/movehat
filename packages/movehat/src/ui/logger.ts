@@ -207,6 +207,45 @@ export const section = (title: string): void => {
 };
 
 /**
+ * Width of the `━` rule used by `phase` and `divider`. Matched to a
+ * comfortable terminal width that fits in a side-by-side dev layout.
+ */
+const PHASE_RULE_WIDTH = 52;
+
+/**
+ * Single muted horizontal rule. Use to close out a phase or to
+ * visually separate output sections.
+ */
+export const divider = (): void => {
+  if (config.silent) return;
+  console.log(colors.muted('━'.repeat(PHASE_RULE_WIDTH)));
+};
+
+/**
+ * Phase header — renders a muted top rule, a bold brand-colored title
+ * indented two spaces, and a muted bottom rule. Use at top-level phase
+ * boundaries (local node start, deploy flow, test orchestrator
+ * sections) so the user can visually anchor where one phase ends and
+ * the next begins.
+ *
+ * @param title - Phase title (e.g. "Local Movement node")
+ *
+ * @example
+ * logger.phase('Local Movement node');
+ * // Renders:
+ * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * //   Local Movement node
+ * // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+export const phase = (title: string): void => {
+  if (config.silent) return;
+  const rule = colors.muted('━'.repeat(PHASE_RULE_WIDTH));
+  console.log(rule);
+  console.log(`  ${colors.brandBright(title)}`);
+  console.log(rule);
+};
+
+/**
  * Key-value pair
  * Use for displaying structured data
  *
@@ -264,6 +303,8 @@ export const logger = {
   plain,
   newline,
   section,
+  phase,
+  divider,
   kv,
   item,
 };
