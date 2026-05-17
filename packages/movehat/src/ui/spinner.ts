@@ -104,6 +104,53 @@ export const withSpinner = async <T>(
 };
 
 /**
+ * Execute async task with a spinner that updates its label with
+ * elapsed seconds while the task runs. Use for long-running phases
+ * (local node startup, publish + tx wait) where the user wants
+ * visible progress feedback in lieu of subprocess chatter.
+ *
+ * Pairs with the `§9` console-UX convention: any phase that
+ * empirically takes ≥3s in normal use should wrap its body in
+ * `withTimedSpinner` so the terminal never goes silent while work
+ * happens.
+ *
+ * @param label - Stable label shown next to the spinner (e.g. "Starting node")
+ * @param task - Async function to execute
+ * @param indent - Number of spaces to indent (default: 0)
+ * @returns Promise resolving to task result
+ *
+ * @example
+ * await withTimedSpinner('Starting local node', async () => {
+ *   await this.waitForReady(60_000);
+ * });
+ * // Renders: ⠋ Starting local node — 0.0s ... ⠼ Starting local node — 14.2s
+ * // On success: ✔ Starting local node (14.2s)
+ * // On error:   ✖ <error.message>
+ */
+export const withTimedSpinner = async <T>(
+  label: string,
+  task: () => Promise<T>,
+  indent: number = 0
+): Promise<T> => {
+  const start = Date.now();
+  const spin = spinner({ text: `${label} — 0.0s`, indent });
+  const timer = setInterval(() => {
+    spin.text = `${label} — ${((Date.now() - start) / 1000).toFixed(1)}s`;
+  }, 500);
+  try {
+    const result = await task();
+    spin.succeed(`${label} (${((Date.now() - start) / 1000).toFixed(1)}s)`);
+    return result;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    spin.fail(errMsg);
+    throw error;
+  } finally {
+    clearInterval(timer);
+  }
+};
+
+/**
  * Spinner chain for sequential operations
  * Manages multiple spinners in sequence
  */
