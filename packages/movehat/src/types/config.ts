@@ -77,7 +77,7 @@ export interface LocalTestOptions {
 
     // Common options (both modes)
     autoFund?: boolean;                 // Auto-fund accounts (default: true)
-    defaultBalance?: number;            // Default balance in octas (default: 100_000_000 = 100 APT)
+    defaultBalance?: number;            // Default balance in octas (default: 100_000_000 = 1 MOVE)
     autoDeploy?: readonly string[];     // Modules to auto-deploy (accepts readonly arrays)
     accountLabels?: readonly string[];  // Labels for pre-generated accounts (default: ['deployer', 'alice', 'bob'])
 }

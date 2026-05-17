@@ -1,6 +1,6 @@
 # counter-example
 
-A working Movehat project scaffolded around a minimal Move module (`hello_blockchain::counter`). Each script in `scripts/` exercises a different Movehat primitive end-to-end against the example contract.
+A working Movehat project scaffolded around several Move modules under the `hello_blockchain` named address — `counter`, `greeting`, `message` (each with its own test spec), plus `registry` (source only, used by the [multi-contract tutorial](https://movehat.org/docs/guides/multi-contract)). Each script in `scripts/` exercises a different Movehat primitive end-to-end against the example contracts.
 
 ## Scripts
 

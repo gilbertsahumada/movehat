@@ -275,7 +275,7 @@ export class ForkManager {
    * @example
    * await forkManager.fundMultipleAccounts(
    *   ["0x123...", "0x456..."],
-   *   100_000_000 // 100 APT
+   *   100_000_000 // 1 MOVE
    * );
    */
   async fundMultipleAccounts(
