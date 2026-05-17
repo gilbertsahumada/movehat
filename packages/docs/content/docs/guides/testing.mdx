@@ -77,8 +77,7 @@ describe("Counter Contract", () => {
   });
 
   it("should initialize with value 0 (via harness.runViewFunction)", async () => {
-    // runViewFunction returns the raw unknown[] tuple from aptos.view —
-    // destructure for singletons.
+    // aptos.view returns unknown[] even for single-value views
     const [value] = await harness.runViewFunction({
       function: `${counter.moduleAddress}::counter::get`,
       functionArguments: [deployer.accountAddress.toString()],

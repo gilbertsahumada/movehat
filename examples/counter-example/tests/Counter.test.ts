@@ -4,11 +4,9 @@ import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
 
 /**
- * Uses the Harness API: Harness.createLocal with autoDeploy. Same
- * Publisher-based publish path the older setupTestFixture flow used.
- * The sibling tests (greeting.test.ts, message.test.ts) stay on
- * setupTestFixture to demonstrate that the older API continues to
- * work side-by-side.
+ * Uses the Harness API: Harness.createLocal with autoDeploy. Sibling
+ * tests (greeting.test.ts, message.test.ts) use setupTestFixture to
+ * demonstrate both surfaces in the same project.
  *
  * For the code-object deploy path (`harness.deployCodeObject`), see
  * scripts/deploy-counter.ts in this directory.
@@ -36,8 +34,7 @@ describe("Counter Contract", () => {
   });
 
   it("should initialize with value 0 (via harness.runViewFunction)", async () => {
-    // Demonstrate the new SDK-backed view path. Returns the raw
-    // unknown[] tuple from aptos.view — destructure for singletons.
+    // aptos.view returns unknown[] even for single-value views
     const [value] = await harness.runViewFunction({
       function: `${counterAddr}::counter::get`,
       functionArguments: [deployer.accountAddress.toString()],
