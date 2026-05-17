@@ -21,6 +21,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] - 2026-05-17
+
+### Added
+
+- Global `-v` / `--verbose` CLI flag and `MOVEHAT_VERBOSE=1` env var.
+  Opt-in surfacing of subprocess output from `movement node run-localnet`,
+  `aptos move build`, and `aptos move publish` for debugging slow startups,
+  build hangs, or git-dependency downloads. By default this output is hidden.
+- `withTimedSpinner` UI helper (`packages/movehat/src/ui/spinner.ts`) wrapping
+  long async tasks with a spinner that updates its label every 500ms with the
+  elapsed wall-clock time. Replaces the silent 10-30s wait during local-node
+  startup with live progress feedback.
+- `logger.phase(title)` and `logger.divider()` helpers (`packages/movehat/src/ui/logger.ts`)
+  rendering consistent `━` rules + bold brand-colored titles at phase
+  boundaries. Replaces the ad-hoc `console.log(colors.bold(...))` +
+  `console.log(colors.muted("─".repeat(50)))` pattern.
+- CLAUDE.md §9 — Console UX conventions. Codifies the five-source taxonomy
+  (system / subprocess / user / SDK warnings / mocha) and the rules every
+  future PR must follow when emitting to the user's terminal.
+- 14 new unit tests covering verbosity helpers (`isVerbose()`, `phase()`,
+  `divider()`) and subprocess output filtering (`LocalNodeManager` stdout/
+  stderr handlers, critical-signal escalation regardless of verbosity).
+
+### Changed
+
+- Local-node startup output is now spinner-driven. Routine `[Node] ...`
+  chatter from the `movement` subprocess is hidden by default; pass `-v` to
+  see it (muted gray `›` prefix). Critical signals (`panic`, `fatal`,
+  `address already in use`, `EADDRINUSE`) always surface as warnings
+  regardless of verbosity — the user is never silenced through a real failure.
+- Publisher's `aptos move build` and `aptos move publish` steps wrapped in
+  `withSpinner`. Their stdout/stderr passthroughs gated behind `isVerbose()`.
+- `commands/test.ts` orchestrator headers use `logger.phase` (replaces
+  ad-hoc bold + repeated rule lines).
+- `setupLocalTesting` opens with a `logger.phase` banner.
+- Subprocess `stderr` is no longer assumed to be an error. Movement CLI
+  emits informational progress messages on stderr ("Applying post startup
+  steps...", "Compiling, may take a little while...") alongside real errors.
+  Both stdout and stderr now follow the same verbosity gate; only lines
+  matching critical signals are escalated.
+
+### Fixed
+
+- `publish.yml` post-publish "Commit version bump back" step no longer fails
+  when `origin/main`'s `package.json` already matches the released version
+  (the typical release-via-PR flow). Previously the unconditional
+  `git stash push → checkout main → rebase → stash pop` dance produced
+  "No stash entries found" when there was no diff to stash and exited 1.
+  An early-exit guard now compares the tag's version to main's version and
+  exits cleanly when they match. The original stash/rebase/pop is preserved
+  for the edge case of a tag created from a feature branch whose version
+  bump never landed on main. Closes
+  [#174](https://github.com/gilbertsahumada/movehat/issues/174).
+
+### Internal
+
+- 26 raw `console.log` / `console.error` / `console.warn` callsites migrated
+  to the equivalent `logger.*` method across `fork/manager.ts`,
+  `fork/server.ts`, `fork/test.ts`, `core/config.ts`, `core/deployments.ts`,
+  `harness/script.ts`, `harness/codeObject.ts`. Secondary §9 sweep across
+  `commands/test-move.ts`, `helpers/move-tests.ts`, `core/AccountManager.ts`,
+  `commands/fork/serve.ts`, `helpers/version-check.ts` tracked in
+  [#223](https://github.com/gilbertsahumada/movehat/issues/223).
+- `formatters.divider` unexported from the wildcard `ui/` namespace (it
+  conflicted with the new `logger.divider`); the function stays accessible
+  as a local helper inside `formatters.ts` for `formatters.sectionHeader`.
+
+---
+
 ## [0.2.2] - 2026-05-16
 
 ### Added

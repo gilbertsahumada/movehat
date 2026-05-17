@@ -3,6 +3,7 @@ import { join } from "path";
 import { existsSync, statSync } from "fs";
 import { Account, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
+import { logger } from "../ui/index.js";
 
 interface ConfigCacheEntry {
   mtimeMs: number;
@@ -132,7 +133,7 @@ export async function resolveNetworkConfig(
       url: "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
     };
-    console.log(`testnet not found in config - using default Movement testnet configuration`);
+    logger.info("testnet not found in config - using default Movement testnet configuration");
   }
 
   // Special case: Auto-generate config for local fork server
@@ -141,7 +142,7 @@ export async function resolveNetworkConfig(
       url: "http://localhost:8080/v1",
       chainId: "local",
     };
-    console.log(`Local network not found in config - using default fork server configuration`);
+    logger.info("Local network not found in config - using default fork server configuration");
   }
 
   if (!networkConfig) {
@@ -187,8 +188,10 @@ export async function resolveNetworkConfig(
       // 3. Deterministic = consistent test results
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
       accounts = [testPrivateKey];
-      console.log(`\n[TESTNET] Using auto-generated test account (safe for testing only)`);
-      console.log(`[TESTNET] For mainnet, set PRIVATE_KEY in .env\n`);
+      logger.newline();
+      logger.warning("[TESTNET] Using auto-generated test account (safe for testing only)");
+      logger.warning("[TESTNET] For mainnet, set PRIVATE_KEY in .env");
+      logger.newline();
     } else {
       // For any other network (especially mainnet), REQUIRE explicit configuration
       // This prevents accidentally using the test key on production networks
@@ -273,8 +276,8 @@ function deriveAccountAddress(privateKeyHex: string | undefined): string {
     // The private key may have come from several sources (network.accounts,
     // global accounts, PRIVATE_KEY env, auto-generated testnet key). Keep
     // the hint generic so it never points at the wrong source.
-    console.warn(
-      `[movehat] Could not derive account address from the resolved private key: ${
+    logger.warning(
+      `Could not derive account address from the resolved private key: ${
         (err as Error).message
       }. Verify the key configured for this network is a valid Ed25519 private key (with or without the "ed25519-priv-" prefix).`
     );

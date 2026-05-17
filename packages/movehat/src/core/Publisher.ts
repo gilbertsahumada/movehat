@@ -10,7 +10,8 @@ import {
 import { validatePathSafety } from "./shell.js";
 import { CliExecutionError, ModuleAlreadyDeployedError, PostPublishError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
-import { logger } from "../ui/index.js";
+import { logger, isVerbose } from "../ui/index.js";
+import { withSpinner } from "../ui/spinner.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 import {
   writeTempKeyFile,
@@ -122,19 +123,23 @@ export class Publisher {
           : [];
 
       // Build first with named addresses
-      logger.step("Building package...");
-      const buildResult = await runCli(
-        {
-          command: "movement",
-          args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
-          timeoutMs: 120000, // 2 minutes for git dependency downloads
-        },
-        { adapter: this.deps.adapter }
+      const buildResult = await withSpinner(
+        "Building package",
+        () =>
+          runCli(
+            {
+              command: "movement",
+              args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
+              timeoutMs: 120000, // 2 minutes for git dependency downloads
+            },
+            { adapter: this.deps.adapter }
+          ),
       );
-      if (buildResult.stdout) console.log(buildResult.stdout.trim());
+      if (isVerbose() && buildResult.stdout) {
+        logger.info(buildResult.stdout.trim(), 2);
+      }
 
       // Publish using direct parameters (avoid config file issues)
-      logger.step("Publishing to blockchain...");
 
       // Format the private key into AIP-80 shape so the Movement CLI
       // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
@@ -179,31 +184,41 @@ export class Publisher {
         // stdout/stderr redaction still applies as defense in depth
         // for any `ed25519-priv-…` substring that surfaces in CLI
         // output (Movement CLI sometimes echoes the key on error).
-        const publishResult = await runCli(
-          {
-            command: "movement",
-            args: [
-              "move",
-              "publish",
-              "--package-dir",
-              safeDir,
-              "--url",
-              config.rpc,
-              "--private-key-file",
-              keyFilePath,
-              "--sender-account",
-              deployerAddress,
-              "--assume-yes",
-              ...namedAddrArgs,
-            ],
-            timeoutMs: 120000, // 2 minutes for blockchain transactions
-          },
-          { adapter: this.deps.adapter }
+        const publishResult = await withSpinner(
+          "Publishing to blockchain",
+          () =>
+            runCli(
+              {
+                command: "movement",
+                args: [
+                  "move",
+                  "publish",
+                  "--package-dir",
+                  safeDir,
+                  "--url",
+                  config.rpc,
+                  "--private-key-file",
+                  keyFilePath,
+                  "--sender-account",
+                  deployerAddress,
+                  "--assume-yes",
+                  ...namedAddrArgs,
+                ],
+                timeoutMs: 120000, // 2 minutes for blockchain transactions
+              },
+              { adapter: this.deps.adapter }
+            ),
         );
         publishOut = publishResult.stdout;
         publishErr = publishResult.stderr;
-        if (publishOut) console.log(publishOut.trim());
-        if (publishErr) console.error(publishErr.trim());
+        // Both stdout and stderr from the publish subprocess are gated
+        // behind isVerbose() — Movement CLI emits progress to both
+        // streams ("Compiling, may take a little while..."), so a
+        // visible stderr line is not by itself a failure signal. The
+        // surrounding withSpinner converts the runCli throw on real
+        // failure into the visible spinner.fail() output instead.
+        if (isVerbose() && publishOut) logger.info(publishOut.trim(), 2);
+        if (isVerbose() && publishErr) logger.info(publishErr.trim(), 2);
       } finally {
         // Unlink the temp key file via the observable cleanup helper.
         // ENOENT and other already-gone outcomes are benign (null).
@@ -279,7 +294,7 @@ export class Publisher {
       if (error instanceof CliExecutionError) {
         // stdout/stderr are already redacted by runCli before reaching here,
         // so this branch is safe to log verbatim.
-        if (error.stdoutPreview) console.log(error.stdoutPreview);
+        if (error.stdoutPreview) logger.info(error.stdoutPreview, 2);
         logger.error(`Failed to publish module: ${error.message}\n${error.stderr}`);
       } else {
         // Preserve existing behaviour for non-CLI errors (filesystem write

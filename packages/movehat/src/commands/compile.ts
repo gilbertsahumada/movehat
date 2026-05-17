@@ -2,7 +2,8 @@ import fs from "fs";
 import path from "path";
 import { loadUserConfig } from "../core/config.js";
 import { validatePathSafety } from "../core/shell.js";
-import { logger } from "../ui/index.js";
+import { logger, isVerbose } from "../ui/index.js";
+import { withSpinner } from "../ui/spinner.js";
 import { runCli } from "../utils/runCli.js";
 
 /**
@@ -195,24 +196,32 @@ async function runMovementBuild(
   args: readonly string[],
   cwd: string
 ): Promise<void> {
-  // Use throwOnNonZeroExit:false so we can log stdout/stderr in both
-  // success and failure paths, matching the behavior of the previous
-  // exec-based helper.
-  const result = await runCli(
-    {
-      command: "movement",
-      args,
-      cwd,
-      timeoutMs: 120000, // 2 minutes for git dependency downloads
-    },
-    { throwOnNonZeroExit: false }
+  // Use throwOnNonZeroExit:false so we can route stdout/stderr through
+  // the §9 verbosity gate ourselves. On failure we surface everything;
+  // on success the chatter is hidden unless isVerbose().
+  const result = await withSpinner("Compiling Move package", () =>
+    runCli(
+      {
+        command: "movement",
+        args,
+        cwd,
+        timeoutMs: 120000, // 2 minutes for git dependency downloads
+      },
+      { throwOnNonZeroExit: false }
+    ),
   );
 
-  if (result.stdout) console.log(result.stdout.trim());
-  if (result.stderr) console.error(result.stderr.trim());
-
   if (result.exitCode !== 0) {
+    // Build failed — show the user everything we have so they can debug.
+    if (result.stdout) logger.plain(result.stdout.trim());
+    if (result.stderr) logger.plain(result.stderr.trim());
     throw new Error(`movement move build exited with code ${result.exitCode}`);
+  }
+
+  // Success path: route output through the verbosity gate.
+  if (isVerbose()) {
+    if (result.stdout) logger.info(result.stdout.trim(), 2);
+    if (result.stderr) logger.info(result.stderr.trim(), 2);
   }
 }
 

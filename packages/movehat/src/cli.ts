@@ -50,6 +50,7 @@ program
   .version(version)
   .option('--network <name>', 'Network to use (testnet, mainnet, local, etc.)')
   .option('--redeploy', 'Force redeploy even if already deployed')
+  .option('-v, --verbose', 'Show subprocess output (movement node, aptos move) for debugging')
   .hook('preAction', (thisCommand) => {
     // Store network option in environment for commands to access
     const options = thisCommand.opts();
@@ -58,6 +59,9 @@ program
     }
     if (options.redeploy) {
       process.env.MH_CLI_REDEPLOY = 'true';
+    }
+    if (options.verbose) {
+      process.env.MOVEHAT_VERBOSE = '1';
     }
   });
 

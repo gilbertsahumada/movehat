@@ -95,9 +95,9 @@ export async function setupLocalTesting(
   const accountLabels = options.accountLabels || ["deployer", "alice", "bob"];
 
   logger.newline();
-  logger.step("Setting up local testing environment...");
-  logger.plain(`   Mode: ${mode}`);
-  logger.plain(`   Accounts: ${accountLabels.join(", ")}`);
+  logger.phase("Setting up local testing environment");
+  logger.kv("Mode", mode, 2);
+  logger.kv("Accounts", accountLabels.join(", "), 2);
   logger.newline();
 
   if (mode === 'local-node') {

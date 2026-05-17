@@ -86,9 +86,9 @@ export function saveDeployment(deployment: DeploymentInfo): void {
       `Deployment saved: deployments/${deployment.network}/${deployment.moduleName}.json`
     );
   } catch (error) {
-    console.error(
-      `Failed to save deployment for ${deployment.moduleName} on ${deployment.network} at ${filePath}:`,
-      error
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error(
+      `Failed to save deployment for ${deployment.moduleName} on ${deployment.network} at ${filePath}: ${msg}`
     );
     throw error;
   }
@@ -110,7 +110,8 @@ export function loadDeployment(network: string, moduleName: string): DeploymentI
     const content = readFileSync(filePath, "utf-8");
     return JSON.parse(content) as DeploymentInfo;
   } catch (error) {
-    console.error(`Failed to load deployment for ${moduleName} on ${network}:`, error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error(`Failed to load deployment for ${moduleName} on ${network}: ${msg}`);
     return null;
   }
 }

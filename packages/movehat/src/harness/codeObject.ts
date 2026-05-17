@@ -20,7 +20,7 @@ import {
 } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
-import { logger } from "../ui/index.js";
+import { logger, isVerbose } from "../ui/index.js";
 import {
   writeTempKeyFile,
   removeKeyFile,
@@ -206,7 +206,7 @@ async function executeMovementMoveObject(
       },
       { adapter: opts.adapter }
     );
-    if (buildResult.stdout) console.log(buildResult.stdout.trim());
+    if (isVerbose() && buildResult.stdout) logger.info(buildResult.stdout.trim(), 2);
 
     // Format the private key into AIP-80 shape so the Movement CLI
     // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
@@ -265,8 +265,11 @@ async function executeMovementMoveObject(
         { adapter: opts.adapter }
       );
       deployOut = result.stdout;
-      if (result.stdout) console.log(result.stdout.trim());
-      if (result.stderr) console.error(result.stderr.trim());
+      // Both streams gated behind isVerbose(); see §9 — stream channel
+      // is not by itself a failure signal. Real failures throw via
+      // CliExecutionError and are surfaced from the catch below.
+      if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
+      if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
     } finally {
       // Unlink via the observable helper — emit a warning if the file
       // could not be removed AND still exists on disk (private key
@@ -336,7 +339,7 @@ async function executeMovementMoveObject(
       throw error;
     }
     if (error instanceof CliExecutionError) {
-      if (error.stdoutPreview) console.log(error.stdoutPreview);
+      if (error.stdoutPreview) logger.info(error.stdoutPreview, 2);
       logger.error(
         `Failed to ${subcommand === "deploy-object" ? "deploy" : "upgrade"} module: ${error.message}\n${error.stderr}`
       );

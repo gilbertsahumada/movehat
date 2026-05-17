@@ -89,7 +89,7 @@ export class ForkManager {
 
     this.storage.saveMetadata(this.metadata);
 
-    console.log(`✓ Fork initialized at ledger version ${ledgerInfo.ledger_version}`);
+    logger.success(`Fork initialized at ledger version ${ledgerInfo.ledger_version}`);
   }
 
   /**
@@ -123,7 +123,7 @@ export class ForkManager {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
 
-      console.log(`  Fetching account ${normalizedAddress} from network...`);
+      logger.info(`Fetching account ${normalizedAddress} from network...`, 2);
       const accountData = await this.apiClient.getAccount(normalizedAddress);
 
       accountState = {
@@ -132,7 +132,7 @@ export class ForkManager {
       };
 
       this.storage.saveAccount(normalizedAddress, accountState);
-      console.log(`  ✓ Cached account ${normalizedAddress}`);
+      logger.success(`Cached account ${normalizedAddress}`, 2);
     }
 
     return accountState;
@@ -148,14 +148,14 @@ export class ForkManager {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
 
-      console.log(`  Fetching resource ${resourceType} for ${normalizedAddress}...`);
+      logger.info(`Fetching resource ${resourceType} for ${normalizedAddress}...`, 2);
 
       try {
         const resourceData = await this.apiClient.getAccountResource(normalizedAddress, resourceType);
         resource = resourceData.data;
 
         this.storage.saveResource(normalizedAddress, resourceType, resource);
-        console.log(`  ✓ Cached resource ${resourceType}`);
+        logger.success(`Cached resource ${resourceType}`, 2);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (msg.includes('404')) {
@@ -178,7 +178,7 @@ export class ForkManager {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
 
-      console.log(`  Fetching all resources for ${normalizedAddress}...`);
+      logger.info(`Fetching all resources for ${normalizedAddress}...`, 2);
       const resourcesList = await this.apiClient.getAccountResources(normalizedAddress);
 
       resources = {};
@@ -187,7 +187,7 @@ export class ForkManager {
       }
 
       this.storage.saveAllResources(normalizedAddress, resources);
-      console.log(`  ✓ Cached ${Object.keys(resources).length} resources`);
+      logger.success(`Cached ${Object.keys(resources).length} resources`, 2);
     }
 
     return resources;
@@ -196,7 +196,7 @@ export class ForkManager {
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);
-    console.log(`  ✓ Updated resource ${resourceType} for ${normalizedAddress}`);
+    logger.success(`Updated resource ${resourceType} for ${normalizedAddress}`, 2);
   }
 
   /** Adds to the existing balance rather than replacing it. */
@@ -258,7 +258,7 @@ export class ForkManager {
       this.storage.saveAccount(normalizedAddress, account);
     }
 
-    console.log(`  ✓ Funded ${normalizedAddress} with ${amount} coins`);
+    logger.success(`Funded ${normalizedAddress} with ${amount} coins`, 2);
   }
 
   listAccounts(): string[] {
@@ -335,7 +335,7 @@ export class ForkManager {
       };
 
       this.storage.saveAccount(normalizedAddress, newAccount);
-      console.log(`  ✓ Created new account ${normalizedAddress}`);
+      logger.success(`Created new account ${normalizedAddress}`, 2);
 
       return newAccount;
     }

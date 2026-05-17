@@ -176,7 +176,7 @@ export const indent = (text: string, spaces: number): string => {
  * console.log(divider(40, '='));
  * // ========================================
  */
-export const divider = (
+const divider = (
   width: number = 60,
   char: string = symbols.line
 ): string => {
