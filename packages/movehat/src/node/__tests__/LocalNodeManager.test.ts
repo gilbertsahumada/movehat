@@ -181,7 +181,7 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     expect(proc.stderr!.listenerCount("data")).toBe(0);
   });
 
-  it("start in non-silent mode wires stdout/stderr listeners that log events", async () => {
+  it("start in non-silent mode wires stdout/stderr listeners that respect §9 filtering", async () => {
     const { adapter, spawned } = buildFakeAdapter();
     stubFetchAlwaysOk();
     const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, silent: false });
@@ -192,18 +192,16 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     expect(proc.stdout!.listenerCount("data")).toBeGreaterThan(0);
     expect(proc.stderr!.listenerCount("data")).toBeGreaterThan(0);
 
-    // Drive a line through stdout — the manager's listener forwards to console.log.
-    proc.stdout!.emit("data", Buffer.from("local node ready\n"));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("local node ready"));
-
-    // stderr non-WARN line goes through console.error.
+    // stderr non-WARN line goes through console.error (real signal — always surfaced).
     proc.stderr!.emit("data", Buffer.from("real error\n"));
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("real error"));
 
-    // stderr WARN line should be filtered (no error log).
+    // stderr WARN-only line is filtered in quiet mode.
     errSpy.mockClear();
     proc.stderr!.emit("data", Buffer.from("WARN something\n"));
     expect(errSpy).not.toHaveBeenCalledWith(expect.stringContaining("WARN"));
+    // Detailed quiet/verbose filter behavior lives in the §9 describe
+    // block below; this test just locks the listener-wiring contract.
   });
 
   it("force-restart cleans the test directory before spawn", async () => {
@@ -449,5 +447,135 @@ describe("LocalNodeManager — fundAccount", () => {
     await mgr.fundAccounts(["0x1", "0x2", "0x3"], 100);
     // 1 ready + 3 mint calls = 4 total.
     expect(fetchFn.mock.calls.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("LocalNodeManager — subprocess output filtering (§9 console UX)", () => {
+  let tmpDir: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "movehat-localnode-filter-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    // Ensure quiet mode is the default for each test; the verbose tests
+    // set MOVEHAT_VERBOSE explicitly inside their own scope.
+    delete process.env.MOVEHAT_VERBOSE;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    delete process.env.MOVEHAT_VERBOSE;
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("hides routine stdout chatter from the movement node in quiet mode", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    logSpy.mockClear();
+
+    // Push routine chatter — exactly the noise we used to spam to stdout.
+    proc.stdout!.emit("data", Buffer.from("Loading aptos framework module"));
+    proc.stdout!.emit("data", Buffer.from("Compiling Move bytecode"));
+    proc.stdout!.emit("data", Buffer.from("aptos_account: account created"));
+
+    // None of these should have reached stdout (no `[Node]` prefix, no
+    // muted gray `›` prefix). The only console.log calls that may arise
+    // are from the spinner mock falling back to plain text — but since
+    // ora auto-disables in non-TTY (vitest is non-TTY), even those are
+    // suppressed.
+    const stdoutCalls = logSpy.mock.calls.flat().join(" ");
+    expect(stdoutCalls).not.toContain("Loading aptos framework module");
+    expect(stdoutCalls).not.toContain("Compiling Move bytecode");
+    expect(stdoutCalls).not.toContain("aptos_account: account created");
+  });
+
+  it("always surfaces panic / fatal lines as warnings, even in quiet mode", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    warnSpy.mockClear();
+
+    proc.stdout!.emit("data", Buffer.from("thread 'main' panicked at 'state corrupted'"));
+
+    const warnCalls = warnSpy.mock.calls.flat().join(" ");
+    expect(warnCalls).toContain("panicked");
+  });
+
+  it("surfaces 'address already in use' (port conflict) regardless of verbosity", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    warnSpy.mockClear();
+
+    proc.stdout!.emit(
+      "data",
+      Buffer.from("error: address already in use: 127.0.0.1:8080"),
+    );
+
+    const warnCalls = warnSpy.mock.calls.flat().join(" ");
+    expect(warnCalls).toContain("address already in use");
+  });
+
+  it("surfaces stdout chatter with gray prefix in verbose mode", async () => {
+    process.env.MOVEHAT_VERBOSE = "1";
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    logSpy.mockClear();
+
+    proc.stdout!.emit("data", Buffer.from("Loading aptos framework module"));
+
+    const stdoutCalls = logSpy.mock.calls.flat().join(" ");
+    expect(stdoutCalls).toContain("Loading aptos framework module");
+  });
+
+  it("always surfaces real stderr errors via logger.error", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    errSpy.mockClear();
+
+    proc.stderr!.emit("data", Buffer.from("ERROR: failed to bind socket"));
+
+    const stderrCalls = errSpy.mock.calls.flat().join(" ");
+    expect(stderrCalls).toContain("failed to bind socket");
+  });
+
+  it("suppresses benign WARN-only stderr in quiet mode", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir });
+    await mgr.start();
+
+    const proc = spawned[0]!;
+    errSpy.mockClear();
+
+    proc.stderr!.emit("data", Buffer.from("[WARN] deprecated config field"));
+
+    const stderrCalls = errSpy.mock.calls.flat().join(" ");
+    expect(stderrCalls).not.toContain("deprecated config field");
   });
 });
