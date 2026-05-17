@@ -7,6 +7,14 @@ import { coloredSymbol, symbols } from './symbols.js';
 export type LogLevel = 'info' | 'success' | 'error' | 'warning' | 'debug';
 
 /**
+ * Verbosity level for subprocess output and gray-prefixed chatter.
+ * - `quiet`   — reserved; currently behaves like `normal`
+ * - `normal`  — default; system logs only, subprocess chatter hidden
+ * - `verbose` — surface subprocess stdout with a muted gray `›` prefix
+ */
+export type Verbosity = 'quiet' | 'normal' | 'verbose';
+
+/**
  * Logger configuration options
  */
 export interface LoggerConfig {
@@ -16,6 +24,8 @@ export interface LoggerConfig {
   level?: LogLevel;
   /** Include timestamps in log messages */
   timestamp?: boolean;
+  /** Verbosity level for subprocess output */
+  verbosity?: Verbosity;
 }
 
 /**
@@ -25,7 +35,17 @@ let config: LoggerConfig = {
   silent: false,
   level: 'info',
   timestamp: false,
+  verbosity: process.env.MOVEHAT_VERBOSE === '1' ? 'verbose' : 'normal',
 };
+
+/**
+ * Whether subprocess chatter should reach the user's terminal.
+ * Honors both the in-process config (set by the `-v` CLI flag's
+ * preAction hook) and the `MOVEHAT_VERBOSE=1` env var (which lets
+ * callers opt in before the CLI parses args, e.g. in shell scripts).
+ */
+export const isVerbose = (): boolean =>
+  config.verbosity === 'verbose' || process.env.MOVEHAT_VERBOSE === '1';
 
 /**
  * Configure logger globally
@@ -235,6 +255,7 @@ export const item = (text: string, indent: number = 0): void => {
  */
 export const logger = {
   configure: configureLogger,
+  isVerbose,
   info,
   success,
   error,
