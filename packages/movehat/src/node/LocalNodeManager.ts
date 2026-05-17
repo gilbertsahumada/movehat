@@ -312,7 +312,7 @@ export class LocalNodeManager {
    * Fund an account using the local faucet
    *
    * @param account Account instance or address to fund
-   * @param amount Amount in octas (default: 100_000_000 = 100 APT)
+   * @param amount Amount in octas (default: 100_000_000 = 1 MOVE)
    */
   async fundAccount(account: Account | string, amount: number = 100_000_000): Promise<void> {
     if (!this.isRunning()) {
@@ -361,7 +361,7 @@ export class LocalNodeManager {
           await this.fundAccount(account, amount);
         }
       },
-      `Funded ${accounts.length} accounts (${(amount / 1e8).toFixed(0)} APT each)`,
+      `Funded ${accounts.length} accounts (${(amount / 1e8).toFixed(0)} MOVE each)`,
     );
     logger.newline();
   }
