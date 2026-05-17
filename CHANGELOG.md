@@ -21,6 +21,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] - 2026-05-17
+
+### Added
+
+- New `guides/multi-contract.mdx` docs page — step-by-step tutorial for
+  extending a `movehat init` project with a second Move module
+  (Registry), demonstrating events + standard `std::error` wrappers +
+  multi-module `autoDeploy`. Includes a troubleshooting section
+  covering the Movement local-node clock-drift behaviour observed when
+  many test specs run sequentially.
+- New `cli/global-flags.mdx` docs page — documents the global
+  `-v / --verbose` flag, `--network`, `--redeploy`, plus the
+  `MOVEHAT_VERBOSE` / `MOVEHAT_NETWORK` / `NO_COLOR` env vars.
+- New `guides/console-output.mdx` docs page — user-facing explanation
+  of the §9 five-source taxonomy (system / subprocess / user / SDK
+  warnings / mocha) and how non-TTY / `NO_COLOR` graceful degradation
+  works.
+- `api/harness.mdx` gains an "About `accountLabels`" subsection
+  clarifying that labeled accounts are independent of
+  `harness.runtime.account`, each gets its own keypair plus 1 MOVE
+  from the faucet, and the retrieval pattern via
+  `AccountManager.getLabeledAccounts()`.
+- `examples/counter-example/move/sources/registry.move` — reference
+  implementation of the tutorial's Registry module, shipped as part
+  of the counter-example for inspection.
+
+### Fixed
+
+- User-facing strings now correctly refer to the native token as
+  **MOVE** instead of APT. Movement L1's native token is MOVE; APT is
+  Aptos's token. The display strings emitted during faucet funding
+  and local-testing setup were using APT, which was incorrect
+  rebranding for a Movement-native dev framework. Touched
+  `LocalNodeManager.fundAccounts`, `setupLocalTesting` balance log
+  (two sites), plus JSDoc comments in `LocalNodeManager`,
+  `types/config.ts`, and `fork/manager.ts`. Also corrects a math
+  error in the comments: 100_000_000 octas is 1 MOVE (10^8 octas),
+  not 100. The runtime math was always correct; only the comments
+  were wrong about the unit count.
+
+---
+
 ## [0.2.3] - 2026-05-17
 
 ### Added
