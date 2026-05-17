@@ -239,7 +239,7 @@ async function setupWithLocalNode(
     logger.plain(`   RPC: ${nodeInfo.rpcUrl}/v1`);
     logger.plain(`   Faucet: ${nodeInfo.faucetUrl}`);
     logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} MOVE`);
     logger.newline();
 
     return { runtime, localNode };
@@ -376,7 +376,7 @@ async function setupWithFork(
     logger.plain(`   Mode: fork (read-only)`);
     logger.plain(`   RPC: http://localhost:${forkPort}/v1`);
     logger.plain(`   Accounts: ${Array.from(accountLabels).join(", ")}`);
-    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} APT`);
+    logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} MOVE`);
     logger.newline();
 
     return { runtime, forkServer, forkManager };
