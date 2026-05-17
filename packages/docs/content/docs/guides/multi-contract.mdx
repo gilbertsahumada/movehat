@@ -1,0 +1,280 @@
+---
+title: Add a second contract
+description: Walk a multi-module Movehat project end-to-end — Move source, test, autoDeploy
+icon: Layers
+---
+
+This tutorial extends the project you scaffolded with `movehat init` by adding a second Move module — **Registry** — alongside the existing **Counter**. By the end you'll have two contracts compiled and tested in the same project, both deployed automatically when you run `movehat test --ts`.
+
+## Prerequisites
+
+You've completed the [Quickstart](/docs/getting-started/quickstart):
+
+- `movehat init my-project && cd my-project`
+- `npm install`
+- `movehat compile` succeeds
+- `movehat test --move` passes (Counter's Move-level test)
+
+## What we're adding
+
+A simple **Registry** module that lets each account claim a name. It demonstrates Move features Counter doesn't use:
+
+- A struct with a `String` field
+- An `EventHandle<T>` to emit registration events
+- Standard error wrappers from `std::error` (`error::already_exists`, `error::not_found`)
+- Two view functions — one that aborts on missing data (`get_name`), one that doesn't (`is_registered`)
+
+## Step 1 — Add the Move source
+
+Create `move/sources/registry.move`:
+
+```move
+module hello_blockchain::registry {
+    use std::signer;
+    use std::error;
+    use std::string::String;
+    use aptos_framework::account;
+    use aptos_framework::event;
+
+    // Account is already registered.
+    const E_ALREADY_REGISTERED: u64 = 1;
+    // Account is not registered.
+    const E_NOT_REGISTERED: u64 = 2;
+
+    // Per-account identity record. Stored under the account that calls
+    // `register`, so each address owns exactly one (or zero) Identity.
+    struct Identity has key {
+        name: String,
+        register_events: event::EventHandle<RegisterEvent>,
+    }
+
+    // Event emitted on a successful `register` call.
+    struct RegisterEvent has drop, store {
+        owner: address,
+        name: String,
+    }
+
+    public entry fun register(account: signer, name: String) {
+        let owner = signer::address_of(&account);
+        assert!(!exists<Identity>(owner), error::already_exists(E_ALREADY_REGISTERED));
+
+        let identity = Identity {
+            name: copy name,
+            register_events: account::new_event_handle<RegisterEvent>(&account),
+        };
+
+        event::emit_event(&mut identity.register_events, RegisterEvent {
+            owner,
+            name,
+        });
+
+        move_to(&account, identity);
+    }
+
+    #[view]
+    public fun get_name(addr: address): String acquires Identity {
+        assert!(exists<Identity>(addr), error::not_found(E_NOT_REGISTERED));
+        borrow_global<Identity>(addr).name
+    }
+
+    #[view]
+    public fun is_registered(addr: address): bool {
+        exists<Identity>(addr)
+    }
+}
+```
+
+A few things to notice:
+
+- The named address `hello_blockchain` is already declared in your `move/Move.toml` — both modules share the same address, which is how Move packages group multiple modules under one publish.
+- `copy name` (line `name: copy name`) is required because Move's borrow checker can't disjoint field borrows of the same struct. We need `name` to live on after it's moved into the `Identity` so we can also include it in the event payload.
+
+## Step 2 — Compile
+
+```bash
+movehat compile
+```
+
+You should see:
+
+```text
+ℹ Compiling Move contracts...
+  Move directory: ./move
+  Detected addresses: hello_blockchain
+  Auto-assigned (0xcafe): hello_blockchain
+
+- Compiling Move package
+✔ Compiling Move package
+
+✔ Compilation finished successfully
+```
+
+If you get a borrow-checker error, double-check the `copy name` keyword and make sure the `Identity` struct constructs before the `event::emit_event` call.
+
+## Step 3 — Add the test
+
+Create `tests/registry.test.ts`:
+
+```typescript
+import { Harness, AccountManager } from "movehat";
+import type { MoveContract } from "movehat/helpers";
+import type { Account } from "@aptos-labs/ts-sdk";
+import { expect } from "chai";
+
+describe("Registry Contract", () => {
+  let harness: Harness;
+  let registry: MoveContract;
+  let registryAddr: string;
+  let alice: Account, bob: Account;
+
+  before(async function () {
+    this.timeout(90000);
+
+    harness = await Harness.createLocal({
+      accountLabels: ["deployer", "alice", "bob"],
+      autoDeploy: ["registry"],
+    });
+
+    const labeled = AccountManager.getLabeledAccounts();
+    alice = labeled.alice!;
+    bob = labeled.bob!;
+
+    registryAddr = harness.runtime.getDeploymentAddress("registry")!;
+    registry = harness.runtime.getContract(registryAddr, "registry");
+  });
+
+  after(async () => {
+    await harness.cleanup();
+  });
+
+  it("alice can register her name", async () => {
+    const tx = await registry.call(alice, "register", ["alice"]);
+    expect(tx.success).to.equal(true);
+
+    const name = await registry.view<string>("get_name", [
+      alice.accountAddress.toString(),
+    ]);
+    expect(name).to.equal("alice");
+  });
+
+  it("bob registers independently and does not affect alice", async () => {
+    await registry.call(bob, "register", ["bob"]);
+
+    const bobName = await registry.view<string>("get_name", [
+      bob.accountAddress.toString(),
+    ]);
+    const aliceName = await registry.view<string>("get_name", [
+      alice.accountAddress.toString(),
+    ]);
+
+    expect(bobName).to.equal("bob");
+    expect(aliceName).to.equal("alice");
+  });
+
+  it("is_registered flips false → true after register", async () => {
+    const carol = AccountManager.getLabeledAccounts().alice!;
+    const before = await registry.view<boolean>("is_registered", [
+      carol.accountAddress.toString(),
+    ]);
+    expect(before).to.equal(true); // alice registered above
+
+    // A brand new unregistered address
+    const newAccount = await AccountManager.createAccount();
+    const after = await registry.view<boolean>("is_registered", [
+      newAccount.accountAddress.toString(),
+    ]);
+    expect(after).to.equal(false);
+  });
+
+  it("duplicate registration aborts", async () => {
+    let threw = false;
+    try {
+      await registry.call(alice, "register", ["alice-again"]);
+    } catch (err) {
+      threw = true;
+      expect((err as Error).message).to.match(
+        /already.*exists|ALREADY_REGISTERED|0x80001/i,
+      );
+    }
+    expect(threw).to.equal(true);
+  });
+});
+```
+
+Key points:
+
+- **`accountLabels` must include `"deployer"`** — `Harness.createLocal` uses that label to bootstrap the runtime. Other labels (`alice`, `bob`) are arbitrary identifiers your test body reads via `AccountManager.getLabeledAccounts()`.
+- **`autoDeploy: ["registry"]`** publishes your new module automatically when the harness starts. The deployer is the account labeled `"deployer"`.
+- **`harness.cleanup()` in `after`** shuts down the local node so the next test spec (Counter, in your case) can start its own clean instance.
+
+## Step 4 — Run
+
+```bash
+movehat test --ts
+```
+
+You should see both Counter and Registry test suites pass:
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TypeScript Integration Tests
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Counter Contract
+    ✔ should initialize with value 0
+    ✔ should increment counter
+    ...
+
+  Registry Contract
+    ✔ alice can register her name
+    ✔ bob registers independently and does not affect alice
+    ✔ is_registered flips false → true after register
+    ✔ duplicate registration aborts
+
+  7 passing (2m)
+```
+
+Each spec spins up its own local Movement node, publishes the relevant module, runs its tests, then tears the node down. You'll see the spinner-driven setup output described in the [Console output](/docs/guides/console-output) guide.
+
+## Step 5 — Verify the deployment record
+
+After a successful run, look in `deployments/local/`:
+
+```bash
+ls deployments/local/
+# counter.json
+# registry.json
+```
+
+Each module gets its own deployment record. Movehat caches these so subsequent runs can skip recompile if the source hasn't changed. To force a fresh deploy past the cache:
+
+```bash
+movehat test --ts --redeploy
+```
+
+## What you learned
+
+- One Movehat project can ship multiple Move modules under the same named address (`hello_blockchain` here).
+- `autoDeploy` accepts an array — every named module gets published as a separate transaction.
+- Each test spec is independent: its own local node, its own labeled accounts, its own deployment cache entry.
+- The same `Harness` API works whether you have one module or many.
+
+## Troubleshooting
+
+**`Ledger on endpoint is more than 60s behind current time`**
+
+The Movement local node's chain clock can drift behind wall-clock time when many test specs run back-to-back in the same process. If you hit this:
+
+- Kill any orphan `movement` processes: `pkill -f "movement node"`
+- Delete `.movehat/local-node` and re-run
+- If it persists, split your test suite into smaller batches with separate `movehat test --ts` invocations
+
+**`Failed to get deployer private key`**
+
+`accountLabels` must include exactly the string `"deployer"`. Rename whichever label you intended for the deployer back to `"deployer"`.
+
+## Next steps
+
+- [Fork the network](/docs/guides/fork) to test against testnet/mainnet state without spinning up a local node
+- [Deploy to live](/docs/guides/deployment) — same `Harness` API, network-scoped
+- [Console output](/docs/guides/console-output) — what every line you see in `movehat test` means and how `-v` changes it

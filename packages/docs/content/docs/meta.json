@@ -8,6 +8,7 @@
     "---Guides---",
     "guides/compilation",
     "guides/testing",
+    "guides/multi-contract",
     "guides/deployment",
     "guides/fork",
     "guides/scripts",
