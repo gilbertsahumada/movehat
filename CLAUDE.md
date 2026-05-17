@@ -195,6 +195,69 @@ How to apply: when ready to merge, the sequence is **always**:
 
 If step 1 is skipped, the merge violates this rule and a retroactive review must be posted on the merged PR plus any follow-up sub-PRs needed.
 
+## 9. Console UX conventions
+
+**Every line that reaches the user's terminal from `packages/movehat/src/` is classified into one of five sources, and each source has a fixed visual treatment.** This rule applies to every PR that touches `src/`.
+
+### The five sources
+
+```
+┌─ System (Movehat lifecycle)      → logger.* with semantic prefix
+│  ▸ in-progress (cyan)
+│  ✔ success     (green)
+│  ✖ error       (red)
+│  ⚠ warning     (yellow)
+│  i info        (blue)
+│
+├─ Subprocess (movement node, aptos move) → muted gray, hidden by default
+│  › <output>    (gray, only with -v)
+│  ✖ <stderr>    (red, always shown — real signal)
+│
+├─ User code (their console.log in tests/ or scripts/)
+│                                  → passthrough, no prefix, no styling
+│
+├─ SDK deprecation warnings        → filter known noise (AIP-80 done in 0.2.2);
+│                                     surface real warnings via logger.warning
+│
+└─ Test framework (mocha reporter) → passthrough; mocha owns its formatting
+```
+
+### Hard rules
+
+- **No raw `console.log` / `console.error` / `console.warn` in `packages/movehat/src/` outside `src/ui/`.** Every system message goes through a `logger.*` method. The only exception is intentional subprocess passthrough — and even those route through the verbosity gate described below.
+- **No raw subprocess stdout passthrough.** When a child process (`movement`, `aptos move`) emits to stdout, the wrapper must filter:
+  - Hide routine chatter unless `isVerbose()` returns true.
+  - Always surface lines matching critical signals (`panic`, `fatal`, `address already in use`, `EADDRINUSE`) — the user is never silenced through a real failure.
+  - Always surface stderr that is not a benign `WARN`-only line — real signal beats chatter.
+  - Pattern to copy: `src/node/LocalNodeManager.ts:147-180` and `src/core/Publisher.ts` (build + publish wrappers).
+- **Any operation that empirically takes ≥3s in normal use MUST be wrapped in a spinner.** Use `withSpinner` (`src/ui/spinner.ts:73`) for short labelled ops, or `withTimedSpinner` (`src/ui/spinner.ts:106`) for long ops where the user wants live elapsed-time feedback. Short ops (<3s) use `logger.step` + `logger.success`.
+- **Top-level phase boundaries use `logger.phase(title)`.** It renders a `━` rule + indented bold title + `━` rule. Close phases with `logger.success(...)` or `logger.error(...)`. Use `logger.divider()` for a standalone rule between sub-sections of the same phase.
+
+### Verbosity contract
+
+- Default (no flag): quiet mode. System logs + critical subprocess signals only.
+- `-v` / `--verbose` global CLI flag: includes subprocess stdout with muted gray `›` prefix.
+- `MOVEHAT_VERBOSE=1` env var: equivalent to `-v`, lets shell-script callers opt in before the CLI parses args.
+- `NO_COLOR=1` or non-TTY: auto-degrades to plain text via `shouldUseColor()` (`src/ui/colors.ts:13`); spinners auto-disable so piped output stays line-based and parseable by CI.
+
+### Templates exception
+
+Files under `packages/movehat/src/templates/**` are scaffolding that ships to user projects. They use raw `console.log` on purpose — that is the API end-users themselves write in their own scripts and tests. Do not migrate template files to `logger.*`.
+
+### How to apply
+
+Before opening a PR that touches `src/`, run:
+
+```bash
+grep -rn "console\.\(log\|error\|warn\)" packages/movehat/src/ \
+  --include="*.ts" \
+  | grep -v __tests__ \
+  | grep -v "src/ui/" \
+  | grep -v "src/templates/"
+```
+
+Every match must either route through a verbosity gate (subprocess passthrough) or be migrated to `logger.*`. New ad-hoc `console.log("...")` calls are a §9 violation and must be fixed before merge.
+
 ---
 
 ## Project-Specific Context
