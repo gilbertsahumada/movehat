@@ -6,6 +6,8 @@ icon: FlaskConical
 
 Movehat supports **two types of tests** for comprehensive coverage.
 
+> ⚠️ **Tests always use `Harness.createLocal()` by default and never touch testnet or mainnet.** Each test spec spawns a fresh local Movement node on `127.0.0.1:8080`; the node is torn down when the spec finishes. If you need a test that reads real network state, use `Harness.createFork(network)` — it's read-only and never spends gas. **Never use `Harness.createLive(network)` in a test file** — that submits real transactions with your `PRIVATE_KEY`. `createLive` belongs in `scripts/*.ts`, not in `tests/*.test.ts`. See [Networks and modes](./networks-and-modes) for the full decision table.
+
 ## Move Unit Tests (Fast)
 
 Write tests directly in your Move files using `#[test]` annotations. Perfect for testing internal logic and business rules.
