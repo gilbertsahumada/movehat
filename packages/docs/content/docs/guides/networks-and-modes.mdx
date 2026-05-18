@@ -1,0 +1,140 @@
+---
+title: Networks and modes
+description: When to use createLocal, createFork, or createLive — and how to avoid sending real transactions by accident
+icon: Network
+---
+
+Movehat exposes three `Harness` factories that target three different execution environments. Picking the right one is usually about answering a single question: **do I want to write transactions to a real network, or just simulate locally?**
+
+## The decision
+
+| Your goal | Factory | Network | Writes gas? | Typical file |
+|---|---|---|---|---|
+| Fast iteration on a clean fresh chain (default for tests) | `createLocal()` | local node on `127.0.0.1:8080` | no (fake gas from faucet) | `tests/*.test.ts` |
+| Read real testnet / mainnet state (writes simulate locally) | `createFork(network)` | reads live, writes rejected | no | `tests/*.test.ts` or `scripts/*.ts` |
+| Deploy or call entry functions on real testnet / mainnet | `createLive(network)` | live RPC, real submission | **yes — real MOVE** | `scripts/*.ts` |
+
+The rest of this page expands each row with code and explains the gotchas.
+
+## Mode 1 — `createLocal()`
+
+Spins up a Movement local node (`movement node run-localnet`), funds the labeled accounts from the local faucet, and (optionally) auto-deploys your modules. Used everywhere you want a fresh blockchain that lives only as long as your test or script.
+
+```typescript
+import { Harness, AccountManager } from "movehat";
+
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice", "bob"],
+  autoDeploy: ["counter"],
+});
+
+const alice = AccountManager.getLabeledAccounts().alice!;
+const counter = harness.runtime.getContract(
+  harness.runtime.getDeploymentAddress("counter")!,
+  "counter"
+);
+
+await counter.call(alice, "increment", []);
+const value = await counter.view<string>("get", [alice.accountAddress.toString()]);
+```
+
+**What you get**: a fresh local Movement node, a faucet that funds labeled accounts with 1 MOVE each by default, and auto-deployed modules pinned to the named address from your `Move.toml`. State resets every time the test spec ends.
+
+**What you don't get**: any contact with testnet or mainnet. There is no path from `createLocal` to a real network — the harness only knows about the local node it spawned.
+
+**When to reach for it**: 99% of the time when you're writing tests. The default `movehat test --ts` flow uses this. See [Testing](./testing) for the full mocha-side patterns.
+
+## Mode 2 — `createFork(network)`
+
+Forks a remote network's state into a local read-only proxy. Lets your test or script see the real state of testnet or mainnet without spending gas.
+
+```typescript
+import { Harness } from "movehat";
+
+const harness = await Harness.createFork("mainnet");
+
+// Reading mainnet account state works
+const [supply] = await harness.runViewFunction({
+  function: "0x1::aptos_coin::AptosCoin",
+  functionArguments: [],
+});
+
+// But writes are rejected — fork is read-only
+try {
+  await counter.call(deployer, "increment", []);
+} catch (err) {
+  // HarnessForkWriteError: writes are not supported in fork mode
+}
+```
+
+**What "read-only" means in practice**:
+
+- **Allowed**: `runViewFunction`, `MoveContract.view`, `getContract(...).view`, account / resource reads
+- **Rejected**: `deployCodeObject`, `upgradeCodeObject`, `MoveContract.call`, any tx submission
+
+The rejection is enforced by the harness Proxy — writes throw synchronously without ever reaching the fork server. Tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192) — simulated-writes-against-fork-state are on the roadmap.
+
+**When to reach for it**: when you want to verify your code works against the real shape of mainnet state (real liquidity pools, real account balances, real module ABIs) without spending real MOVE. Common pattern in EVM tooling (`forge test --fork-url`, Hardhat fork mode); Movehat exposes the same shape.
+
+See [Fork system](./fork) for the deeper dive on the `ForkManager` lifecycle and what gets cached vs proxied.
+
+## Mode 3 — `createLive(network)`
+
+Binds the harness directly to a real network RPC. Transactions go on chain. Gas is real. State changes are irreversible.
+
+```typescript
+import { Harness } from "movehat";
+
+// MOVEHAT_NETWORK env var or explicit arg
+const harness = await Harness.createLive("mainnet");
+
+const deployment = await harness.deployCodeObject({
+  moduleName: "counter",
+  addressName: "hello_blockchain",
+});
+// ↑ This DEPLOYS to mainnet. Real MOVE consumed. Real on-chain code object.
+
+const counter = harness.runtime.getContract(deployment.address, "counter");
+await counter.call(harness.runtime.account, "increment", []);
+// ↑ This SUBMITS to mainnet. Real tx. Real gas.
+```
+
+> ⚠️ **`createLive` writes real transactions with the configured `PRIVATE_KEY`. Use it only inside `scripts/*.ts` files invoked explicitly via `movehat run`. Never in `tests/*.test.ts`.** A test file in your suite — even one your IDE or CI accidentally picks up — can send real txs the moment it instantiates a live harness. The cost surface is your wallet balance plus the irreversibility of mainnet writes.
+
+**When to reach for it**: deploy scripts, upgrade scripts, one-shot maintenance scripts. Everything the `examples/counter-example/scripts/` directory contains is a `createLive`-style script.
+
+The canonical deploy pattern is in [`scripts/deploy-counter.ts`](https://github.com/gilbertsahumada/movehat/blob/main/examples/counter-example/scripts/deploy-counter.ts). The harness also includes a duplicate-detection guard — if the module is already deployed on the target network, the deploy will refuse to redeploy unless you pass `--redeploy` explicitly.
+
+## Common footguns
+
+### "I wrote `createLive` in a test file"
+
+Symptom: your test sends real txs to mainnet/testnet and your wallet pays gas. Maybe state on chain changes unexpectedly.
+
+What happened: `tests/*.test.ts` files are picked up by mocha automatically. If one of them instantiates `Harness.createLive(...)`, it binds to a real network the same way a deploy script would. There is no test framework guard against this.
+
+Fix: replace `createLive` with `createLocal` (for fresh state) or `createFork` (for live state read-only). Move any deploy code to `scripts/*.ts` where it belongs. The test file should never need a live network.
+
+### "I redeployed on mainnet by accident"
+
+Symptom: running `movehat run scripts/deploy-counter.ts --network mainnet` twice creates two separate code objects and consumes gas twice.
+
+What happened: the duplicate-detection guard kicks in on the **second** run if `deployments/mainnet/counter.json` already exists from the first. But if you delete that file (or set `--redeploy`), the guard is bypassed.
+
+Fix: keep `deployments/{network}/*.json` files committed (they're tracked by default), don't pass `--redeploy` unless you genuinely want a new code object, and use [`upgradeCodeObject`](../api/harness#harnessupgradecodeobjectoptions) when you want to push new bytecode to an existing object.
+
+### "My test suite runs slowly because each spec spawns a node"
+
+Symptom: 10 test files = 10 sequential local-node spawns = 2-5 minutes of pure startup overhead before any assertion runs.
+
+What happened: each `Harness.createLocal()` call spawns its own Movement local node by default. The current architecture doesn't share a single node across specs.
+
+Fix: open issue [#235](https://github.com/gilbertsahumada/movehat/issues/235) tracks this; the proposed mocha root-hooks pattern (Option 1) brings N spawns down to 1. Until that ships, the workaround is to keep test spec counts low or split into separate `movehat test --ts` invocations.
+
+## Related
+
+- [Testing](./testing) — Move unit tests + TypeScript integration tests + best practices
+- [Fork system](./fork) — `ForkManager` lifecycle, what gets cached, fork-server architecture
+- [Deployment](./deployment) — deploying with `createLive` to testnet / mainnet
+- [Harness API reference](../api/harness) — full factory + method signatures
+- [`-v` flag and verbose mode](../cli/global-flags) — debugging subprocess output across all three modes
