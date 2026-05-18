@@ -113,6 +113,8 @@ If you get a borrow-checker error, double-check the `copy name` keyword and make
 
 ## Step 3 — Add the test
 
+Tests in this tutorial use `Harness.createLocal()` — they spawn a local Movement node and never touch testnet or mainnet. See [Networks and modes](./networks-and-modes) for the full picture on when to use `createLocal` vs `createFork` vs `createLive`.
+
 Create `tests/registry.test.ts`:
 
 ```typescript

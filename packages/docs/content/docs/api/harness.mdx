@@ -39,6 +39,18 @@ Three static factories cover the three execution modes. Each returns a `Harness`
 | `Harness.createFork(network, apiKey?)` | `'fork'` | Movement fork server (read-only snapshot of `network`) | View-only tests against real network state, no writes |
 | `Harness.createLive(network, faucetUrl?)` | `'live'` | Nothing — binds to a real RPC (testnet / mainnet / custom) | Deployment scripts, real-network interactions |
 
+### When to use which factory
+
+| Your goal | Factory | Network | Writes gas? | Typical file |
+|---|---|---|---|---|
+| Fast iteration on a clean fresh chain (default for tests) | `createLocal()` | local node on `127.0.0.1:8080` | no (fake gas from faucet) | `tests/*.test.ts` |
+| Read real testnet / mainnet state (writes simulate locally) | `createFork(network)` | reads live, writes rejected | no | `tests/*.test.ts` or `scripts/*.ts` |
+| Deploy or call entry functions on real testnet / mainnet | `createLive(network)` | live RPC, real submission | **yes — real MOVE** | `scripts/*.ts` |
+
+The three factories are otherwise interchangeable on the read side — `runViewFunction`, `getContract`, etc. work the same way. `deployCodeObject` / `upgradeCodeObject` are gated to `createLocal` and `createLive` (forks are read-only by design today; tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192)).
+
+See the [Networks and modes](/docs/guides/networks-and-modes) guide for the full decision flow including common footguns.
+
 ### `Harness.createLocal(options?: LocalTestOptions)`
 
 Spins up a Movement local node (`movement node run-localnet`), generates and funds the named accounts from the local faucet, and (when `autoDeploy` is set) publishes the named modules via the existing Publisher path.

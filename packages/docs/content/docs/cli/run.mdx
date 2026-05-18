@@ -12,6 +12,8 @@ movehat run <script> [options]
 
 Execute a TypeScript/JavaScript script with the Movehat Runtime Environment.
 
+> ⚠️ Scripts invoked via `movehat run` may use `Harness.createLive(network)` and submit real transactions to testnet or mainnet, spending real MOVE from the configured `PRIVATE_KEY`. Check the script's network target — via the `--network` flag, `MOVEHAT_NETWORK` env var, or the `defaultNetwork` in `movehat.config.ts` — **before** running. For the safe-by-default behavior used by tests, see [Networks and modes](/docs/guides/networks-and-modes).
+
 ## Options
 
 | Flag | Description |
