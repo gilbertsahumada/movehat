@@ -211,6 +211,9 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
   // terminal until the user Ctrl+Cs the parent (which kills the child via
   // inherited stdio). Attach .catch so a spawn-time failure doesn't become
   // an unhandled rejection.
+  /* c8 ignore start -- watch mode launches a long-running mocha process and
+     never returns; not testable as a unit. Behaviour is covered by the
+     integration suite and by manual smoke. */
   if (watch) {
     runCli(
       {
@@ -229,6 +232,7 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
     logger.newline();
     return;
   }
+  /* c8 ignore stop */
 
   // Non-watch mode: await the run, surface the exit code as a thrown error
   // so the orchestrator above can summarize the failure.
@@ -243,10 +247,14 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
       },
       { throwOnNonZeroExit: false }
     );
+    /* c8 ignore start -- runCli with throwOnNonZeroExit:false only throws on
+       spawn-time failure (ENOENT, etc.), which is blocked upstream by the
+       existsSync(mochaPath) check at line 192. Defense in depth. */
   } catch (error) {
     logger.error(`Failed to run TypeScript tests: ${(error as Error).message}`);
     throw error;
   }
+  /* c8 ignore stop */
 
   if (result.exitCode === 0) {
     return;
