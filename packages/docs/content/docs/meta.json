@@ -12,6 +12,7 @@
     "guides/multi-contract",
     "guides/tutorial-fork-testing",
     "guides/tutorial-deploy-live",
+    "guides/tutorial-ci",
     "guides/deployment",
     "guides/fork",
     "guides/scripts",

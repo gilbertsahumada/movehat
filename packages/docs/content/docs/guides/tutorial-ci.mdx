@@ -1,0 +1,170 @@
+---
+title: Tutorial — CI integration
+description: Add a GitHub Actions workflow that compiles your Move package and runs unit tests on every PR
+icon: GitBranch
+---
+
+This tutorial drops a ready-to-go GitHub Actions workflow into a Movehat project. By the end, every PR you open will compile the Move package, run Move-level unit tests, and fail the merge if either step fails. TypeScript integration tests are opt-in.
+
+The same workflow ships verbatim in [`examples/counter-example/.github/workflows/ci.yml`](https://github.com/gilbertsahumada/movehat/blob/main/examples/counter-example/.github/workflows/ci.yml). If you copy from this page, copy from there — they are byte-identical and the file in the example is the source of truth.
+
+## What "good CI" looks like for a Movehat project
+
+The minimum gate is:
+
+1. **Compile** — `movehat compile` must succeed. Catches Move source errors that the TypeScript layer never sees.
+2. **Move unit tests** — `movehat test --move`. Fast (~milliseconds per `#[test]` function), no node spawn required, deterministic.
+
+That's it for the mandatory layer. Three things stay opt-in because they trade off CI minutes against catch-rate:
+
+- **TypeScript integration tests** (`movehat test --ts`) — each spec spawns a real local Movement node. Useful but slow.
+- **Fork-mode tests** — depend on upstream RPC; can be flaky under rate limits.
+- **Live-network tests** — never. `createLive` belongs in `scripts/*.ts`, not `tests/*.test.ts`. See [Networks and modes](./networks-and-modes).
+
+## Step 1 — Drop in the workflow
+
+Create `.github/workflows/ci.yml` in your project:
+
+```yaml
+name: CI
+
+# Reference CI workflow for a Movehat project. Documented in:
+# https://movehat.org/docs/guides/tutorial-ci
+#
+# Compiles the Move package and runs Move-level unit tests on every PR
+# against main. TypeScript integration tests are opt-in (commented step
+# at the bottom) because each spec spawns a local Movement node and
+# adds ~30-60s of latency.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Movement CLI binary
+        id: cache-movement-cli
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/movement
+          # SHA256 prefix ties cache hits to the pinned binary; rotating
+          # MOVEMENT_CLI_SHA256 below busts the cache automatically.
+          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
+
+      - name: Install Movement CLI
+        if: steps.cache-movement-cli.outputs.cache-hit != 'true'
+        env:
+          # Pinned SHA256 of movement-cli-l1-linux-x86_64.tar.gz from the
+          # bypass-homebrew moving tag. Upstream re-uploads silently, so
+          # SHA256 is the only stable version pin. Rotate this value
+          # consciously when adopting a new upstream build.
+          MOVEMENT_CLI_SHA256: f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2
+        run: |
+          ARTIFACT="movement-cli-l1-linux-x86_64.tar.gz"
+          curl -fLO "https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/${ARTIFACT}"
+          echo "${MOVEMENT_CLI_SHA256}  ${ARTIFACT}" | sha256sum -c
+          mkdir -p temp_extract
+          tar -xzf "${ARTIFACT}" -C temp_extract
+          chmod +x temp_extract/movement
+          sudo mv temp_extract/movement /usr/local/bin/movement
+          rm -rf temp_extract "${ARTIFACT}"
+
+      - name: Verify Movement CLI
+        run: movement --version
+
+      - name: Compile Move package
+        run: npx movehat compile
+
+      - name: Run Move unit tests
+        run: npx movehat test --move
+
+      # Opt-in: TypeScript integration tests. Each spec spawns a local
+      # Movement node (~15-30s startup) + runs assertions, so a 5-spec
+      # suite can take 3-5 minutes. Uncomment when your project has
+      # tests/*.test.ts files you want gated on every PR.
+      #
+      # - name: Run TypeScript integration tests
+      #   run: npx movehat test --ts
+```
+
+## Step 2 — What each block does
+
+- **`actions/setup-node@v4` with `node-version: '20'`** — Movehat targets Node 20 / 22. Use 20 for the broadest LTS coverage; bump to 22 once you've validated.
+- **`npm ci`** — assumes you committed `package-lock.json`. Faster + reproducible than `npm install`. Swap for `pnpm install --frozen-lockfile` or `yarn install --immutable` if you use a different package manager (and update the `cache: 'npm'` field to match).
+- **`actions/cache@v4` for `/usr/local/bin/movement`** — caches the Movement CLI binary across runs. Cold install is ~15 seconds; cache hits are ~1 second.
+- **SHA256 pin in `MOVEMENT_CLI_SHA256`** — Movement Labs re-uses the `bypass-homebrew` tag, so the URL alone is not a stable version pin. Verifying the SHA256 before `chmod`/`mv` rejects silent upstream replacements. When you adopt a new CLI build, update the SHA256 value (the cache key prefix automatically changes, busting the cache).
+- **`npx movehat compile` + `--move`** — both invoke the locally-installed `movehat` from `node_modules`. No global install needed.
+
+## Step 3 — When (and how) to enable TypeScript tests
+
+Uncomment the last step when:
+
+- You have at least one file in `tests/*.test.ts`.
+- The CI minutes are acceptable (each test spec spawns a local Movement node, ~15-30s startup).
+
+If you also rely on a `PRIVATE_KEY` for some test paths (e.g., live-network sanity), add it as a GitHub Actions secret and pass it through:
+
+```yaml
+- name: Run TypeScript integration tests
+  run: npx movehat test --ts
+  env:
+    PRIVATE_KEY: ${{ secrets.MOVEMENT_PRIVATE_KEY }}
+```
+
+The default `createLocal()` flow does **not** need any secrets. Only add `PRIVATE_KEY` if a specific test path explicitly uses `createLive(...)` — which it should not (see [Testing safety callout](./testing)).
+
+## Step 4 — Push and watch it run
+
+Commit the file, push a branch, open a PR. Within ~1-2 minutes you should see two checks complete:
+
+```text
+✓ test          1m 14s     compile + Move unit tests passed
+```
+
+If it's red, GitHub Actions surfaces the failing step inline. Most common failures (in rough order of frequency):
+
+### `SHA256 mismatch`
+
+The cached Movement CLI artifact's SHA256 differs from the pinned value in `MOVEMENT_CLI_SHA256`. Upstream re-uploaded under the same tag. Rotate the pin: download the new artifact locally, compute its `sha256sum`, paste it into the env var, and bust the cache by changing the `f2bdf3fa` prefix in the `key` field.
+
+### `move: command not found`
+
+The cache restored an empty `/usr/local/bin/movement` (rare; happens after a force-rotate). Delete the cache via Actions UI → Caches → search for `movement-cli-` → trash. The next run will re-install fresh.
+
+### `movehat: command not found`
+
+`npm ci` didn't run, or the Movehat dependency is missing from `package.json`. Check that `movehat` is in `dependencies`, not just `devDependencies`, since the CLI is invoked via `npx`.
+
+### Local node fails to spawn (only if you enabled `--ts`)
+
+The Movement local node sometimes fails the first time after a cold cache. Common cause: another process is bound to `127.0.0.1:8080`. Issue [#235](https://github.com/gilbertsahumada/movehat/issues/235) tracks the broader "one node per test spec is slow" pattern; for now, keep TypeScript test suites small or split them across separate `movehat test --ts` invocations.
+
+## Beyond the basics
+
+Two patterns the reference workflow intentionally leaves out:
+
+- **Test matrix across Node versions** — useful for library authors but overkill for end-user Move projects. If you ship Movehat-driven tooling as a library, mirror the matrix shape from [Movehat's own CI](https://github.com/gilbertsahumada/movehat/blob/main/.github/workflows/ci.yml).
+- **Coverage gating** — `pnpm test:coverage` produces `coverage/coverage-summary.json` consumable by `jq`. Skip the JSON parsing for end-user projects unless you're enforcing a per-module floor; the per-file `vitest.config.ts` gate is enough for most use cases.
+
+## Next steps
+
+- [Testing](./testing) — Move unit tests, TypeScript integration tests, and the safety contract that keeps both off mainnet.
+- [Networks and modes](./networks-and-modes) — the decision table behind `createLocal` / `createFork` / `createLive`.
+- [Console output](./console-output) — interpreting Movehat's `[2026-...] STEP` traces in CI logs.
