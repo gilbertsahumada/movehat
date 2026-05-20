@@ -20,6 +20,15 @@ interface AccountPool {
   labelMap: Record<string, string>; // label → address
 }
 
+export interface SaveAccountPoolOptions {
+  /**
+   * Persist accounts loaded from a private key, environment variable, or
+   * config. Defaults to false so imported live keys are not written to disk
+   * accidentally when callers only intend to save generated test accounts.
+   */
+  includeImported?: boolean | undefined;
+}
+
 /**
  * Centralized Account Manager for movehat
  *
@@ -34,6 +43,7 @@ export class AccountManager {
   private static pool: Map<string, Account> = new Map(); // address → Account
   private static privateKeys: Map<string, string> = new Map(); // address → privateKey hex
   private static labelMap: Map<string, string> = new Map(); // label → address
+  private static generatedAccountAddresses: Set<string> = new Set();
   private static poolLoaded = false;
   // `defaultPoolPath` is captured ONCE at module-import time. A later
   // `process.chdir(...)` does NOT redirect the save destination — pass
@@ -80,6 +90,7 @@ export class AccountManager {
 
     this.pool.set(address, account);
     this.privateKeys.set(address, account.privateKey.toString());
+    this.generatedAccountAddresses.add(address);
 
     if (label) {
       this.labelMap.set(label, address);
@@ -144,19 +155,8 @@ export class AccountManager {
     // Format into AIP-80 shape (`ed25519-priv-0x…`) before constructing
     // the SDK type. Without this, raw-hex inputs trigger a noisy
     // deprecation warning from `@aptos-labs/ts-sdk` on every call.
-    const formatted = PrivateKey.formatPrivateKey(
-      privateKeyHex,
-      PrivateKeyVariants.Ed25519,
-    );
-    const privateKey = new Ed25519PrivateKey(formatted);
-    const account = Account.fromPrivateKey({ privateKey });
-    const address = account.accountAddress.toString();
-
-    // Add to pool for tracking
-    this.pool.set(address, account);
-
-    // Store private key
-    this.privateKeys.set(address, privateKeyHex);
+    const account = this.accountFromPrivateKey(privateKeyHex);
+    this.trackAccount(account, privateKeyHex, "imported");
 
     return account;
   }
@@ -219,7 +219,21 @@ export class AccountManager {
    * @example
    * AccountManager.saveAccountPool();
    */
-  static saveAccountPool(poolPath?: string): void {
+  static saveAccountPool(): void;
+  static saveAccountPool(poolPath: string): void;
+  static saveAccountPool(options: SaveAccountPoolOptions): void;
+  static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
+  static saveAccountPool(
+    poolPathOrOptions?: string | SaveAccountPoolOptions,
+    options: SaveAccountPoolOptions = {},
+  ): void {
+    const poolPath =
+      typeof poolPathOrOptions === "string" ? poolPathOrOptions : undefined;
+    const effectiveOptions =
+      typeof poolPathOrOptions === "object" && poolPathOrOptions !== null
+        ? poolPathOrOptions
+        : options;
+    const includeImported = effectiveOptions.includeImported ?? false;
     const basePath = poolPath || this.defaultPoolPath;
 
     // Ensure directory exists with restrictive perms (the pool file holds
@@ -236,6 +250,10 @@ export class AccountManager {
     const labelMapObject: Record<string, string> = {};
 
     for (const [address, account] of this.pool.entries()) {
+      if (!includeImported && !this.generatedAccountAddresses.has(address)) {
+        continue;
+      }
+
       // Find label for this address (if any)
       let label: string | undefined;
       for (const [lbl, addr] of this.labelMap.entries()) {
@@ -311,8 +329,8 @@ export class AccountManager {
 
       // Restore accounts
       for (const stored of poolData.accounts) {
-        const account = this.loadAccountFromPrivateKey(stored.privateKey);
-        this.pool.set(stored.address, account);
+        const account = this.accountFromPrivateKey(stored.privateKey);
+        this.trackAccount(account, stored.privateKey, "generated");
 
         if (stored.label) {
           this.labelMap.set(stored.label, stored.address);
@@ -350,6 +368,7 @@ export class AccountManager {
     this.pool.clear();
     this.privateKeys.clear();
     this.labelMap.clear();
+    this.generatedAccountAddresses.clear();
     this.poolLoaded = false;
   }
 
@@ -453,5 +472,31 @@ export class AccountManager {
     }
 
     return result;
+  }
+
+  private static accountFromPrivateKey(privateKeyHex: string): Account {
+    const formatted = PrivateKey.formatPrivateKey(
+      privateKeyHex,
+      PrivateKeyVariants.Ed25519,
+    );
+    const privateKey = new Ed25519PrivateKey(formatted);
+    return Account.fromPrivateKey({ privateKey });
+  }
+
+  private static trackAccount(
+    account: Account,
+    privateKeyHex: string,
+    source: "generated" | "imported",
+  ): void {
+    const address = account.accountAddress.toString();
+
+    this.pool.set(address, account);
+    this.privateKeys.set(address, privateKeyHex);
+
+    if (source === "generated") {
+      this.generatedAccountAddresses.add(address);
+    } else {
+      this.generatedAccountAddresses.delete(address);
+    }
   }
 }
