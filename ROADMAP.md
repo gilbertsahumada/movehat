@@ -289,8 +289,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 **Definition of Done**:
 - [x] `packages/docs/content/docs/guides/tutorial-fork-testing.mdx` live on movehat.org (M8.1)
 - [x] `packages/docs/content/docs/guides/tutorial-deploy-live.mdx` live on movehat.org (M8.2)
-- [ ] `packages/docs/content/docs/guides/tutorial-ci.mdx` live on movehat.org
-- [ ] `examples/counter-example/.github/workflows/ci.yml` committed and identical to the snippet in the CI tutorial
+- [x] `packages/docs/content/docs/guides/tutorial-ci.mdx` live on movehat.org (M8.3)
+- [x] `examples/counter-example/.github/workflows/ci.yml` committed and identical to the snippet in the CI tutorial (M8.3 — verified byte-identical)
 - [ ] `movehat.org/docs/api/reference/` sidebar groups symbols by category (Harness / Account / Contract / Fork / Deployment Helpers / Errors), not flat alphabetical
 - [ ] `MAINTENANCE.md` at repo root with release cadence + triage SLA + deprecation policy
 - [ ] `packages/docs/content/docs/contributing/maintenance.mdx` exists and links from `contributing/index.mdx`
@@ -306,7 +306,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 | M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | in PR |
 | M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
 | M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | in PR |
-| M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | |
+| M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | in PR |
 | M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | |
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
