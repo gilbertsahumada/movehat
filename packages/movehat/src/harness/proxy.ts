@@ -48,7 +48,7 @@ export function createHarnessProxy<T extends object>(
  * design as the harness-level guards in {@link createHarnessProxy} for
  * `deployCodeObject` / `upgradeCodeObject` / `runMoveScript`. Writable-
  * fork support that would make `.call` execute against a local Move VM
- * is tracked separately in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+ * is tracked separately.
  */
 export function createForkContractProxy<T extends object>(target: T): T {
   return new Proxy(target, {

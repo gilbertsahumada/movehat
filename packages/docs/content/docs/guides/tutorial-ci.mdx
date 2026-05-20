@@ -144,7 +144,7 @@ If it's red, GitHub Actions surfaces the failing step inline. Most common failur
 
 The cached Movement CLI artifact's SHA256 differs from the pinned value in `MOVEMENT_CLI_SHA256`. Upstream re-uploaded under the same tag. Rotate the pin: download the new artifact locally, compute its `sha256sum`, paste it into the env var, and bust the cache by changing the `f2bdf3fa` prefix in the `key` field.
 
-### `move: command not found`
+### `movement: command not found`
 
 The cache restored an empty `/usr/local/bin/movement` (rare; happens after a force-rotate). Delete the cache via Actions UI → Caches → search for `movement-cli-` → trash. The next run will re-install fresh.
 

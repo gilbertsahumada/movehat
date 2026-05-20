@@ -188,4 +188,19 @@ describe("ForkServer — POST /v1/view proxy", () => {
       },
     );
   });
+
+  it("returns 413 body_too_large when the request body exceeds 1 MiB", async () => {
+    // Build a payload just over 1 MiB so the limit fires mid-stream; the
+    // JSON wrapper adds ~30 bytes around the inner string. The broken
+    // pre-fix code called req.destroy() before sendJSON ran, so fetch saw
+    // a connection reset instead of this envelope.
+    const big = "a".repeat(1024 * 1024 + 1024);
+    const body = JSON.stringify({ function: "0x1::coin::supply", arguments: [big] });
+
+    const { status, body: respBody } = await postView(body);
+
+    expect(status).toBe(413);
+    expect(respBody.error_code).toBe("body_too_large");
+    expect(fakeApi.view).not.toHaveBeenCalled();
+  });
 });

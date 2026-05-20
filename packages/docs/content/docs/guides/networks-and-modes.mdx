@@ -82,7 +82,7 @@ try {
 
 **Important gotcha for view functions**: view calls are proxied to *upstream* — they reflect the upstream network's state, not any local mutations you made via `forkManager.setResource` or `forkManager.fundAccount`. For the dominant use case ("read a real mainnet view"), this is what you want. For "deploy to a fork, then view the result", you need a writable fork (#192).
 
-**When to reach for it**: snapshot real on-chain account / resource shapes for deterministic tests, or verify that read paths through your code interact correctly with real framework types. For anything that requires a view function or transaction execution today, use `createLocal` instead.
+**When to reach for it**: snapshot real on-chain account / resource shapes for deterministic tests, run live view functions against real mainnet state (e.g. current MOVE supply, DEX prices), or verify that read paths through your code interact correctly with real framework types. When you need transaction execution — or view results that reflect local mutations made via `forkManager.setResource` / `forkManager.fundAccount` — use `createLocal` (fresh chain) or wait on the writable-fork work tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
 See [Fork system](./fork) for the deeper dive on the `ForkManager` lifecycle and what gets cached vs proxied, and [the fork-mode tutorial](./tutorial-fork-testing) for a step-by-step walkthrough.
 

@@ -359,18 +359,26 @@ export class ForkServer {
       body = await new Promise<string>((resolve, reject) => {
         const chunks: Buffer[] = [];
         let totalBytes = 0;
+        let overflow = false;
         req.on('data', (chunk: Buffer | string) => {
+          if (overflow) return;
           const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           totalBytes += buf.length;
           if (totalBytes > MAX_VIEW_BODY_BYTES) {
+            overflow = true;
             reject(new Error('body_too_large'));
-            req.destroy();
             return;
           }
           chunks.push(buf);
         });
-        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-        req.on('error', (err) => reject(err));
+        req.on('end', () => {
+          if (overflow) return;
+          resolve(Buffer.concat(chunks).toString('utf8'));
+        });
+        req.on('error', (err) => {
+          if (overflow) return;
+          reject(err);
+        });
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
