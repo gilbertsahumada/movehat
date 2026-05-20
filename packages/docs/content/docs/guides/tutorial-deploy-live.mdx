@@ -1,0 +1,191 @@
+---
+title: Tutorial — deploying to a live network
+description: Walk through deploying and upgrading a Move module on Movement testnet or mainnet
+icon: Rocket
+---
+
+> ⚠️ **This tutorial submits real transactions to a live network.** Every step on testnet costs testnet MOVE (free, but rate-limited); every step on mainnet costs **real MOVE** and is irreversible. Run on testnet first. Never copy a `createLive(network)` call into a `tests/*.test.ts` file — see [Networks and modes](./networks-and-modes) for the safety story.
+
+This tutorial walks through the canonical deploy + upgrade flow using `Harness.createLive(network)` and the two scripts that ship with `movehat init`: `scripts/deploy-counter.ts` and `scripts/upgrade-counter.ts`. By the end you'll have a code object live on testnet and have re-published bytecode into it without changing the on-chain address.
+
+## Prerequisites
+
+- You've completed the [Quickstart](/docs/getting-started/quickstart) and have a project from `movehat init`.
+- Movement CLI installed (`movement --version` works).
+- A funded testnet account. Easiest path: visit the [Movement testnet faucet](https://faucet.movementlabs.xyz/?network=testnet) with your address.
+- Your `.env` is configured:
+
+```bash
+# .env
+PRIVATE_KEY=0x<your 64-char hex private key>
+MOVEHAT_NETWORK=testnet
+```
+
+The default `movehat init` template reads `PRIVATE_KEY` from `.env` and derives the account address at runtime. Keep this file out of git (the scaffold's `.gitignore` already excludes it).
+
+## Step 1 — Inspect the deploy script
+
+The canonical script lives at `scripts/deploy-counter.ts` after `movehat init`. The shape:
+
+```typescript
+import { Harness } from "movehat";
+
+async function main() {
+  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const harness = await Harness.createLive(network);
+  try {
+    const deployment = await harness.deployCodeObject({
+      moduleName: "counter",
+      addressName: "hello_blockchain",
+    });
+
+    console.log(`Module deployed at: ${deployment.address}::counter`);
+    console.log(`Transaction:        ${deployment.txHash}`);
+
+    const counter = harness.runtime.getContract(deployment.address, "counter");
+    await counter.call(harness.runtime.account, "increment", []);
+
+    const [value] = await harness.runViewFunction({
+      function: `${deployment.address}::counter::get`,
+      functionArguments: [harness.runtime.account.accountAddress.toString()],
+    });
+    console.log(`Counter value: ${value}`);
+  } finally {
+    await harness.cleanup();
+  }
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
+```
+
+Two things to notice:
+
+- **`moduleName` vs `addressName`** — the `Move.toml` declares `[addresses] hello_blockchain = "_"` (the named-address slot), while the source file declares `module hello_blockchain::counter { ... }`. `addressName: "hello_blockchain"` is the Move.toml slot; `moduleName: "counter"` is the on-chain module identifier and the persistence key Movehat uses to track this deployment.
+- **`createLive(network)` reads `PRIVATE_KEY` from your environment** — no flag, no interactive prompt. The address is derived from the private key at runtime; if you forget to set `PRIVATE_KEY` you get a clear error before any RPC call.
+
+## Step 2 — Deploy
+
+```bash
+npx movehat run scripts/deploy-counter.ts
+# or, if your package.json declares an npm script for it:
+npm run deploy
+```
+
+Expected output (paths and hashes will differ):
+
+```text
+Runtime initialized on testnet
+   Account: 0x84d4...e72c
+   RPC: https://testnet.movementnetwork.xyz/v1
+
+✔ Compiling Move package
+✔ Building deploy transaction
+✔ Submitting publish-object transaction
+
+Module deployed at: 0xcb3fd6f3bb10b46d8a6bf68b391f0ec1be5d1cb9790f219df54f80744e29c5f8::counter
+Transaction:        0x...
+
+Incrementing counter...
+✔ Transaction hash: 0x...
+Counter value: 1
+```
+
+What just happened, in three sentences:
+
+1. `deployCodeObject` ran `movement move deploy-object` against the local Move package, derived a code-object address bound to the `addressName` slot, and submitted the publish transaction.
+2. Movehat wrote `deployments/testnet/counter.json` with the object address, txHash, and timestamp. This file is **committed to git on purpose** so subsequent runs of `upgrade-counter.ts` can find the same object.
+3. The post-deploy `increment` call ran a real transaction against the just-deployed module, and the view-fn read it back as `1`.
+
+The code object address from the KPI 1 testnet smoke test was `0xcb3fd6f3bb10b46d8a6bf68b391f0ec1be5d1cb9790f219df54f80744e29c5f8` ([explorer](https://explorer.movementnetwork.xyz/object/0xcb3fd6f3bb10b46d8a6bf68b391f0ec1be5d1cb9790f219df54f80744e29c5f8?network=testnet)) — yours will be different because the address is derived from your account's published-object nonce.
+
+## Step 3 — Verify against live RPC
+
+Without spending more gas, read the counter state again to confirm it persisted:
+
+```typescript
+// In a fresh script or REPL:
+import { Harness } from "movehat";
+
+const harness = await Harness.createLive("testnet");
+const deployer = harness.runtime.account.accountAddress.toString();
+const objectAddress = harness.runtime.getDeploymentAddress("counter")!;
+
+const [value] = await harness.runViewFunction({
+  function: `${objectAddress}::counter::get`,
+  functionArguments: [deployer],
+});
+console.log(`Counter for ${deployer}: ${value}`);
+await harness.cleanup();
+```
+
+`getDeploymentAddress("counter")` reads `deployments/testnet/counter.json` — the same file the deploy step wrote.
+
+## Step 4 — Upgrade the module (state preservation)
+
+Modify `move/sources/counter.move` — add a `decrement` function, change a constant, anything that changes the bytecode. Then run:
+
+```bash
+npx movehat run scripts/upgrade-counter.ts
+# or:
+npm run upgrade
+```
+
+The upgrade script:
+
+```typescript
+const objectAddress = harness.runtime.getDeploymentAddress("counter");
+if (!objectAddress) {
+  throw new Error("No prior deployment found. Run deploy first.");
+}
+
+const upgrade = await harness.upgradeCodeObject({
+  moduleName: "counter",
+  addressName: "hello_blockchain",
+  objectAddress,
+});
+
+const [value] = await harness.runViewFunction({
+  function: `${upgrade.address}::counter::get`,
+  functionArguments: [harness.runtime.account.accountAddress.toString()],
+});
+console.log(`Counter state preserved through upgrade. value=${value}`);
+```
+
+The crucial part: **the on-chain address does not change**, and **resource state under that address survives** the upgrade. The KPI 1 smoke run on testnet upgraded the bytecode and the counter value stayed at `1` ([upgrade tx `0x1e300d18ba42858d382a61b668bcea16a5b23cf9bb308e247b8b374b21a864f5`](https://explorer.movementnetwork.xyz/txn/0x1e300d18ba42858d382a61b668bcea16a5b23cf9bb308e247b8b374b21a864f5?network=testnet) — published the same module signature against the existing object).
+
+If you removed or renamed a public function, Move's upgrade-compatibility check will refuse the upgrade. That's the contract: storage stays stable, code can only be a backwards-compatible extension. See the [Aptos upgrade-compatibility rules](https://aptos.dev/move/book/package-upgrades/) for the full grammar; Movement enforces the same checks.
+
+## Step 5 — Common pitfalls
+
+### `Module already deployed at <object> on testnet`
+
+`deployCodeObject` refuses to redeploy by default — it would create a second, parallel code object and silently fork your state. Two ways to handle it:
+
+- **You actually want to upgrade**: switch to `scripts/upgrade-counter.ts` or call `harness.upgradeCodeObject(...)` directly.
+- **You really want a new code object** (e.g., testing a clean state): delete `deployments/testnet/counter.json`. The next deploy will create a fresh object at a new address. Be aware: any caller holding the old address will see stale code until they re-fetch.
+
+### `EOBJECT_DOES_NOT_EXIST` on upgrade
+
+Your `deployments/testnet/counter.json` points at an address that isn't a code object. This usually means the file is stale from a pre-code-object era of Movehat, or from a different account. Delete the file and redeploy fresh.
+
+### `Failed to get private key` / `PRIVATE_KEY missing`
+
+`createLive(network)` requires `PRIVATE_KEY` in the environment (or in a `.env` file in the working directory). The harness derives the account address from this key. Set it and re-run.
+
+### Mainnet account has zero balance
+
+On Movement mainnet, your account needs MOVE before `deployCodeObject` can publish. Verify with:
+
+```bash
+curl https://mainnet.movementnetwork.xyz/v1/accounts/<your-address>/resources \
+  | jq '.[] | select(.type | contains("CoinStore"))'
+```
+
+If the result is empty, your account exists but has never received MOVE. Move funds to it before retrying.
+
+## Next steps
+
+- [Fork-mode testing](./tutorial-fork-testing) — test against real mainnet state without spending gas.
+- [Networks and modes](./networks-and-modes) — full decision table on `createLocal` vs `createFork` vs `createLive`.
+- [`movehat run`](../cli/run) — the CLI used to invoke deploy scripts.
+- [Deployment guide](./deployment) — additional deploy patterns beyond the canonical script.
