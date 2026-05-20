@@ -117,6 +117,15 @@ describe("ForkServer — POST /v1/view proxy", () => {
     return { status: res.status, body: await res.json() };
   }
 
+  async function startAndFetch(path: string, init?: RequestInit): Promise<Response> {
+    server = new ForkServer(forkDir, 0);
+    await server.start();
+    const internal = (server as unknown as { server: { address(): AddressInfo } }).server;
+    const port = internal.address().port;
+
+    return fetch(`http://127.0.0.1:${port}${path}`, init);
+  }
+
   it("forwards a view-fn payload to upstream and returns the result", async () => {
     fakeApi.view.mockResolvedValueOnce(["100"]);
 
@@ -161,6 +170,23 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(body.message).toContain("connection refused");
   });
 
+  it("redacts upstream view errors before logging or returning them", async () => {
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const rawSecret = "0x" + "a".repeat(64);
+    fakeApi.view.mockRejectedValueOnce(new Error(`private_key=${rawSecret}`));
+
+    const { status, body } = await postView(
+      JSON.stringify({ function: "0x1::coin::supply", type_arguments: [], arguments: [] }),
+    );
+
+    const logged = stderrSpy.mock.calls.flat().join("\n");
+    expect(status).toBe(502);
+    expect(body.message).not.toContain(rawSecret);
+    expect(body.message).toContain("***REDACTED***");
+    expect(logged).not.toContain(rawSecret);
+    expect(logged).toContain("***REDACTED***");
+  });
+
   it("forwards Accept and X-Aptos-Client headers to upstream", async () => {
     fakeApi.view.mockResolvedValueOnce(["forwarded"]);
 
@@ -202,5 +228,46 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(status).toBe(413);
     expect(respBody.error_code).toBe("body_too_large");
     expect(fakeApi.view).not.toHaveBeenCalled();
+  });
+
+  it("blocks untrusted Origin before routing POST /v1/view", async () => {
+    fakeApi.view.mockResolvedValueOnce(["should-not-run"]);
+
+    const res = await startAndFetch("/v1/view", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ function: "0x1::coin::supply" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.error_code).toBe("cors_origin_forbidden");
+    expect(fakeApi.view).not.toHaveBeenCalled();
+  });
+
+  it("returns 405 with Allow for wrong methods on known endpoints", async () => {
+    const ledger = await startAndFetch("/v1/", { method: "POST" });
+    expect(ledger.status).toBe(405);
+    expect(ledger.headers.get("allow")).toBe("GET");
+    expect((await ledger.json()).error_code).toBe("method_not_allowed");
+
+    await server?.stop();
+    server = null;
+
+    const view = await startAndFetch("/v1/view", { method: "GET" });
+    expect(view.status).toBe(405);
+    expect(view.headers.get("allow")).toBe("POST");
+    expect((await view.json()).error_code).toBe("method_not_allowed");
+  });
+
+  it("returns 400 malformed_path for invalid encoded resource paths", async () => {
+    const res = await startAndFetch("/v1/accounts/0x1/resource/%ZZ");
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error_code).toBe("malformed_path");
   });
 });

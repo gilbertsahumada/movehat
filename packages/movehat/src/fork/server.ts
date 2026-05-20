@@ -2,6 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import { ForkManager } from './manager.js';
 import { logger } from '../ui/index.js';
+import { redactSecrets } from '../utils/redact.js';
 
 export interface ForkServerOptions {
   /**
@@ -59,6 +60,79 @@ export class ForkServer {
     }
   }
 
+  private isOriginAllowed(req: http.IncomingMessage): boolean {
+    const origin = req.headers.origin;
+    return typeof origin !== 'string' || this.corsAllowOrigins.has(origin);
+  }
+
+  private allowedMethodsForPath(pathname: string): readonly string[] | null {
+    if (pathname === '/v1' || pathname === '/v1/') {
+      return ['GET'];
+    }
+    if (pathname === '/v1/view') {
+      return ['POST'];
+    }
+    if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}$/)) {
+      return ['GET'];
+    }
+    if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}\/resource\/.+$/)) {
+      return ['GET'];
+    }
+    if (pathname.match(/^\/v1\/accounts\/0x[a-fA-F0-9]{1,64}\/resources$/)) {
+      return ['GET'];
+    }
+    return null;
+  }
+
+  private sendMethodNotAllowed(res: http.ServerResponse, allowedMethods: readonly string[]): void {
+    this.sendJSON(
+      res,
+      405,
+      {
+        message: `Method not allowed. Allowed methods: ${allowedMethods.join(', ')}`,
+        error_code: 'method_not_allowed',
+        vm_error_code: null
+      },
+      { Allow: allowedMethods.join(', ') }
+    );
+  }
+
+  private sendForbiddenOrigin(res: http.ServerResponse): void {
+    this.sendJSON(res, 403, {
+      message: 'Origin is not allowed to access this fork server',
+      error_code: 'cors_origin_forbidden',
+      vm_error_code: null
+    });
+  }
+
+  private handleOptions(req: http.IncomingMessage, res: http.ServerResponse, pathname: string): boolean {
+    if (req.method !== 'OPTIONS') {
+      return false;
+    }
+
+    const origin = req.headers.origin;
+    const allowedMethods = this.allowedMethodsForPath(pathname);
+    if (typeof origin !== 'string' || !allowedMethods) {
+      this.sendMethodNotAllowed(res, allowedMethods ?? ['GET', 'POST']);
+      return true;
+    }
+
+    this.applyCors(req, res);
+    const requestedMethod = req.headers['access-control-request-method'];
+    if (
+      typeof requestedMethod === 'string' &&
+      !allowedMethods.includes(requestedMethod.toUpperCase())
+    ) {
+      this.sendMethodNotAllowed(res, allowedMethods);
+      return true;
+    }
+
+    res.setHeader('Allow', allowedMethods.join(', '));
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+
   /**
    * Start the fork server
    */
@@ -77,7 +151,7 @@ export class ForkServer {
     this.server = http.createServer((req, res) => {
       this.handleRequest(req, res).catch((error) => {
         // Log full error server-side for diagnostics
-        logger.error(`Error handling request: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`Error handling request: ${this.sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}`);
 
         // Only send response if headers haven't been sent yet
         if (!res.headersSent) {
@@ -167,6 +241,10 @@ export class ForkServer {
     return sanitized.length > 100 ? sanitized.substring(0, 100) + '...' : sanitized;
   }
 
+  private sanitizeErrorMessage(message: string): string {
+    return this.sanitizePathname(redactSecrets(message));
+  }
+
   /**
    * Handle incoming HTTP requests
    */
@@ -183,10 +261,18 @@ export class ForkServer {
 
     this.applyCors(req, res);
 
-    // Handle OPTIONS for CORS preflight
-    if (req.method === 'OPTIONS') {
-      res.writeHead(200);
-      res.end();
+    if (!this.isOriginAllowed(req)) {
+      this.sendForbiddenOrigin(res);
+      return;
+    }
+
+    if (this.handleOptions(req, res, pathname)) {
+      return;
+    }
+
+    const allowedMethods = this.allowedMethodsForPath(pathname);
+    if (allowedMethods && !allowedMethods.includes(req.method ?? '')) {
+      this.sendMethodNotAllowed(res, allowedMethods);
       return;
     }
 
@@ -202,7 +288,17 @@ export class ForkServer {
         const accountIndex = parts.indexOf('accounts') + 1;
         const resourceIndex = parts.indexOf('resource') + 1;
         const address = parts[accountIndex];
-        const resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
+        let resourceType: string;
+        try {
+          resourceType = decodeURIComponent(parts.slice(resourceIndex).join('/'));
+        } catch {
+          this.sendJSON(res, 400, {
+            message: 'Malformed resource path',
+            error_code: 'malformed_path',
+            vm_error_code: null
+          });
+          return;
+        }
         if (!address) {
           this.send404(res, 'Malformed resource path', 'malformed_path');
           return;
@@ -224,7 +320,7 @@ export class ForkServer {
       }
     } catch (error) {
       // Log full error server-side for diagnostics
-      logger.error(`Error handling request: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`Error handling request: ${this.sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}`);
 
       // Send generic error to client (don't expose internal details)
       this.sendError(res, 500, 'Internal server error');
@@ -427,8 +523,8 @@ export class ForkServer {
       const rawMsg = error instanceof Error ? error.message : String(error);
       // Sanitize: reuse the existing log-injection guard from
       // sanitizePathname (control chars, length cap).
-      const safeMsg = this.sanitizePathname(rawMsg);
-      logger.error(`Upstream view-fn call failed: ${rawMsg}`);
+      const safeMsg = this.sanitizeErrorMessage(rawMsg);
+      logger.error(`Upstream view-fn call failed: ${safeMsg}`);
       this.sendJSON(res, 502, {
         message: `Upstream view-fn call failed: ${safeMsg}`,
         error_code: 'upstream_error',
