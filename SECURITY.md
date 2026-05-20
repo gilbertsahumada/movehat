@@ -47,15 +47,23 @@ Out of scope:
 - The documentation site, unless it leaks credentials or executes untrusted
   code
 
-## Known advisories in development dependencies
+## Known advisories in non-published workspace dependencies
 
 The CI audit gate (`pnpm audit --prod --audit-level critical`) currently
-allows known high-severity advisories in development-only transitive
-dependencies of `packages/docs` to pass. None of these reach the
-published `movehat` package on npm; they affect only the docs-site
-build pipeline and the hosted static site.
+allows known non-critical advisories outside the published `movehat`
+runtime package to pass. None of these reach the packed `movehat` npm
+artifact; they affect the docs-site dependency tree and related
+workspace build tooling.
 
-Tracked advisories (2026-05-16):
+Tracked advisories (2026-05-20):
+
+- Current `pnpm audit --prod --audit-level critical`: passes with zero
+  critical advisories.
+- Current full production audit count: 26 non-critical advisories
+  (13 high, 11 moderate, 2 low).
+- The previous workspace-root `http-proxy > follow-redirects` advisory
+  path has been removed; `http-proxy` is no longer declared at the
+  workspace root.
 
 - **Next.js** (multiple) — middleware/proxy bypass, DoS, SSRF advisories
   in `next` ≥ 13.4.6 < 15.5.16. Path:
@@ -80,4 +88,6 @@ The repo cannot shortcut this chain (e.g. pin Next.js via
 `pnpm.overrides`) because Fumadocs has tight version expectations
 that breaking would crash the docs site build.
 
-The published `packages/movehat` package has zero advisories.
+The published `packages/movehat` package is also guarded by a pack
+contents check. The npm tarball must not contain raw `src/**`, compiled
+tests, fixtures, snapshots, source maps, or common secret files.

@@ -42,6 +42,9 @@ jobs:
       - name: Build
         run: pnpm build:movehat
 
+      - name: Check npm package contents
+        run: pnpm --filter movehat run check-pack-contents
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -214,7 +217,16 @@ jobs:
           rm -rf temp_extract "${ARTIFACT}"
 
       - name: Verify Movement CLI
-        run: movement --version
+        env:
+          MOVEMENT_CLI_BINARY_SHA256_LINUX_X64: 7a6b13f45c7473de4f8abc05100743993763153fc6dbaab934a0c2e5d3df595b
+        run: |
+          case "${{ runner.arch }}" in
+            X64)   EXPECTED_BINARY_SHA256="${MOVEMENT_CLI_BINARY_SHA256_LINUX_X64}" ;;
+            ARM64) echo "::error::aarch64 binary SHA256 not pinned"; exit 1 ;;
+            *)     echo "::error::Unsupported runner.arch: ${{ runner.arch }}"; exit 1 ;;
+          esac
+          echo "${EXPECTED_BINARY_SHA256}  /usr/local/bin/movement" | sha256sum -c
+          movement --version
 
       - name: Run E2E tests
         run: pnpm test:e2e:quick
@@ -303,21 +315,14 @@ jobs:
 
       - name: Audit dependencies
         # `pnpm audit` operates workspace-wide and cannot scope to a
-        # single package. The current findings (27 total: 2 low / 12
-        # moderate / 13 high) are ALL transitive dependencies of
-        # `packages/docs` (Fumadocs → Next.js / Vite / Rollup /
-        # path-to-regexp / picomatch). The published `packages/movehat`
-        # has zero advisories. Fixing the docs-site CVEs requires
-        # upgrading Fumadocs past v15, which requires Next.js 16, which
-        # is incompatible with the docs site's current static-export
-        # configuration. Pinning via `pnpm.overrides` risks breaking
-        # the Fumadocs runtime.
+        # single package. Non-critical findings can include docs-site
+        # transitive dependencies and workspace tooling, so this gate is
+        # intentionally critical-only until accepted non-critical
+        # advisories are tracked in SECURITY.md.
         #
-        # Pragmatic gate: fail only on `critical`. The 13 high CVEs in
-        # docs build infra are documented in SECURITY.md as "Known
-        # advisories in development dependencies" and will be revisited
-        # when Fumadocs supports Next.js 16. Real critical-level CVEs
-        # in `movehat`'s direct deps still hard-fail this step.
+        # Pragmatic gate: critical-level CVEs in production dependency
+        # paths hard-fail this step; lower severities require explicit
+        # documentation or remediation before acceptance.
         run: pnpm audit --prod --audit-level critical
         # F10a (audit): production-dependency vulnerabilities at
         # critical severity hard-fail. Anything below critical that
