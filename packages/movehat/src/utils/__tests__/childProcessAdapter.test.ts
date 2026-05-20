@@ -82,7 +82,7 @@ describe('defaultChildProcessAdapter', () => {
               'setInterval(() => {}, 1000);',
             ].join(''),
           ],
-          timeoutMs: 25,
+          timeoutMs: 1000,
         })
       ).rejects.toThrow(/timed out/);
 
