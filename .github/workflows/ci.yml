@@ -180,12 +180,14 @@ jobs:
         id: cache-movement-cli
         uses: actions/cache@v4
         with:
-          path: /usr/local/bin/movement
-          # SHA256 prefix ties cache hits to the pinned binary; rotating
-          # MOVEMENT_CLI_SHA256_LINUX_X64 below busts the cache automatically.
-          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
-          restore-keys: |
-            movement-cli-${{ runner.os }}-${{ runner.arch }}-
+          path: ${{ runner.temp }}/movement
+          # SHA256 prefixes tie cache hits to the pinned tarball and binary.
+          # The "bin" namespace avoids restoring older /usr/local/bin caches
+          # that predate binary-level SHA verification.
+          key: movement-cli-bin-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa-7a6b13f4
+
+      - name: Add Movement CLI to PATH
+        run: echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Install Movement CLI
         if: steps.cache-movement-cli.outputs.cache-hit != 'true'
@@ -213,7 +215,7 @@ jobs:
           mkdir -p temp_extract
           tar -xzf "${ARTIFACT}" -C temp_extract
           chmod +x temp_extract/movement
-          sudo mv temp_extract/movement /usr/local/bin/movement
+          mv temp_extract/movement "$RUNNER_TEMP/movement"
           rm -rf temp_extract "${ARTIFACT}"
 
       - name: Verify Movement CLI
@@ -225,7 +227,7 @@ jobs:
             ARM64) echo "::error::aarch64 binary SHA256 not pinned"; exit 1 ;;
             *)     echo "::error::Unsupported runner.arch: ${{ runner.arch }}"; exit 1 ;;
           esac
-          echo "${EXPECTED_BINARY_SHA256}  /usr/local/bin/movement" | sha256sum -c
+          echo "${EXPECTED_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
           movement --version
 
       - name: Run E2E tests
