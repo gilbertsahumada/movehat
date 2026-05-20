@@ -26,6 +26,12 @@ describe('redactSecrets', () => {
     expect(redactSecrets(input)).toBe('Loaded key ***REDACTED*** ok');
   });
 
+  it('replaces AIP-80 private-key literals with other key schemes', () => {
+    const key = '0x' + '1'.repeat(64);
+    const input = `Loaded key secp256k1-priv-${key} ok`;
+    expect(redactSecrets(input)).toBe('Loaded key ***REDACTED*** ok');
+  });
+
   it('redacts private_key labelled values', () => {
     const input = 'private_key: 0x' + 'b'.repeat(64);
     expect(redactSecrets(input)).toBe('***REDACTED***');
@@ -36,8 +42,23 @@ describe('redactSecrets', () => {
     expect(redactSecrets(input)).toBe('***REDACTED***');
   });
 
+  it('redacts raw private keys next to CLI key flags', () => {
+    const input = '--private-key 0x' + 'd'.repeat(64);
+    expect(redactSecrets(input)).toBe('***REDACTED***');
+  });
+
+  it('redacts raw private keys before nearby key context', () => {
+    const input = '0x' + 'e'.repeat(64) + ' private key loaded';
+    expect(redactSecrets(input)).toBe('***REDACTED*** private key loaded');
+  });
+
   it('leaves regular hex addresses alone', () => {
     const input = 'Account 0x1234 deployed module counter';
+    expect(redactSecrets(input)).toBe(input);
+  });
+
+  it('leaves full-length account addresses alone without key context', () => {
+    const input = 'Account 0x' + 'f'.repeat(64) + ' deployed module counter';
     expect(redactSecrets(input)).toBe(input);
   });
 
@@ -133,6 +154,27 @@ describe('runCli', () => {
       timeoutMs: 1234,
       signal,
     });
+  });
+
+  it('resolves movement and sanitizes env when using the default adapter', async () => {
+    const result = await runCli(
+      {
+        command: 'movement',
+        args: [
+          '-e',
+          "process.stdout.write(process.env.PRIVATE_KEY ? 'leaked' : (process.env.PATH ? 'sanitized' : 'missing-path'))",
+        ],
+        env: {
+          PATH: process.env.PATH ?? '',
+          MOVEHAT_MOVEMENT_BIN: process.execPath,
+          PRIVATE_KEY: '0x' + 'a'.repeat(64),
+        },
+      },
+      { throwOnNonZeroExit: false }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('sanitized');
   });
 
   it('truncates stdoutPreview on CliExecutionError', async () => {

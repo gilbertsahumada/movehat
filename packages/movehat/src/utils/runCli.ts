@@ -5,6 +5,7 @@ import {
   type RunInput,
   type RunResult,
 } from './childProcessAdapter.js';
+import { resolveMovementBinary, sanitizeMovementEnv } from './movementCli.js';
 import { redactSecrets } from './redact.js';
 
 export { redactSecrets } from './redact.js';
@@ -38,8 +39,17 @@ export async function runCli(
 ): Promise<RunResult> {
   const adapter = options.adapter ?? defaultChildProcessAdapter;
   const throwOnNonZeroExit = options.throwOnNonZeroExit ?? true;
+  const movementResolveOptions = input.env ? { env: input.env } : {};
+  const runInput =
+    input.command === 'movement' && options.adapter === undefined
+      ? {
+          ...input,
+          command: resolveMovementBinary(movementResolveOptions),
+          env: sanitizeMovementEnv(input.env ?? process.env),
+        }
+      : input;
 
-  const raw = await adapter.run(input);
+  const raw = await adapter.run(runInput);
   const result: RunResult = {
     exitCode: raw.exitCode,
     stdout: redactSecrets(raw.stdout),

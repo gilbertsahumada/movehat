@@ -48,6 +48,7 @@ export interface RunInput {
 }
 
 const DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
+const TERMINATION_GRACE_MS = 5_000;
 
 export interface RunResult {
   /**
@@ -103,16 +104,17 @@ export interface SpawnedProcess {
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_INHERIT_STDIO_TIMEOUT_MS = 30 * 60 * 1000;
 
 class DefaultChildProcessAdapter implements ChildProcessAdapter {
   run(input: RunInput): Promise<RunResult> {
-    // Skip the default 5-minute timeout when the caller wires stdio
-    // through to the terminal — interactive sessions (mocha, tsx scripts,
-    // `movement move test`, `pnpm install`) routinely exceed 5 minutes
-    // and SIGTERM'ing them silently would be a regression. An explicit
-    // `timeoutMs` is always honored, regardless of `inheritStdio`.
     const timeoutMs =
-      input.timeoutMs ?? (input.inheritStdio ? undefined : DEFAULT_TIMEOUT_MS);
+      input.timeoutMs ??
+      (input.inheritStdio ? DEFAULT_INHERIT_STDIO_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+
+    if (input.signal?.aborted) {
+      return Promise.reject(new Error('Command aborted before start'));
+    }
 
     return new Promise<RunResult>((resolve, reject) => {
       const child = spawn(input.command, [...input.args], {
@@ -126,6 +128,33 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       let totalBytes = 0;
       let overflowed = false;
       const maxBuffer = input.maxBuffer ?? DEFAULT_MAX_BUFFER;
+      let settled = false;
+      let pendingFailure: Error | undefined;
+      let forceKillHandle: NodeJS.Timeout | undefined;
+
+      const settleResolve = (result: RunResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      const settleReject = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      const requestTermination = (reason?: Error) => {
+        if (reason && !pendingFailure) {
+          pendingFailure = reason;
+        }
+        child.kill('SIGTERM');
+        if (!forceKillHandle) {
+          forceKillHandle = setTimeout(() => {
+            child.kill('SIGKILL');
+          }, TERMINATION_GRACE_MS);
+        }
+      };
 
       const onChunk = (chunks: Buffer[]) => (chunk: Buffer) => {
         if (overflowed) return;
@@ -134,8 +163,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
           overflowed = true;
           clearTimer();
           input.signal?.removeEventListener('abort', onAbort);
-          child.kill('SIGTERM');
-          reject(
+          requestTermination(
             new Error(
               `Command output exceeded maxBuffer (${maxBuffer} bytes): ${input.command}`
             )
@@ -156,34 +184,35 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
 
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
-          child.kill('SIGTERM');
-          reject(new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`));
+          requestTermination(
+            new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`)
+          );
         }, timeoutMs);
       }
 
       const onAbort = () => {
-        child.kill('SIGTERM');
+        requestTermination();
       };
 
       if (input.signal) {
-        if (input.signal.aborted) {
-          clearTimer();
-          child.kill('SIGTERM');
-          reject(new Error('Command aborted before start'));
-          return;
-        }
         input.signal.addEventListener('abort', onAbort, { once: true });
       }
 
       child.on('error', (err) => {
         clearTimer();
+        if (forceKillHandle) clearTimeout(forceKillHandle);
         input.signal?.removeEventListener('abort', onAbort);
-        reject(err);
+        settleReject(err);
       });
 
       child.on('close', (code, signal) => {
         clearTimer();
+        if (forceKillHandle) clearTimeout(forceKillHandle);
         input.signal?.removeEventListener('abort', onAbort);
+        if (pendingFailure) {
+          settleReject(pendingFailure);
+          return;
+        }
         const result: RunResult = {
           exitCode: code !== null ? code : -1,
           stdout: Buffer.concat(stdoutChunks).toString('utf8'),
@@ -192,7 +221,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         if (signal) {
           result.signal = signal;
         }
-        resolve(result);
+        settleResolve(result);
       });
 
       // Under inheritStdio, child.stdin is null and the parent's stdin

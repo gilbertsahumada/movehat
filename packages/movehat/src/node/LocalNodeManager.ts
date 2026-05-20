@@ -6,6 +6,7 @@ import {
   type ChildProcessAdapter,
   type SpawnedProcess,
 } from "../utils/childProcessAdapter.js";
+import { resolveMovementBinary, sanitizeMovementEnv } from "../utils/movementCli.js";
 import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 import { withTimedSpinner, withSpinner } from "../ui/spinner.js";
 
@@ -136,9 +137,11 @@ export class LocalNodeManager {
 
       // Start the node process via the injectable adapter.
       this.killed = false;
+      const usesDefaultAdapter = this.adapter === defaultChildProcessAdapter;
       this.spawned = this.adapter.spawn({
-        command: "movement",
+        command: usesDefaultAdapter ? resolveMovementBinary() : "movement",
         args,
+        ...(usesDefaultAdapter ? { env: sanitizeMovementEnv() } : {}),
         stdio: this.options.silent ? "ignore" : "pipe",
       });
 
