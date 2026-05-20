@@ -10,6 +10,7 @@
     "guides/testing",
     "guides/networks-and-modes",
     "guides/multi-contract",
+    "guides/tutorial-fork-testing",
     "guides/deployment",
     "guides/fork",
     "guides/scripts",
