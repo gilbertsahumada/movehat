@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-21
+
 ### Added
 
 - New `guides/tutorial-fork-testing.mdx` docs page — step-by-step
@@ -46,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Deployment Helpers / Errors / Other) instead of flat alphabetical,
   via a postprocess-script-only refactor in
   `packages/movehat/scripts/postprocess-typedoc.mjs`.
+- New `packages/movehat/src/utils/movementCli.ts` helper — dedicated
+  Movement CLI wrapper with argument validation, secret-redaction
+  hooks, and a unit-test surface covering shape + invocation paths.
 
 ### Changed
 
@@ -56,13 +61,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about write rejection (the harness-Proxy gate covers
   `deployCodeObject` / `upgradeCodeObject` / `runMoveScript`;
   `MoveContract.call` gets the new fork-contract Proxy guard).
+- CI Movement-binary cache isolated per job in
+  `.github/workflows/ci.yml` so the E2E job no longer shares cache
+  with the unit-test job (avoids cross-test contamination).
+- CI Movement-binary SHA256 pin corrected across `.github/workflows/`,
+  `examples/counter-example/.github/workflows/ci.yml`, and the
+  `tutorial-ci.mdx` code fence so all three stay byte-identical with
+  the canonical pin.
+- Example workflow (`examples/counter-example/.github/workflows/ci.yml`)
+  expanded with `MOVEMENT_CLI_BINARY_SHA256` verification step
+  matching the tutorial reference (was previously tutorial-only).
+- Example workflow Movement-CLI cache target moved from
+  `/usr/local/bin/movement` (root-owned, EACCES on cache restore for
+  the unprivileged runner user) to `${{ runner.temp }}/movement`,
+  with `PATH` prepend.
 
 ### Fixed
 
 - The networks-and-modes guide shipped with the KPI 1 docs site
   contained two factually-wrong claims about fork-mode write
-  rejection. Corrected in PR #244 (M8.1); the corrected version ships
-  to movehat.org with the next `develop → main` batch merge.
+  rejection. Corrected in PR #244 (M8.1); ships to movehat.org with
+  this release.
+- Fork server `POST /v1/view` proxy body-too-large path: `req.destroy()`
+  ran before the 413 envelope could be written, so clients saw
+  ECONNRESET instead of the structured error. Replaced with an
+  overflow flag; pre-limit chunks stream as before, post-limit chunks
+  are discarded by an early-return guard in the data handler. New
+  unit test asserts the 413 actually reaches the client.
+- `networks-and-modes.mdx` "When to reach for it" paragraph
+  contradicted the supported view-fn list in the bullet above it;
+  reconciled so both align on `createFork` supporting view functions.
+- `tutorial-ci.mdx` troubleshooting heading typo: `move:` →
+  `movement:` (binary is named `movement`).
+- `tutorial-fork-testing.mdx` intro caching claim qualified to
+  distinguish cached accounts/resources from proxied view functions.
+- Child process timeout coverage test stabilized — flake source was
+  a timing assertion that raced the SIGTERM handler.
+
+### Security
+
+- Hardened Movement CLI execution path: argument validation in
+  `childProcessAdapter.ts`, expanded secret-redaction patterns in
+  `redact.ts`, and a dedicated `movementCli.ts` wrapper module that
+  centralizes flag handling. Reduces blast radius of any future
+  input-injection bug in callers.
+- Hardened fork server: CORS origin allow-list rejects untrusted
+  origins with HTTP 403; wrong-method requests on known endpoints
+  return HTTP 405 with `Allow` header; malformed percent-encoded
+  resource paths return HTTP 400 instead of crashing the handler.
+  Fork storage layer gained path-traversal protections.
+- `AccountManager` no longer persists imported accounts to disk —
+  only auto-generated test accounts are saved; imported private keys
+  remain in memory for the lifetime of the process. Prevents
+  accidental persistence of user-supplied keys to `.movehat/accounts/`.
+- Pre-publish gates tightened: `prepublishOnly` script, expanded
+  `scripts/check-pack-contents.js` denylist, additional `publish.yml`
+  guards. Full security audit recorded at
+  `SECURITY_AUDIT_2026-05-20.md` at repo root.
 
 ---
 
