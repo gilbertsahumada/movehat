@@ -291,11 +291,11 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] `packages/docs/content/docs/guides/tutorial-deploy-live.mdx` live on movehat.org (M8.2)
 - [x] `packages/docs/content/docs/guides/tutorial-ci.mdx` live on movehat.org (M8.3)
 - [x] `examples/counter-example/.github/workflows/ci.yml` committed and identical to the snippet in the CI tutorial (M8.3 — verified byte-identical)
-- [ ] `movehat.org/docs/api/reference/` sidebar groups symbols by category (Harness / Account / Contract / Fork / Deployment Helpers / Errors), not flat alphabetical
-- [ ] `MAINTENANCE.md` at repo root with release cadence + triage SLA + deprecation policy
-- [ ] `packages/docs/content/docs/contributing/maintenance.mdx` exists and links from `contributing/index.mdx`
-- [ ] `grant/KPI2.pdf` generated, sign-off date set
-- [ ] Telegram draft in `grant/email-draft-kpi2.md` references `KPI2.pdf` + delivery commit hash
+- [x] `movehat.org/docs/api/reference/` sidebar groups symbols by category (Harness / Account / Contract / Fork / Deployment Helpers / Errors), not flat alphabetical (M8.4a — verified in regenerated `meta.json`)
+- [x] `MAINTENANCE.md` at repo root with release cadence + triage SLA + deprecation policy (M8.4b)
+- [x] Maintenance policy linked from `contributing/index.mdx` (M8.4b — dropped the separate `contributing/maintenance.mdx` due to Next `/raw/` EISDIR collision; cross-ref added to `contributing/index.mdx` instead, same discoverability)
+- [x] `grant/KPI2.pdf` generated, sign-off date set (M8.4c)
+- [x] Telegram draft in `grant/email-draft-kpi2.md` references `KPI2.pdf` + delivery commit hash (M8.4c)
 - [ ] CI green on `develop → main` batch PR
 - [ ] `docs-deploy.yml` succeeds on the batch merge; all three new tutorial pages return HTTP 200
 
@@ -307,7 +307,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 | M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
 | M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | in PR |
 | M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | in PR |
-| M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | |
+| M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | in PR |
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
 

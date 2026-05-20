@@ -9,15 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New `guides/tutorial-fork-testing.mdx` docs page — step-by-step
+  tutorial for using `Harness.createFork(network)` to read live
+  Movement state from a TypeScript test, with a working
+  `runViewFunction` example against `0x1::coin::supply<AptosCoin>` and
+  a demonstration of the synchronous deploy-rejection guard.
+- New `guides/tutorial-deploy-live.mdx` docs page — step-by-step
+  tutorial for `Harness.createLive(network)` covering `.env` setup,
+  `deployCodeObject` + `upgradeCodeObject`, state preservation across
+  upgrades (referencing the KPI 1 testnet smoke evidence), and common
+  pitfalls (stale deployment records, `EOBJECT_DOES_NOT_EXIST`,
+  accidental `--redeploy`).
+- New `guides/tutorial-ci.mdx` docs page + reference workflow at
+  `examples/counter-example/.github/workflows/ci.yml` — copy-paste-able
+  GitHub Actions CI for end-user Movehat projects. The MDX code-fence
+  and the committed YAML are byte-identical.
+- `POST /v1/view` proxy on the fork server — `harness.runViewFunction`
+  and `MoveContract.view` now work against forked networks by
+  forwarding view-fn calls to upstream RPC. Stateless passthrough; no
+  view-result caching. Whitelisted request headers (`Accept`,
+  `X-Aptos-Client`) round-trip to upstream. Closes #243.
+- `MoveContract.call` synchronous guard in fork mode — calling `.call`
+  on a contract obtained from a fork-mode harness throws a clear
+  "fork is read-only" error instead of falling through to the fork
+  server's unhandled `/v1/transactions` endpoint and surfacing as
+  HTTP 404. Helper: `createForkContractProxy` alongside the existing
+  `createHarnessProxy`.
+- New `MAINTENANCE.md` at the repo root — documents release cadence
+  (patch / minor / per-milestone batch merges), issue triage SLA
+  (24h security / 3 business days bug / 5 business days feature),
+  SemVer versioning policy with pre-1.0 conventions, one-minor-release
+  deprecation window, and Movement CLI compatibility / SHA256 pinning
+  procedure.
+- TypeDoc-emitted API reference sidebar now groups symbols by
+  functional category (Harness / Account / Contract / Fork /
+  Deployment Helpers / Errors / Other) instead of flat alphabetical,
+  via a postprocess-script-only refactor in
+  `packages/movehat/scripts/postprocess-typedoc.mjs`.
+
 ### Changed
 
-### Deprecated
-
-### Removed
+- `packages/docs/content/docs/guides/networks-and-modes.mdx` rewritten
+  to reflect actual fork-mode behavior — promoted `runViewFunction` /
+  `MoveContract.view` from "Not yet supported" to "Supported" once
+  the `POST /v1/view` proxy landed, and corrected the false claims
+  about write rejection (the harness-Proxy gate covers
+  `deployCodeObject` / `upgradeCodeObject` / `runMoveScript`;
+  `MoveContract.call` gets the new fork-contract Proxy guard).
 
 ### Fixed
 
-### Security
+- The networks-and-modes guide shipped with the KPI 1 docs site
+  contained two factually-wrong claims about fork-mode write
+  rejection. Corrected in PR #244 (M8.1); the corrected version ships
+  to movehat.org with the next `develop → main` batch merge.
 
 ---
 
