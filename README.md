@@ -190,7 +190,7 @@ For anything not on this list, open an issue on [GitHub](https://github.com/gilb
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development setup, the dual-tier test infrastructure, and the PR workflow.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development setup, the dual-tier test infrastructure, and the PR workflow. See [`MAINTENANCE.md`](./MAINTENANCE.md) for release cadence, triage SLA, versioning, and deprecation policy.
 
 ## License
 

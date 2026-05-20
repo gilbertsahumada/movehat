@@ -63,6 +63,7 @@ pnpm-debug.log*
 !SECURITY.md
 !CHANGELOG.md
 !BENCHMARKS.md
+!MAINTENANCE.md
 !MOVEMENT_CLI_COMPAT.md
 !NOTICE.md
 !.github/**/*.md
