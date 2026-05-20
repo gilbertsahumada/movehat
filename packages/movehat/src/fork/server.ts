@@ -397,8 +397,23 @@ export class ForkServer {
       return;
     }
 
+    // Forward a narrow set of client headers to upstream so that
+    // BCS-encoded responses (`Accept: application/x-bcs`) and client
+    // identification (`X-Aptos-Client`) round-trip through the proxy.
+    // Hop-by-hop and connection-level headers (host, connection,
+    // content-length, etc.) are deliberately not forwarded.
+    const forwardableHeaders: Record<string, string> = {};
+    for (const name of ['accept', 'x-aptos-client'] as const) {
+      const value = req.headers[name];
+      if (typeof value === 'string') {
+        // Use the canonical capitalization upstream expects.
+        const canonical = name === 'accept' ? 'Accept' : 'X-Aptos-Client';
+        forwardableHeaders[canonical] = value;
+      }
+    }
+
     try {
-      const result = await this.forkManager.forwardView(payload);
+      const result = await this.forkManager.forwardView(payload, forwardableHeaders);
       this.sendJSON(res, 200, result);
     } catch (error) {
       const rawMsg = error instanceof Error ? error.message : String(error);

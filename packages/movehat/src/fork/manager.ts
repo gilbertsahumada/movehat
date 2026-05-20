@@ -201,12 +201,19 @@ export class ForkManager {
    * invalidation that the fork system does not implement today. The
    * payload is forwarded verbatim and the upstream response array is
    * returned unchanged.
+   *
+   * `extraHeaders` are forwarded to upstream so that client headers
+   * such as `Accept: application/x-bcs` (for BCS-encoded view results)
+   * or `X-Aptos-Client` round-trip through the proxy.
    */
-  async forwardView(payload: unknown): Promise<unknown[]> {
+  async forwardView(
+    payload: unknown,
+    extraHeaders: Record<string, string> = {}
+  ): Promise<unknown[]> {
     if (!this.apiClient) {
       throw new Error('Fork not initialized. Call initialize() or load() first.');
     }
-    return this.apiClient.view(payload);
+    return this.apiClient.view(payload, extraHeaders);
   }
 
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {

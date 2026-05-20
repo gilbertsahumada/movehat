@@ -148,8 +148,16 @@ export class MovementApiClient {
    * Mirrors `get<T>` for TLS/timeout/maxBytes/error-wrapping; differs
    * only in `method: 'POST'`, the `Content-Type: application/json`
    * header, and writing `body` to the request stream before `end()`.
+   *
+   * `extraHeaders` are merged in last and override defaults — used by
+   * the fork-server view proxy to forward client headers like
+   * `Accept` or `X-Aptos-Client` through to the upstream node.
    */
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(
+    path: string,
+    body: unknown,
+    extraHeaders: Record<string, string> = {}
+  ): Promise<T> {
     const fullUrl = `${this.nodeUrl}${path}`;
     const parsedUrl = new URL(fullUrl);
     const isHttps = parsedUrl.protocol === 'https:';
@@ -162,6 +170,11 @@ export class MovementApiClient {
     };
     if (this.apiKey !== undefined) {
       headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+    for (const [k, v] of Object.entries(extraHeaders)) {
+      // Don't let callers override Content-Length — we just computed it.
+      if (k.toLowerCase() === 'content-length') continue;
+      headers[k] = v;
     }
 
     const timeoutMs = this.timeoutMs;
@@ -289,8 +302,15 @@ export class MovementApiClient {
    * Stateless passthrough — view results are not cached. Returns the raw
    * array the upstream API returns (single-value views still come back as
    * a one-element tuple).
+   *
+   * `extraHeaders` are forwarded to upstream — used by the fork server's
+   * view proxy to relay client headers (`Accept`, `X-Aptos-Client`, …)
+   * so downstream behavior such as BCS-encoded responses is preserved.
    */
-  async view(payload: unknown): Promise<unknown[]> {
-    return this.post<unknown[]>(this.apiPath('/view'), payload);
+  async view(
+    payload: unknown,
+    extraHeaders: Record<string, string> = {}
+  ): Promise<unknown[]> {
+    return this.post<unknown[]>(this.apiPath('/view'), payload, extraHeaders);
   }
 }

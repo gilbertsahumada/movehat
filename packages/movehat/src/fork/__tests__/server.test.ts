@@ -127,11 +127,18 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(status).toBe(200);
     expect(body).toEqual(["100"]);
     expect(fakeApi.view).toHaveBeenCalledTimes(1);
-    expect(fakeApi.view).toHaveBeenCalledWith({
+    // The proxy forwards whitelisted headers (Accept, X-Aptos-Client)
+    // through to upstream. `fetch()` in this test doesn't set
+    // X-Aptos-Client, but undici sets a default `Accept: */*` we round-
+    // trip transparently.
+    const firstCall = fakeApi.view.mock.calls[0]!;
+    const [forwardedPayload, forwardedHeaders] = firstCall;
+    expect(forwardedPayload).toEqual({
       function: "0x1::coin::supply",
       type_arguments: [],
       arguments: [],
     });
+    expect(forwardedHeaders).not.toHaveProperty("X-Aptos-Client");
   });
 
   it("rejects malformed JSON with 400 invalid_body", async () => {
@@ -152,5 +159,33 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(status).toBe(502);
     expect(body.error_code).toBe("upstream_error");
     expect(body.message).toContain("connection refused");
+  });
+
+  it("forwards Accept and X-Aptos-Client headers to upstream", async () => {
+    fakeApi.view.mockResolvedValueOnce(["forwarded"]);
+
+    server = new ForkServer(forkDir, 0);
+    await server.start();
+    const internal = (server as unknown as { server: { address(): AddressInfo } }).server;
+    const port = internal.address().port;
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/view`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/x-bcs",
+        "X-Aptos-Client": "my-test-client/1.0",
+      },
+      body: JSON.stringify({ function: "0x1::coin::supply" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(fakeApi.view).toHaveBeenCalledWith(
+      { function: "0x1::coin::supply" },
+      {
+        Accept: "application/x-bcs",
+        "X-Aptos-Client": "my-test-client/1.0",
+      },
+    );
   });
 });
