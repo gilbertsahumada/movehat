@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
@@ -22,6 +22,36 @@ function sanitizeAddressForFilename(address: string): string {
   }
 
   return safe;
+}
+
+const PRIVATE_DIR_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
+
+function ensurePrivateDirectory(path: string): void {
+  if (!existsSync(path)) {
+    mkdirSync(path, { recursive: true, mode: PRIVATE_DIR_MODE });
+  }
+  chmodSync(path, PRIVATE_DIR_MODE);
+}
+
+function writePrivateFile(path: string, data: string): void {
+  writeFileSync(path, data, { mode: PRIVATE_FILE_MODE });
+  chmodSync(path, PRIVATE_FILE_MODE);
+}
+
+function readJsonFile<T>(path: string, label: string): T {
+  try {
+    const value: unknown = JSON.parse(readFileSync(path, 'utf-8'));
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`Invalid JSON in ${label} at ${path}. Expected an object.`);
+    }
+    return value as T;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(`Invalid JSON in ${label} at ${path}. Delete or repair the file and retry.`);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -49,31 +79,27 @@ export class ForkStorage {
    */
   initialize(): void {
     // Create main fork directory
-    if (!existsSync(this.forkPath)) {
-      mkdirSync(this.forkPath, { recursive: true });
-    }
+    ensurePrivateDirectory(this.forkPath);
 
     // Create subdirectories
     const resourcesDir = join(this.forkPath, 'resources');
-    if (!existsSync(resourcesDir)) {
-      mkdirSync(resourcesDir, { recursive: true });
-    }
+    ensurePrivateDirectory(resourcesDir);
 
     const cacheDir = join(this.forkPath, 'cache');
-    if (!existsSync(cacheDir)) {
-      mkdirSync(cacheDir, { recursive: true });
-    }
+    ensurePrivateDirectory(cacheDir);
 
     // Create .gitignore for cache
     const gitignorePath = join(cacheDir, '.gitignore');
     if (!existsSync(gitignorePath)) {
-      writeFileSync(gitignorePath, '*\n!.gitignore\n');
+      writePrivateFile(gitignorePath, '*\n!.gitignore\n');
     }
 
     // Initialize accounts.json if it doesn't exist
     const accountsPath = join(this.forkPath, 'accounts.json');
     if (!existsSync(accountsPath)) {
-      writeFileSync(accountsPath, JSON.stringify({}, null, 2));
+      writePrivateFile(accountsPath, JSON.stringify({}, null, 2));
+    } else {
+      chmodSync(accountsPath, PRIVATE_FILE_MODE);
     }
   }
 
@@ -89,7 +115,7 @@ export class ForkStorage {
    */
   saveMetadata(metadata: ForkMetadata): void {
     const metadataPath = join(this.forkPath, 'metadata.json');
-    writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    writePrivateFile(metadataPath, JSON.stringify(metadata, null, 2));
   }
 
   /**
@@ -102,8 +128,7 @@ export class ForkStorage {
       throw new Error(`Fork metadata not found at ${metadataPath}`);
     }
 
-    const data = readFileSync(metadataPath, 'utf-8');
-    return JSON.parse(data);
+    return readJsonFile<ForkMetadata>(metadataPath, 'fork metadata');
   }
 
   /**
@@ -116,7 +141,7 @@ export class ForkStorage {
       return null;
     }
 
-    const accounts = JSON.parse(readFileSync(accountsPath, 'utf-8'));
+    const accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
     return accounts[address] || null;
   }
 
@@ -128,11 +153,11 @@ export class ForkStorage {
 
     let accounts: Record<string, AccountState> = {};
     if (existsSync(accountsPath)) {
-      accounts = JSON.parse(readFileSync(accountsPath, 'utf-8'));
+      accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
     }
 
     accounts[address] = state;
-    writeFileSync(accountsPath, JSON.stringify(accounts, null, 2));
+    writePrivateFile(accountsPath, JSON.stringify(accounts, null, 2));
   }
 
   /**
@@ -145,7 +170,7 @@ export class ForkStorage {
       return null;
     }
 
-    const resources = JSON.parse(readFileSync(resourceFilePath, 'utf-8'));
+    const resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
     return resources[resourceType] || null;
   }
 
@@ -159,7 +184,7 @@ export class ForkStorage {
       return {};
     }
 
-    return JSON.parse(readFileSync(resourceFilePath, 'utf-8'));
+    return readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
   }
 
   /**
@@ -170,17 +195,15 @@ export class ForkStorage {
 
     // Ensure resources directory exists
     const resourcesDir = join(this.forkPath, 'resources');
-    if (!existsSync(resourcesDir)) {
-      mkdirSync(resourcesDir, { recursive: true });
-    }
+    ensurePrivateDirectory(resourcesDir);
 
     let resources: Record<string, unknown> = {};
     if (existsSync(resourceFilePath)) {
-      resources = JSON.parse(readFileSync(resourceFilePath, 'utf-8'));
+      resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
     }
 
     resources[resourceType] = data;
-    writeFileSync(resourceFilePath, JSON.stringify(resources, null, 2));
+    writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
   }
 
   /**
@@ -191,11 +214,9 @@ export class ForkStorage {
 
     // Ensure resources directory exists
     const resourcesDir = join(this.forkPath, 'resources');
-    if (!existsSync(resourcesDir)) {
-      mkdirSync(resourcesDir, { recursive: true });
-    }
+    ensurePrivateDirectory(resourcesDir);
 
-    writeFileSync(resourceFilePath, JSON.stringify(resources, null, 2));
+    writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
   }
 
   /**
@@ -215,7 +236,7 @@ export class ForkStorage {
       return [];
     }
 
-    const accounts = JSON.parse(readFileSync(accountsPath, 'utf-8'));
+    const accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
     return Object.keys(accounts);
   }
 
@@ -225,7 +246,7 @@ export class ForkStorage {
    */
   clearAccounts(): void {
     const accountsPath = join(this.forkPath, 'accounts.json');
-    writeFileSync(accountsPath, JSON.stringify({}, null, 2));
+    writePrivateFile(accountsPath, JSON.stringify({}, null, 2));
   }
 
   /**

@@ -79,6 +79,16 @@ describe("F2 — ForkServer CORS is closed by default", () => {
     const port = boundPort(server);
 
     const res = await fetchFromServer(port, "https://evil.example");
+    expect(res.status).toBe(403);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("allows no-Origin requests without emitting CORS headers", async () => {
+    server = new ForkServer(forkDir, 0);
+    await server.start();
+    const port = boundPort(server);
+
+    const res = await fetchFromServer(port);
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
@@ -96,6 +106,50 @@ describe("F2 — ForkServer CORS is closed by default", () => {
     );
 
     const denied = await fetchFromServer(port, "https://evil.example");
+    expect(denied.status).toBe(403);
     expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("answers allowed preflight requests without running endpoint handlers", async () => {
+    server = new ForkServer(forkDir, 0, "127.0.0.1", {
+      corsAllowOrigins: ["https://trusted.example"],
+    });
+    await server.start();
+    const port = boundPort(server);
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/view`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://trusted.example",
+        "Access-Control-Request-Method": "POST",
+      },
+    });
+
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "https://trusted.example"
+    );
+    expect(res.headers.get("allow")).toBe("POST");
+  });
+
+  it("rejects preflight requests whose requested method is not allowed for the path", async () => {
+    server = new ForkServer(forkDir, 0, "127.0.0.1", {
+      corsAllowOrigins: ["https://trusted.example"],
+    });
+    await server.start();
+    const port = boundPort(server);
+
+    const res = await fetch(`http://127.0.0.1:${port}/v1/view`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://trusted.example",
+        "Access-Control-Request-Method": "GET",
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("POST");
+    expect(body.error_code).toBe("method_not_allowed");
   });
 });

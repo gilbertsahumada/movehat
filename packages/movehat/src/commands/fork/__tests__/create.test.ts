@@ -27,7 +27,7 @@ vi.mock("../../../core/config.js", () => ({
   resolveNetworkConfig: resolveNetworkConfigMock,
 }));
 
-const { default: forkCreateCommand } = await import("../create.js");
+const { default: forkCreateCommand, validateForkName } = await import("../create.js");
 
 describe("forkCreateCommand", () => {
   let tmpCwd: string;
@@ -98,6 +98,23 @@ describe("forkCreateCommand", () => {
     await forkCreateCommand({ network: "testnet", path: customPath, name: "ignored-when-path-set" });
 
     expect(ForkManagerCtor).toHaveBeenCalledWith(customPath);
+  });
+
+  it("accepts safe fork names and rejects path-like names", () => {
+    expect(validateForkName("testnet-fork_1.2")).toBe("testnet-fork_1.2");
+
+    for (const unsafe of ["", ".", "..", "../prod", "prod/secret", "prod\\secret", "prod..secret", "prod secret"]) {
+      expect(() => validateForkName(unsafe)).toThrow("Invalid fork name");
+    }
+  });
+
+  it("exits 1 before initialization when --name is not a safe basename", async () => {
+    await expect(forkCreateCommand({ network: "testnet", name: "../prod" })).rejects.toThrow(
+      "__test_exit_1__"
+    );
+
+    expect(ForkManagerCtor).not.toHaveBeenCalled();
+    expect(forkManagerInitialize).not.toHaveBeenCalled();
   });
 
   it("prompts for overwrite when the fork directory already exists", async () => {

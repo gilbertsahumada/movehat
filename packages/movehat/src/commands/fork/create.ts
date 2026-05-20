@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import prompts from 'prompts';
 import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
@@ -9,6 +9,30 @@ interface ForkCreateOptions {
   network?: string;
   path?: string;
   name?: string;
+}
+
+const SAFE_FORK_NAME_RE = /^[A-Za-z0-9._-]+$/;
+const RESERVED_FORK_NAMES = new Set(['.', '..']);
+
+export function validateForkName(name: string): string {
+  if (name.length === 0) {
+    throw new Error('Invalid fork name: name must not be empty');
+  }
+
+  if (
+    RESERVED_FORK_NAMES.has(name) ||
+    basename(name) !== name ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    name.includes('..') ||
+    !SAFE_FORK_NAME_RE.test(name)
+  ) {
+    throw new Error(
+      'Invalid fork name: use only letters, numbers, dot, underscore, and dash; path separators and traversal are not allowed'
+    );
+  }
+
+  return name;
 }
 
 /**
@@ -41,7 +65,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     const networkConfig = await resolveNetworkConfig(userConfig, networkName);
 
     // Determine fork name and path
-    const forkName = options.name || `${networkName}-fork`;
+    const forkName = validateForkName(options.name || `${networkName}-fork`);
     const forkPath = options.path || join(process.cwd(), '.movehat', 'forks', forkName);
 
     logger.newline();

@@ -283,6 +283,34 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [ ] Distributed opportunistically across milestones (e.g., #41 fits naturally in M1, #44 in M0)
 - [ ] No critical (`security` + `bug`) audit issues left open at the time of M6
 
+### M8 — KPI 2 delivery: TypeDoc polish + tutorials + maintenance policy (~5 days, issue [#238](https://github.com/gilbertsahumada/movehat/issues/238))
+**Goal**: Close the formal KPI 2 commitments listed in `grant/KPI1.md` §E.2.
+
+**Definition of Done**:
+- [x] `packages/docs/content/docs/guides/tutorial-fork-testing.mdx` live on movehat.org (M8.1)
+- [x] `packages/docs/content/docs/guides/tutorial-deploy-live.mdx` live on movehat.org (M8.2)
+- [x] `packages/docs/content/docs/guides/tutorial-ci.mdx` live on movehat.org (M8.3)
+- [x] `examples/counter-example/.github/workflows/ci.yml` committed and identical to the snippet in the CI tutorial (M8.3 — verified byte-identical)
+- [x] `movehat.org/docs/api/reference/` sidebar groups symbols by category (Harness / Account / Contract / Fork / Deployment Helpers / Errors), not flat alphabetical (M8.4a — verified in regenerated `meta.json`)
+- [x] `MAINTENANCE.md` at repo root with release cadence + triage SLA + deprecation policy (M8.4b)
+- [x] Maintenance policy linked from `contributing/index.mdx` (M8.4b — dropped the separate `contributing/maintenance.mdx` due to Next `/raw/` EISDIR collision; cross-ref added to `contributing/index.mdx` instead, same discoverability)
+- [x] `grant/KPI2.pdf` generated, sign-off date set (M8.4c)
+- [x] Telegram draft in `grant/email-draft-kpi2.md` references `KPI2.pdf` + delivery commit hash (M8.4c)
+- [ ] CI green on `develop → main` batch PR
+- [ ] `docs-deploy.yml` succeeds on the batch merge; all three new tutorial pages return HTTP 200
+
+**Sub-PRs**:
+
+| Sub | Description | Issue | Status |
+|---|---|---|---|
+| M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | ✅ shipped in PR #245 |
+| M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
+| M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | ✅ shipped in PR #246 |
+| M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | ✅ shipped in PR #247 |
+| M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | ✅ shipped in PR #248 |
+
+**Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
+
 ---
 
 ## Critical issues bound to milestones
@@ -307,10 +335,10 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 ## Execution order
 
 ```
-M0 → M1 → M2 → M3 → M4 → M5 → M6
+M0 → M1 → M2 → M3 → M4 → M5 → M6 → M8
 ```
 
-M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize.
+M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize. M7 runs continuously across all milestones. M8 is the KPI 2 delivery and depends on M5/M6 (docs site + release pipeline) being live.
 
 ## Risks
 

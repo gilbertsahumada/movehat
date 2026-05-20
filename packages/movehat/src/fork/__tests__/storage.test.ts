@@ -31,6 +31,17 @@ describe('ForkStorage', () => {
       expect(vol.existsSync(`${forkPath}/accounts.json`)).toBe(true);
     });
 
+    it('should create fork directories as 0700 and cache/account files as 0600', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+
+      expect(vol.statSync(forkPath).mode & 0o777).toBe(0o700);
+      expect(vol.statSync(`${forkPath}/resources`).mode & 0o777).toBe(0o700);
+      expect(vol.statSync(`${forkPath}/cache`).mode & 0o777).toBe(0o700);
+      expect(vol.statSync(`${forkPath}/accounts.json`).mode & 0o777).toBe(0o600);
+      expect(vol.statSync(`${forkPath}/cache/.gitignore`).mode & 0o777).toBe(0o600);
+    });
+
     it('should not overwrite existing files', () => {
       vol.fromJSON({
         [`${forkPath}/accounts.json`]: '{"existing": "data"}',
@@ -41,6 +52,7 @@ describe('ForkStorage', () => {
 
       const content = vol.readFileSync(`${forkPath}/accounts.json`, 'utf-8');
       expect(content).toBe('{"existing": "data"}');
+      expect(vol.statSync(`${forkPath}/accounts.json`).mode & 0o777).toBe(0o600);
     });
   });
 
@@ -89,11 +101,21 @@ describe('ForkStorage', () => {
       const loaded = storage.loadMetadata();
 
       expect(loaded).toEqual(metadata);
+      expect(vol.statSync(`${forkPath}/metadata.json`).mode & 0o777).toBe(0o600);
     });
 
     it('should throw error if metadata does not exist', () => {
       const storage = new ForkStorage(forkPath);
       expect(() => storage.loadMetadata()).toThrow('Fork metadata not found');
+    });
+
+    it('should throw a controlled error for corrupt metadata JSON', () => {
+      vol.fromJSON({
+        [`${forkPath}/metadata.json`]: '{not-json',
+      });
+
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.loadMetadata()).toThrow('Invalid JSON in fork metadata');
     });
   });
 
@@ -113,6 +135,7 @@ describe('ForkStorage', () => {
       const loaded = storage.getAccount('0x123');
 
       expect(loaded).toEqual(accountState);
+      expect(vol.statSync(`${forkPath}/accounts.json`).mode & 0o777).toBe(0o600);
     });
 
     it('should return null for non-existent account', () => {
@@ -156,6 +179,25 @@ describe('ForkStorage', () => {
 
       const accounts = storage.listAccounts();
       expect(accounts).toHaveLength(0);
+      expect(vol.statSync(`${forkPath}/accounts.json`).mode & 0o777).toBe(0o600);
+    });
+
+    it('should throw a controlled error for corrupt accounts JSON', () => {
+      vol.fromJSON({
+        [`${forkPath}/accounts.json`]: '{"0x1":',
+      });
+
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.listAccounts()).toThrow('Invalid JSON in fork accounts');
+    });
+
+    it('should throw a controlled error when accounts JSON is not an object', () => {
+      vol.fromJSON({
+        [`${forkPath}/accounts.json`]: 'null',
+      });
+
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.listAccounts()).toThrow('Expected an object');
     });
   });
 
@@ -174,6 +216,7 @@ describe('ForkStorage', () => {
       const loaded = storage.getResource('0x1', '0x1::coin::CoinStore');
 
       expect(loaded).toEqual(resource);
+      expect(vol.statSync(`${forkPath}/resources/0x1.json`).mode & 0o777).toBe(0o600);
     });
 
     it('should return null for non-existent resource', () => {
@@ -196,6 +239,15 @@ describe('ForkStorage', () => {
 
       expect(Object.keys(resources)).toHaveLength(2);
       expect(resources['0x1::coin::CoinStore']).toEqual({ value: '100' });
+    });
+
+    it('should throw a controlled error for corrupt resource JSON', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: '{bad',
+      });
+
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.getAllResources('0x1')).toThrow('Invalid JSON in fork resources');
     });
 
     it('should check if resource exists', () => {

@@ -1,0 +1,85 @@
+name: CI
+
+# Reference CI workflow for a Movehat project. Documented in:
+# https://movehat.org/docs/guides/tutorial-ci
+#
+# Compiles the Move package and runs Move-level unit tests on every PR
+# against main. TypeScript integration tests are opt-in (commented step
+# at the bottom) because each spec spawns a local Movement node and
+# adds ~30-60s of latency.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Movement CLI binary
+        id: cache-movement-cli
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/movement
+          # SHA256 prefix ties cache hits to the pinned binary; rotating
+          # MOVEMENT_CLI_SHA256 below busts the cache automatically.
+          key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
+
+      - name: Add Movement CLI to PATH
+        run: echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Install Movement CLI
+        if: steps.cache-movement-cli.outputs.cache-hit != 'true'
+        env:
+          # Pinned SHA256 of movement-cli-l1-linux-x86_64.tar.gz from the
+          # bypass-homebrew moving tag. Upstream re-uploads silently, so
+          # SHA256 is the only stable version pin. Rotate this value
+          # consciously when adopting a new upstream build.
+          MOVEMENT_CLI_SHA256: f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2
+        run: |
+          ARTIFACT="movement-cli-l1-linux-x86_64.tar.gz"
+          curl -fLO "https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/${ARTIFACT}"
+          echo "${MOVEMENT_CLI_SHA256}  ${ARTIFACT}" | sha256sum -c
+          mkdir -p temp_extract
+          tar -xzf "${ARTIFACT}" -C temp_extract
+          chmod +x temp_extract/movement
+          mv temp_extract/movement "$RUNNER_TEMP/movement"
+          rm -rf temp_extract "${ARTIFACT}"
+
+      - name: Verify Movement CLI
+        env:
+          # SHA256 of the extracted movement binary. This
+          # validates both cache hits and fresh installs.
+          MOVEMENT_CLI_BINARY_SHA256: 1101983bddae0e8f810d3a4b8e2b0f04d00f91ee5eb7f1cdefa3f93ad77ee1fa
+        run: |
+          echo "${MOVEMENT_CLI_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
+          movement --version
+
+      - name: Compile Move package
+        run: npx movehat compile
+
+      - name: Run Move unit tests
+        run: npx movehat test --move
+
+      # Opt-in: TypeScript integration tests. Each spec spawns a local
+      # Movement node (~15-30s startup) + runs assertions, so a 5-spec
+      # suite can take 3-5 minutes. Uncomment when your project has
+      # tests/*.test.ts files you want gated on every PR.
+      #
+      # - name: Run TypeScript integration tests
+      #   run: npx movehat test --ts

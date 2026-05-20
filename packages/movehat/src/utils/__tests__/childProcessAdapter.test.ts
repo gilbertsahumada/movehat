@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defaultChildProcessAdapter } from '../childProcessAdapter.js';
 
 const NODE = process.execPath;
@@ -59,6 +62,35 @@ describe('defaultChildProcessAdapter', () => {
         timeoutMs: 50,
       })
     ).rejects.toThrow(/timed out/);
+  });
+
+  it('waits for a timed-out child to close after SIGTERM before rejecting', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'movehat-timeout-'));
+    const marker = join(dir, 'terminated.txt');
+    try {
+      await expect(
+        defaultChildProcessAdapter.run({
+          command: NODE,
+          args: [
+            '-e',
+            [
+              "const fs = require('node:fs');",
+              `const marker = ${JSON.stringify(marker)};`,
+              "process.on('SIGTERM', () => {",
+              "  setTimeout(() => { fs.writeFileSync(marker, 'closed'); process.exit(0); }, 75);",
+              "});",
+              'setInterval(() => {}, 1000);',
+            ].join(''),
+          ],
+          timeoutMs: 1000,
+        })
+      ).rejects.toThrow(/timed out/);
+
+      expect(existsSync(marker)).toBe(true);
+      expect(readFileSync(marker, 'utf8')).toBe('closed');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('aborts a running command with exitCode -1 and signal SIGTERM', async () => {
@@ -228,12 +260,10 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
     ).rejects.toThrow(/timed out after 50ms/);
   });
 
-  it('omits the default timeout when inheritStdio is true (short child completes naturally)', async () => {
-    // We can't wait 5 minutes to prove the default timeout isn't set, but
-    // we can prove that a child running with inheritStdio:true and no
-    // explicit timeoutMs completes via the natural exit path with no
-    // timeout-derived rejection. Combined with the test above, the
-    // conditional-skip behavior is pinned in both directions.
+  it('uses a longer default timeout when inheritStdio is true (short child completes naturally)', async () => {
+    // We can't wait 30 minutes to prove the inherited-stdio timeout, but
+    // we can prove that a short child still completes via the natural exit
+    // path with no timeout-derived rejection.
     const result = await defaultChildProcessAdapter.run({
       command: NODE,
       args: ['-e', "setTimeout(() => process.exit(0), 50)"],
@@ -242,12 +272,7 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it('does not schedule a setTimeout when inheritStdio is true and timeoutMs is omitted', async () => {
-    // Direct evidence (review follow-up): spy on globalThis.setTimeout and
-    // assert no timer scheduled with the DEFAULT_TIMEOUT_MS (300000ms) value.
-    // Short-running children may legitimately schedule small timers via
-    // their own logic, so we filter the spy calls to the default-timeout
-    // duration specifically — that's the value the regression repaired.
+  it('schedules the inherited-stdio default timeout when timeoutMs is omitted', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
     try {
       await defaultChildProcessAdapter.run({
@@ -255,10 +280,10 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
         args: ['-e', 'process.exit(0)'],
         inheritStdio: true,
       });
-      const defaultTimeoutCalls = setTimeoutSpy.mock.calls.filter(
-        (args) => args[1] === 5 * 60 * 1000
+      const inheritedTimeoutCalls = setTimeoutSpy.mock.calls.filter(
+        (args) => args[1] === 30 * 60 * 1000
       );
-      expect(defaultTimeoutCalls).toHaveLength(0);
+      expect(inheritedTimeoutCalls).toHaveLength(1);
     } finally {
       setTimeoutSpy.mockRestore();
     }

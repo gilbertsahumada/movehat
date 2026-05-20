@@ -1,0 +1,215 @@
+---
+title: Tutorial — fork-mode testing
+description: Read real mainnet account state in your tests without spending gas
+icon: GitFork
+---
+
+This tutorial walks through using `Harness.createFork()` to read live Movement mainnet state from a TypeScript test. The fork system caches **accounts and resources** locally on first fetch, so subsequent runs hit the cache for those reads. **View functions** are always proxied to upstream on each call — they reflect current upstream state and require network access every time.
+
+## What fork mode is good for today
+
+The fork system caches **accounts and resources** from a remote network and serves them from a local proxy; **view functions** are proxied to upstream on every call (not cached, so they always reflect upstream state). Useful for:
+
+- Asserting against the real on-chain shape of framework types (e.g. `0x1::coin::CoinInfo`).
+- Running view functions against real mainnet state without spending gas — e.g., "what's the current total MOVE supply?" or "what does this DEX's `get_price` view return right now?".
+- Snapshotting mainnet state for deterministic tests that don't need to spend gas or wait for RPC.
+- Verifying that your code correctly bails when handed a read-only handle.
+
+What fork mode does **not** support today:
+
+- **Transaction submission** — `MoveContract.call(...)`, `harness.deployCodeObject(...)`, `harness.upgradeCodeObject(...)`, `harness.runMoveScript(...)`. These throw a synchronous read-only error in fork mode before any transaction is submitted. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+- **View functions against fork-local mutations** — view calls are proxied upstream, so they don't see resources you mutated via `forkManager.setResource` or `forkManager.fundAccount`. They reflect the upstream network's state, not your local snapshot. Same writable-fork issue (#192).
+
+When you need transaction execution, use `Harness.createLocal()` (fresh chain) or `Harness.createLive(network)` (real RPC, real gas) — see [Networks and modes](./networks-and-modes).
+
+## Prerequisites
+
+- You've completed the [Quickstart](/docs/getting-started/quickstart).
+- Movement CLI is installed (`movement --version` works).
+- Your `movehat.config.ts` declares a `mainnet` network with an RPC URL. The default config that `movehat init` writes already does this.
+
+## Step 1 — Create the fork
+
+In a fresh `tests/fork-mainnet.test.ts`:
+
+```typescript
+import { describe, it, before, after } from "mocha";
+import { expect } from "chai";
+import { Harness } from "movehat";
+
+describe("Fork: read mainnet 0x1 framework state", () => {
+  let harness: Harness;
+
+  before(async function () {
+    this.timeout(120_000);
+    harness = await Harness.createFork("mainnet");
+  });
+
+  after(async () => {
+    await harness.cleanup();
+  });
+
+  // tests go here
+});
+```
+
+What the `before` hook does:
+
+1. Starts a local fork server on `127.0.0.1:8080` (configurable via `forkPort` if 8080 is taken).
+2. Stores the fork's cached state under `.movehat/forks/test-local/`.
+3. Wires `harness.runtime.aptos` to point its RPC base URL at the fork server.
+
+The first call against any account or resource fetches it from the upstream mainnet RPC and writes it to the local snapshot. Every subsequent call within the same fork lifetime reads from the local snapshot.
+
+## Step 2 — Read a real mainnet account
+
+The framework account `0x1` exists on every Movement network and is a safe choice for a smoke test:
+
+```typescript
+it("reads the 0x1 framework account from mainnet", async () => {
+  const account = await harness.runtime.aptos.getAccountInfo({
+    accountAddress: "0x1",
+  });
+
+  expect(account.sequence_number).to.be.a("string");
+  expect(account.authentication_key).to.match(/^0x[0-9a-f]{64}$/);
+});
+```
+
+If you run `pnpm test:ts` with `-v` you'll see the fork server log the request:
+
+```
+[2026-05-20T...] GET /v1/accounts/0x1
+```
+
+## Step 3 — Read a specific resource
+
+Pull a specific resource by its fully qualified type name. The framework `AccountResource` type lives at `0x1::account::Account`:
+
+```typescript
+it("reads 0x1's account resource", async () => {
+  const resource = await harness.runtime.aptos.getAccountResource({
+    accountAddress: "0x1",
+    resourceType: "0x1::account::Account",
+  });
+
+  expect(resource).to.have.property("sequence_number");
+});
+```
+
+The fork server handles five endpoints today:
+
+| Endpoint | Backed by |
+|---|---|
+| `GET /v1/` | Synthetic ledger info reflecting the snapshot's pinned version |
+| `GET /v1/accounts/:addr` | Cached account metadata (lazy-fetched on first call) |
+| `GET /v1/accounts/:addr/resource/:type` | Cached single resource (lazy-fetched on first call) |
+| `GET /v1/accounts/:addr/resources` | Cached resource bundle (lazy-fetched on first call) |
+| `POST /v1/view` | **Proxied to upstream every call** — view results are not cached |
+
+Anything else (notably `POST /v1/transactions`) returns `404 endpoint_not_found`. That's why fork mode can't execute transactions — issue [#192](https://github.com/gilbertsahumada/movehat/issues/192) tracks writable-fork.
+
+## Step 4 — Run a view function against real mainnet state
+
+This is the most powerful read-side use case: ask the network "what does this view function return right now?", without spending gas or deploying anything. Movement framework views work without any setup:
+
+```typescript
+it("reads the live MOVE supply via 0x1::coin::supply", async () => {
+  const [supply] = await harness.runViewFunction({
+    function: "0x1::coin::supply",
+    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    functionArguments: [],
+  });
+
+  // supply comes back as { vec: ["<u128 as string>"] } in the framework's
+  // Option<u128> shape; unwrap if you want the number.
+  expect(supply).to.be.an("object");
+});
+```
+
+In `-v` mode you'll see the proxy hit:
+
+```
+[2026-05-20T...] POST /v1/view
+```
+
+The fork server forwards the entire payload to the upstream RPC and returns the response unchanged. This means view results reflect the *upstream* network — they don't see any local state you mutated via `forkManager.setResource` / `forkManager.fundAccount`. For the dominant use case ("read mainnet view"), this is exactly what you want.
+
+## Step 5 — Observe the cache
+
+Run the test twice in a row. The second run is dramatically faster because every resource read hits the on-disk snapshot under `.movehat/forks/test-local/` instead of the upstream mainnet RPC.
+
+If you want a clean re-fetch, delete the fork directory or pass `forkResetState: true` (the default for `setupLocalTesting` direct use — `Harness.createFork` does not expose a knob for this; if you need it, drop down to `setupLocalTesting({ mode: "fork", forkResetState: true })`).
+
+## Step 6 — Verify writes are rejected
+
+The harness rejects deploy, upgrade, and script execution synchronously on fork-mode instances:
+
+```typescript
+it("rejects deploy on a fork-mode harness", async () => {
+  let threw = false;
+  try {
+    await harness.deployCodeObject({
+      moduleName: "counter",
+      addressName: "hello_blockchain",
+    });
+  } catch (err) {
+    threw = true;
+    expect((err as Error).message).to.match(/read-only/i);
+  }
+  expect(threw).to.equal(true);
+});
+```
+
+The same guard fires for `harness.upgradeCodeObject(...)`, `harness.runMoveScript(...)`, and fork-mode `MoveContract.call(...)`. Transaction submission is blocked before it reaches the fork server because `/v1/transactions` is intentionally not implemented. Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+
+## Run
+
+```bash
+pnpm test:ts
+# or
+movehat test --ts
+```
+
+Expected output:
+
+```
+  Fork: read mainnet 0x1 framework state
+    ✔ reads the 0x1 framework account from mainnet
+    ✔ reads 0x1's account resource
+    ✔ reads the live MOVE supply via 0x1::coin::supply
+    ✔ rejects deploy on a fork-mode harness
+
+  4 passing
+```
+
+## Troubleshooting
+
+### `Fork at .movehat/forks/test-local was created for network "testnet" but you requested "mainnet"`
+
+The default fork name is `test-local` and is **not** network-suffixed. Switching networks against the same fork name is refused on purpose to prevent cross-network state corruption. Two ways out:
+
+- Delete the stale fork: `rm -rf .movehat/forks/test-local`.
+- Use a network-specific name: `Harness.createFork("mainnet")` does not currently expose `forkName` directly — drop down to `setupLocalTesting({ mode: "fork", forkNetwork: "mainnet", forkName: "mainnet-local" })` and build a `Harness` over the returned context if you need parallel forks per network.
+
+### `Auto-deploy doesn't work in fork mode (read-only)`
+
+The warning is informational — the harness skips the deploy and continues. Move your deploys into a script invoked via `movehat run` against `createLive`, or drop `autoDeploy` entirely if your fork test is read-only.
+
+### RPC rate limits on the first run
+
+Each first-time resource fetch hits the upstream mainnet RPC. If your test reads many resources, throttle the cold path by hitting them sequentially in `before` (so the cache is warm by the time the assertions run) and committing `.movehat/forks/test-local/` if you want CI runs to skip the cold fetch entirely.
+
+### `Harness.createFork is read-only`
+
+You called `MoveContract.call(...)` or another transaction-submitting helper. Fork mode is read-only, so the harness rejects writes before they reach the fork server. Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192). For now, switch the test to `Harness.createLocal()` (fresh chain) when you need to execute transactions.
+
+### `Upstream view-fn call failed` (HTTP 502)
+
+The fork server proxied your view call to upstream, but upstream returned an error (timeout, connection refused, non-200 response). Check that the upstream RPC for your fork's network is reachable and that the view function exists at the cited address. Run with `-v` to see the full upstream error message.
+
+## Next steps
+
+- [Networks and modes](./networks-and-modes) — the full decision table on when to use `createLocal` vs `createFork` vs `createLive`.
+- [Fork system](./fork) — `ForkManager` direct API + CLI commands for managing fork snapshots outside of tests.
+- [Testing](./testing) — Move-side unit tests and TypeScript integration tests for clean-chain flows.

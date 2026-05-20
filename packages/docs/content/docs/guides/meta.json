@@ -1,4 +1,4 @@
 {
   "title": "Guides",
-  "pages": ["compilation", "testing", "networks-and-modes", "multi-contract", "deployment", "fork", "scripts", "console-output"]
+  "pages": ["compilation", "testing", "networks-and-modes", "multi-contract", "tutorial-fork-testing", "tutorial-deploy-live", "tutorial-ci", "deployment", "fork", "scripts", "console-output"]
 }

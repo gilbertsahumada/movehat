@@ -34,9 +34,6 @@
     "prepare": "husky"
   },
   "packageManager": "pnpm@9.0.0",
-  "dependencies": {
-    "http-proxy": "^1.18.1"
-  },
   "devDependencies": {
     "@commitlint/cli": "^21.0.0",
     "@commitlint/config-conventional": "^21.0.0",

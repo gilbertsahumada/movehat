@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Harness, HarnessDisposedError } from "../../harness/index.js";
+import { createForkContractProxy } from "../../harness/proxy.js";
 import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 /**
@@ -93,6 +94,32 @@ describe("Harness — proxy poisoning", () => {
 
   // Dedicated suites exist for each of the four methods
   // (codeObject.deploy/upgrade.test.ts, view.test.ts, script.test.ts).
+
+  it("createForkContractProxy: .call throws synchronously with a fork-mode message", () => {
+    const stub = {
+      call: () => Promise.resolve({ hash: "0x", success: true, vm_status: "ok" }),
+      view: () => Promise.resolve("read"),
+      getModuleId: () => "0x1::counter",
+    };
+    const wrapped = createForkContractProxy(stub);
+
+    // .call() throws synchronously, before the original method body runs.
+    expect(() => wrapped.call()).toThrow(/read-only|Harness\.createFork/i);
+
+    // Other methods pass through.
+    expect(wrapped.getModuleId()).toBe("0x1::counter");
+  });
+
+  it("createForkContractProxy: .view passes through unchanged", async () => {
+    const stub = {
+      call: () => Promise.resolve({ hash: "0x", success: true, vm_status: "ok" }),
+      view: () => Promise.resolve(42),
+      getModuleId: () => "0x1::counter",
+    };
+    const wrapped = createForkContractProxy(stub);
+
+    await expect(wrapped.view()).resolves.toBe(42);
+  });
 
   it("await harness.someAsyncMethod() pattern: post-cleanup throw happens before await", async () => {
     const harness = await Harness.createLive("testnet");

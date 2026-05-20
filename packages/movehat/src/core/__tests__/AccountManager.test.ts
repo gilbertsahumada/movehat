@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync, statSync, existsSync, writeFileSync } from "fs";
+import {
+  mkdtempSync,
+  rmSync,
+  statSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "fs";
 import { tmpdir, platform } from "os";
 import { join } from "path";
 import { AccountManager } from "../AccountManager.js";
@@ -51,6 +58,41 @@ describe("AccountManager.saveAccountPool", () => {
       const mode = stat.mode & 0o777;
       expect(mode).toBe(0o700);
     }
+  });
+
+  it("omits imported private-key accounts by default", () => {
+    const generated = AccountManager.createAccount("alice");
+    AccountManager.loadAccountFromPrivateKey(TEST_KEY_A);
+
+    const poolDir = join(tmpDir, "accounts");
+    AccountManager.saveAccountPool(poolDir);
+
+    const poolData = JSON.parse(
+      readFileSync(join(poolDir, "test-pool.json"), "utf-8")
+    );
+    expect(poolData.accounts).toHaveLength(1);
+    expect(poolData.accounts[0].address).toBe(
+      generated.accountAddress.toString()
+    );
+    expect(JSON.stringify(poolData)).not.toContain(TEST_KEY_A);
+  });
+
+  it("persists imported private-key accounts only when includeImported is explicit", () => {
+    AccountManager.createAccount("alice");
+    const imported = AccountManager.loadAccountFromPrivateKey(TEST_KEY_A);
+
+    const poolDir = join(tmpDir, "accounts-with-imported");
+    AccountManager.saveAccountPool(poolDir, { includeImported: true });
+
+    const poolData = JSON.parse(
+      readFileSync(join(poolDir, "test-pool.json"), "utf-8")
+    );
+    expect(poolData.accounts).toHaveLength(2);
+    const addresses = poolData.accounts.map(
+      (account: { address: string }) => account.address
+    );
+    expect(addresses).toContain(imported.accountAddress.toString());
+    expect(JSON.stringify(poolData)).toContain(TEST_KEY_A);
   });
 });
 

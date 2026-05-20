@@ -17,10 +17,11 @@
     }
   },
   "scripts": {
-    "build": "tsc && npm run copy-templates",
+    "build": "npm run clean && tsc && npm run copy-templates",
     "copy-templates": "cp -r src/templates dist/",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
+    "check-pack-contents": "node scripts/check-pack-contents.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -28,11 +29,10 @@
     "docs:api": "typedoc && node scripts/postprocess-typedoc.mjs",
     "bench": "cd ../../examples/counter-example && tsx ../../packages/movehat/bench/fork.bench.ts",
     "prepack": "cp ../../README.md README.md",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm run check-pack-contents"
   },
   "files": [
     "dist",
-    "src",
     "bin"
   ],
   "repository": {

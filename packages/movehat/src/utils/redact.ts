@@ -3,12 +3,14 @@
  * stderr / stdout / CLI arguments. Each match is replaced with
  * `***REDACTED***` by `redactSecrets`.
  *
- * The labelled pattern (second entry) intentionally accepts bare `priv` and
- * `key` prefixes. Over-redaction is fine; missing a real key is not.
+ * The labelled/contextual patterns intentionally accept bare `priv` and
+ * `key` prefixes only when they are adjacent to a full 32-byte hex value.
+ * Full-length addresses without key context are left untouched.
  */
 export const SECRET_PATTERNS: readonly RegExp[] = [
-  /ed25519-priv-0x[0-9a-fA-F]{64}/g,
-  /(private[_-]?key|priv[_-]?key|priv|key)\s*[:=]\s*0x[0-9a-fA-F]{32,}/gi,
+  /\b[a-z0-9]+(?:-[a-z0-9]+)*-priv-0x[0-9a-fA-F]{64,}\b/gi,
+  /(?:--)?(?:private[_-]?key|private\s+key|priv[_-]?key|priv|key)\s*(?:[:=]|\s)\s*0x[0-9a-fA-F]{64}\b/gi,
+  /\b0x[0-9a-fA-F]{64}\b(?=\s*(?:private[_-]?key|private\s+key|priv[_-]?key|priv|key)\b)/gi,
 ];
 
 /**

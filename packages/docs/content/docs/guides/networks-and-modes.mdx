@@ -11,7 +11,7 @@ Movehat exposes three `Harness` factories that target three different execution 
 | Your goal | Factory | Network | Writes gas? | Typical file |
 |---|---|---|---|---|
 | Fast iteration on a clean fresh chain (default for tests) | `createLocal()` | local node on `127.0.0.1:8080` | no (fake gas from faucet) | `tests/*.test.ts` |
-| Read real testnet / mainnet state (writes simulate locally) | `createFork(network)` | reads live, writes rejected | no | `tests/*.test.ts` or `scripts/*.ts` |
+| Read real testnet / mainnet state (accounts, resources, view functions) | `createFork(network)` | reads proxied to upstream; transactions rejected | no | `tests/*.test.ts` |
 | Deploy or call entry functions on real testnet / mainnet | `createLive(network)` | live RPC, real submission | **yes — real MOVE** | `scripts/*.ts` |
 
 The rest of this page expands each row with code and explains the gotchas.
@@ -46,37 +46,45 @@ const value = await counter.view<string>("get", [alice.accountAddress.toString()
 
 ## Mode 2 — `createFork(network)`
 
-Forks a remote network's state into a local read-only proxy. Lets your test or script see the real state of testnet or mainnet without spending gas.
+Forks a remote network's state into a local read-only proxy. Lets your test see the real account + resource state of testnet or mainnet without spending gas.
 
 ```typescript
 import { Harness } from "movehat";
 
 const harness = await Harness.createFork("mainnet");
 
-// Reading mainnet account state works
+// Reading a real mainnet account works
+const account = await harness.runtime.aptos.getAccountInfo({
+  accountAddress: "0x1",
+});
+
+// Running a view function against real mainnet state works
+// (the fork server proxies POST /v1/view to upstream RPC)
 const [supply] = await harness.runViewFunction({
-  function: "0x1::aptos_coin::AptosCoin",
+  function: "0x1::coin::supply",
+  typeArguments: ["0x1::aptos_coin::AptosCoin"],
   functionArguments: [],
 });
 
-// But writes are rejected — fork is read-only
+// Deploy/upgrade/script attempts throw synchronously from the harness Proxy
 try {
-  await counter.call(deployer, "increment", []);
+  await harness.deployCodeObject({ moduleName: "counter", addressName: "hello_blockchain" });
 } catch (err) {
-  // HarnessForkWriteError: writes are not supported in fork mode
+  // Error: "Harness.createFork is read-only; code-object deployment requires ..."
 }
 ```
 
-**What "read-only" means in practice**:
+**What "read-only" means in practice today**:
 
-- **Allowed**: `runViewFunction`, `MoveContract.view`, `getContract(...).view`, account / resource reads
-- **Rejected**: `deployCodeObject`, `upgradeCodeObject`, `MoveContract.call`, any tx submission
+- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call (not cached, so they always reflect current upstream state).
+- **Rejected at the harness layer**: `deployCodeObject`, `upgradeCodeObject`, `runMoveScript` — all throw synchronously with a clear error message.
+- **Not supported yet**: `MoveContract.call` and any direct transaction submission. The fork server has no `/v1/transactions` handler; these fail with HTTP 404. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
-The rejection is enforced by the harness Proxy — writes throw synchronously without ever reaching the fork server. Tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192) — simulated-writes-against-fork-state are on the roadmap.
+**Important gotcha for view functions**: view calls are proxied to *upstream* — they reflect the upstream network's state, not any local mutations you made via `forkManager.setResource` or `forkManager.fundAccount`. For the dominant use case ("read a real mainnet view"), this is what you want. For "deploy to a fork, then view the result", you need a writable fork (#192).
 
-**When to reach for it**: when you want to verify your code works against the real shape of mainnet state (real liquidity pools, real account balances, real module ABIs) without spending real MOVE. Common pattern in EVM tooling (`forge test --fork-url`, Hardhat fork mode); Movehat exposes the same shape.
+**When to reach for it**: snapshot real on-chain account / resource shapes for deterministic tests, run live view functions against real mainnet state (e.g. current MOVE supply, DEX prices), or verify that read paths through your code interact correctly with real framework types. When you need transaction execution — or view results that reflect local mutations made via `forkManager.setResource` / `forkManager.fundAccount` — use `createLocal` (fresh chain) or wait on the writable-fork work tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
-See [Fork system](./fork) for the deeper dive on the `ForkManager` lifecycle and what gets cached vs proxied.
+See [Fork system](./fork) for the deeper dive on the `ForkManager` lifecycle and what gets cached vs proxied, and [the fork-mode tutorial](./tutorial-fork-testing) for a step-by-step walkthrough.
 
 ## Mode 3 — `createLive(network)`
 
