@@ -258,6 +258,29 @@ grep -rn "console\.\(log\|error\|warn\)" packages/movehat/src/ \
 
 Every match must either route through a verbosity gate (subprocess passthrough) or be migrated to `logger.*`. New ad-hoc `console.log("...")` calls are a §9 violation and must be fixed before merge.
 
+## 10. Issue lifecycle — every PR links to an issue, and closes it on merge
+
+**Every PR that ships user-visible behavior — new feature, bug fix, new doc page, new tutorial, new convention — must reference a GitHub issue. Sub-PRs of a milestone link to the per-sub-PR issue from §5; standalone fixes link to the issue that motivated them. The PR body uses GitHub's auto-close keywords (`Closes #N` / `Fixes #N`) so the link is mechanical, not narrative.**
+
+The rule:
+
+- **Before starting work**, grep open issues for the area you're about to touch (`gh issue list --search "<keyword>"`). If an issue exists, your PR closes it. If none exists, file one first — the issue is the durable record of *why* the work happened; the PR is the *how*.
+- **Use `Closes #N` (not `Related to #N` or `See #N`) when the PR fully resolves the issue.** Use `Tracks #M` for the meta-issue (per §5). GitHub recognizes both keywords but only `Closes` / `Fixes` / `Resolves` auto-close the linked issue on merge.
+- **Auto-close fires on merge to the default branch (`main`).** Because this project uses the `develop → main` batch workflow (§5 + §7), sub-PRs merged to `develop` reference issues with `Closes #N` but **GitHub will not auto-close them until the batch merges to `main`.** This is the system working as intended — the milestone closeout happens atomically with the batch.
+- **Manually close the issue when a sub-PR merges to `develop`** if you want the issue tracker to reflect develop's state immediately rather than wait for the batch. Add a comment on the issue referencing the merged sub-PR + the eventual batch PR, then close. This is optional housekeeping; the auto-close on batch merge is the load-bearing path.
+- **Meta-issues (per §5)** close when every linked sub-issue closes. The `Tracks #M` reference on each sub-PR + GitHub's "linked issues" UI surfaces the remaining work.
+
+How to apply:
+
+1. **Starting a feature/fix**: `gh issue list --search "<area>"` → either pick the existing issue or file a new one with the DoD shape from §5 (mechanically verifiable bullets, exact file paths, exact grep commands). Branch name should reflect the issue (`m8.4/typedoc-...` style for sub-issues; `fix/issue-NNN-short-summary` for standalone fixes).
+2. **PR description**: include `Closes #N` (and `Tracks #M` if there's a meta-issue) on its own line near the bottom of the PR body. The §6.2 / §6.3 tier-2/3 reporting and the §8 self-review live above.
+3. **Merge to develop**: the auto-close is deferred until the batch. Optional: manually close the issue with a one-line "shipped in PR #N to develop; auto-close pending develop→main batch" comment.
+4. **Develop → main batch**: GitHub fires the auto-close on every `Closes #N` referenced in any commit in the batch. The closeout PR (§7) double-checks by listing every issue closed in the milestone table.
+
+**Audit cadence**: when starting a new milestone, scan open issues for ones that should already be closed — sub-PRs merged to develop in the previous milestone may have closed on the batch but a parallel issue (e.g., one filed mid-flight that wasn't linked via `Closes`) may still be open. Close them with a comment citing the PR that resolved them.
+
+Why this matters: the issue tracker is the durable record of decisions. PRs are the change-set; issues are the *why* + the linked-discussion thread. An open issue that's actually resolved is friction for everyone — new contributors think there's open work, maintainers re-investigate already-decided questions, the auto-generated "open issues" badge on the README misleads users about the project's health.
+
 ---
 
 ## Project-Specific Context
