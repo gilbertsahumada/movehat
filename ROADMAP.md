@@ -288,7 +288,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Definition of Done**:
 - [x] `packages/docs/content/docs/guides/tutorial-fork-testing.mdx` live on movehat.org (M8.1)
-- [ ] `packages/docs/content/docs/guides/tutorial-deploy-live.mdx` live on movehat.org
+- [x] `packages/docs/content/docs/guides/tutorial-deploy-live.mdx` live on movehat.org (M8.2)
 - [ ] `packages/docs/content/docs/guides/tutorial-ci.mdx` live on movehat.org
 - [ ] `examples/counter-example/.github/workflows/ci.yml` committed and identical to the snippet in the CI tutorial
 - [ ] `movehat.org/docs/api/reference/` sidebar groups symbols by category (Harness / Account / Contract / Fork / Deployment Helpers / Errors), not flat alphabetical
@@ -305,7 +305,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 |---|---|---|---|
 | M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | in PR |
 | M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
-| M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | |
+| M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | in PR |
 | M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | |
 | M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | |
 
