@@ -143,6 +143,101 @@ export class MovementApiClient {
   }
 
   /**
+   * Make a POST request to the API with a JSON body.
+   *
+   * Mirrors `get<T>` for TLS/timeout/maxBytes/error-wrapping; differs
+   * only in `method: 'POST'`, the `Content-Type: application/json`
+   * header, and writing `body` to the request stream before `end()`.
+   */
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const fullUrl = `${this.nodeUrl}${path}`;
+    const parsedUrl = new URL(fullUrl);
+    const isHttps = parsedUrl.protocol === 'https:';
+    const client = isHttps ? https : http;
+
+    const payload = JSON.stringify(body);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload).toString(),
+    };
+    if (this.apiKey !== undefined) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+
+    const timeoutMs = this.timeoutMs;
+    const maxBytes = this.maxBytes;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+
+      const req = client.request(fullUrl, { method: 'POST', headers }, (res) => {
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+
+        res.on('data', (chunk: Buffer | string) => {
+          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += buf.length;
+          if (totalBytes > maxBytes) {
+            req.destroy();
+            settle(() =>
+              reject(
+                new Error(
+                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
+                )
+              )
+            );
+            return;
+          }
+          chunks.push(buf);
+        });
+
+        res.on('end', () => {
+          if (settled) return;
+          const data = Buffer.concat(chunks).toString('utf8');
+          if (res.statusCode !== 200) {
+            settle(() =>
+              reject(
+                new Error(
+                  `API request failed with status ${res.statusCode}: ${data}`
+                )
+              )
+            );
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            settle(() => resolve(parsed));
+          } catch (err) {
+            settle(() =>
+              reject(new Error(`Failed to parse JSON response: ${err}`))
+            );
+          }
+        });
+      });
+
+      req.setTimeout(timeoutMs, () => {
+        req.destroy();
+        settle(() =>
+          reject(new Error(`API request timed out after ${timeoutMs}ms`))
+        );
+      });
+
+      req.on('error', (err) => {
+        settle(() => reject(new Error(`API request failed: ${err.message}`)));
+      });
+
+      req.write(payload);
+      req.end();
+    });
+  }
+
+  /**
    * Build API path with proper prefix
    */
   private apiPath(suffix: string): string {
@@ -186,5 +281,16 @@ export class MovementApiClient {
     const normalizedAddress = normalizeAddressShort(address);
 
     return this.get<AccountResource[]>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
+  }
+
+  /**
+   * Execute a Move view function via the upstream node's POST /v1/view.
+   *
+   * Stateless passthrough — view results are not cached. Returns the raw
+   * array the upstream API returns (single-value views still come back as
+   * a one-element tuple).
+   */
+  async view(payload: unknown): Promise<unknown[]> {
+    return this.post<unknown[]>(this.apiPath('/view'), payload);
   }
 }

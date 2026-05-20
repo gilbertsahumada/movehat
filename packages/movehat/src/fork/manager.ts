@@ -193,6 +193,22 @@ export class ForkManager {
     return resources;
   }
 
+  /**
+   * Stateless passthrough of `POST /v1/view` to the upstream RPC.
+   *
+   * View results are not cached — they depend on ledger version and
+   * arguments, so any caching layer would need version-aware
+   * invalidation that the fork system does not implement today. The
+   * payload is forwarded verbatim and the upstream response array is
+   * returned unchanged.
+   */
+  async forwardView(payload: unknown): Promise<unknown[]> {
+    if (!this.apiClient) {
+      throw new Error('Fork not initialized. Call initialize() or load() first.');
+    }
+    return this.apiClient.view(payload);
+  }
+
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
     this.storage.saveResource(normalizedAddress, resourceType, data);

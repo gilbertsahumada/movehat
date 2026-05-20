@@ -303,7 +303,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 | Sub | Description | Issue | Status |
 |---|---|---|---|
-| M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | in PR |
+| M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | in PR |
+| M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
 | M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | |
 | M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | |
 | M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | |
