@@ -11,7 +11,7 @@ Movehat exposes three `Harness` factories that target three different execution 
 | Your goal | Factory | Network | Writes gas? | Typical file |
 |---|---|---|---|---|
 | Fast iteration on a clean fresh chain (default for tests) | `createLocal()` | local node on `127.0.0.1:8080` | no (fake gas from faucet) | `tests/*.test.ts` |
-| Read real testnet / mainnet **account + resource** state | `createFork(network)` | account/resource reads passthrough; writes rejected | no | `tests/*.test.ts` |
+| Read real testnet / mainnet state (accounts, resources, view functions) | `createFork(network)` | reads proxied to upstream; transactions rejected | no | `tests/*.test.ts` |
 | Deploy or call entry functions on real testnet / mainnet | `createLive(network)` | live RPC, real submission | **yes — real MOVE** | `scripts/*.ts` |
 
 The rest of this page expands each row with code and explains the gotchas.
@@ -58,10 +58,12 @@ const account = await harness.runtime.aptos.getAccountInfo({
   accountAddress: "0x1",
 });
 
-// Reading a specific resource works
-const resource = await harness.runtime.aptos.getAccountResource({
-  accountAddress: "0x1",
-  resourceType: "0x1::account::Account",
+// Running a view function against real mainnet state works
+// (the fork server proxies POST /v1/view to upstream RPC)
+const [supply] = await harness.runViewFunction({
+  function: "0x1::coin::supply",
+  typeArguments: ["0x1::aptos_coin::AptosCoin"],
+  functionArguments: [],
 });
 
 // Deploy/upgrade/script attempts throw synchronously from the harness Proxy
@@ -74,11 +76,11 @@ try {
 
 **What "read-only" means in practice today**:
 
-- **Supported**: `aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`, ledger info (`/v1/`). The fork server caches each unique resource on first fetch; subsequent reads hit the local snapshot.
+- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call (not cached, so they always reflect current upstream state).
 - **Rejected at the harness layer**: `deployCodeObject`, `upgradeCodeObject`, `runMoveScript` — all throw synchronously with a clear error message.
-- **Not yet supported** (tracked in [#243](https://github.com/gilbertsahumada/movehat/issues/243)): `runViewFunction` and `MoveContract.view` — the fork server does not currently proxy `/v1/view` to upstream RPC. `MoveContract.call` is similarly unguarded at the harness layer and fails with an opaque 404 from the fork server.
+- **Not supported yet**: `MoveContract.call` and any direct transaction submission. The fork server has no `/v1/transactions` handler; these fail with HTTP 404. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
-A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked separately in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+**Important gotcha for view functions**: view calls are proxied to *upstream* — they reflect the upstream network's state, not any local mutations you made via `forkManager.setResource` or `forkManager.fundAccount`. For the dominant use case ("read a real mainnet view"), this is what you want. For "deploy to a fork, then view the result", you need a writable fork (#192).
 
 **When to reach for it**: snapshot real on-chain account / resource shapes for deterministic tests, or verify that read paths through your code interact correctly with real framework types. For anything that requires a view function or transaction execution today, use `createLocal` instead.
 

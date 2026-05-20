@@ -208,6 +208,8 @@ export class ForkServer {
           return;
         }
         await this.handleGetResource(address, resourceType, res);
+      } else if (pathname === '/v1/view' && req.method === 'POST') {
+        await this.handleViewProxy(req, res);
       } else {
         // Use regex capture for resources endpoint
         const resourcesMatch = pathname.match(/^\/v1\/accounts\/(0x[a-fA-F0-9]{1,64})\/resources$/);
@@ -331,6 +333,99 @@ export class ForkServer {
       } else {
         throw error;
       }
+    }
+  }
+
+  /**
+   * Handle POST /v1/view — proxy to upstream RPC.
+   *
+   * Stateless: view results are not cached. Buffers the request body
+   * with a 1 MiB ceiling, parses JSON, delegates to
+   * `forkManager.forwardView`, and returns the upstream array verbatim.
+   *
+   * Errors map to:
+   *   413 — body exceeds MAX_VIEW_BODY_BYTES
+   *   400 — body is not valid JSON
+   *   502 — upstream RPC failed (timeout, network error, non-200 response)
+   */
+  private async handleViewProxy(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
+    const MAX_VIEW_BODY_BYTES = 1 * 1024 * 1024; // 1 MiB
+
+    let body: string;
+    try {
+      body = await new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        req.on('data', (chunk: Buffer | string) => {
+          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += buf.length;
+          if (totalBytes > MAX_VIEW_BODY_BYTES) {
+            reject(new Error('body_too_large'));
+            req.destroy();
+            return;
+          }
+          chunks.push(buf);
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        req.on('error', (err) => reject(err));
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg === 'body_too_large') {
+        this.sendJSON(res, 413, {
+          message: `Request body exceeds ${MAX_VIEW_BODY_BYTES} bytes`,
+          error_code: 'body_too_large',
+          vm_error_code: null
+        });
+        return;
+      }
+      throw error;
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      this.sendJSON(res, 400, {
+        message: 'Request body is not valid JSON',
+        error_code: 'invalid_body',
+        vm_error_code: null
+      });
+      return;
+    }
+
+    // Forward a narrow set of client headers to upstream so that
+    // BCS-encoded responses (`Accept: application/x-bcs`) and client
+    // identification (`X-Aptos-Client`) round-trip through the proxy.
+    // Hop-by-hop and connection-level headers (host, connection,
+    // content-length, etc.) are deliberately not forwarded.
+    const forwardableHeaders: Record<string, string> = {};
+    for (const name of ['accept', 'x-aptos-client'] as const) {
+      const value = req.headers[name];
+      if (typeof value === 'string') {
+        // Use the canonical capitalization upstream expects.
+        const canonical = name === 'accept' ? 'Accept' : 'X-Aptos-Client';
+        forwardableHeaders[canonical] = value;
+      }
+    }
+
+    try {
+      const result = await this.forkManager.forwardView(payload, forwardableHeaders);
+      this.sendJSON(res, 200, result);
+    } catch (error) {
+      const rawMsg = error instanceof Error ? error.message : String(error);
+      // Sanitize: reuse the existing log-injection guard from
+      // sanitizePathname (control chars, length cap).
+      const safeMsg = this.sanitizePathname(rawMsg);
+      logger.error(`Upstream view-fn call failed: ${rawMsg}`);
+      this.sendJSON(res, 502, {
+        message: `Upstream view-fn call failed: ${safeMsg}`,
+        error_code: 'upstream_error',
+        vm_error_code: null
+      });
     }
   }
 

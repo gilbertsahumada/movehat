@@ -13,7 +13,7 @@ import type {
 } from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
 import { initRuntime } from "../runtime.js";
-import { createHarnessProxy } from "./proxy.js";
+import { createHarnessProxy, createForkContractProxy } from "./proxy.js";
 import { deployCodeObject, upgradeCodeObject } from "./codeObject.js";
 import { runViewFunction } from "./view.js";
 import { runMoveScript } from "./script.js";
@@ -115,6 +115,14 @@ export class Harness {
     if (apiKey !== undefined) setupOpts.forkApiKey = apiKey;
     if (rpcUrl !== undefined) setupOpts.forkRpcUrl = rpcUrl;
     const ctx = await setupLocalTesting(setupOpts);
+
+    // Wrap getContract so contracts obtained in fork mode reject .call()
+    // synchronously instead of 404'ing against the fork server's
+    // unhandled /v1/transactions endpoint. View methods pass through.
+    const originalGetContract = ctx.runtime.getContract;
+    ctx.runtime.getContract = (address, moduleName) =>
+      createForkContractProxy(originalGetContract(address, moduleName));
+
     const init: HarnessInit = {
       mode: "fork",
       runtime: ctx.runtime,
