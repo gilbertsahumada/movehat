@@ -35,10 +35,13 @@ jobs:
         id: cache-movement-cli
         uses: actions/cache@v4
         with:
-          path: /usr/local/bin/movement
+          path: ${{ runner.temp }}/movement
           # SHA256 prefix ties cache hits to the pinned binary; rotating
           # MOVEMENT_CLI_SHA256 below busts the cache automatically.
           key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
+
+      - name: Add Movement CLI to PATH
+        run: echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Install Movement CLI
         if: steps.cache-movement-cli.outputs.cache-hit != 'true'
@@ -55,11 +58,17 @@ jobs:
           mkdir -p temp_extract
           tar -xzf "${ARTIFACT}" -C temp_extract
           chmod +x temp_extract/movement
-          sudo mv temp_extract/movement /usr/local/bin/movement
+          mv temp_extract/movement "$RUNNER_TEMP/movement"
           rm -rf temp_extract "${ARTIFACT}"
 
       - name: Verify Movement CLI
-        run: movement --version
+        env:
+          # SHA256 of the extracted movement binary. This
+          # validates both cache hits and fresh installs.
+          MOVEMENT_CLI_BINARY_SHA256: 7a6b13f45c7473de4f8abc05100743993763153fc6dbaab934a0c2e5d3df595b
+        run: |
+          echo "${MOVEMENT_CLI_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
+          movement --version
 
       - name: Compile Move package
         run: npx movehat compile

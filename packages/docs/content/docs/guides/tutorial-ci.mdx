@@ -63,10 +63,13 @@ jobs:
         id: cache-movement-cli
         uses: actions/cache@v4
         with:
-          path: /usr/local/bin/movement
+          path: ${{ runner.temp }}/movement
           # SHA256 prefix ties cache hits to the pinned binary; rotating
           # MOVEMENT_CLI_SHA256 below busts the cache automatically.
           key: movement-cli-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa
+
+      - name: Add Movement CLI to PATH
+        run: echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Install Movement CLI
         if: steps.cache-movement-cli.outputs.cache-hit != 'true'
@@ -83,11 +86,17 @@ jobs:
           mkdir -p temp_extract
           tar -xzf "${ARTIFACT}" -C temp_extract
           chmod +x temp_extract/movement
-          sudo mv temp_extract/movement /usr/local/bin/movement
+          mv temp_extract/movement "$RUNNER_TEMP/movement"
           rm -rf temp_extract "${ARTIFACT}"
 
       - name: Verify Movement CLI
-        run: movement --version
+        env:
+          # SHA256 of the extracted movement binary. This
+          # validates both cache hits and fresh installs.
+          MOVEMENT_CLI_BINARY_SHA256: 7a6b13f45c7473de4f8abc05100743993763153fc6dbaab934a0c2e5d3df595b
+        run: |
+          echo "${MOVEMENT_CLI_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
+          movement --version
 
       - name: Compile Move package
         run: npx movehat compile
@@ -108,8 +117,8 @@ jobs:
 
 - **`actions/setup-node@v4` with `node-version: '20'`** — Movehat targets Node 20 / 22. Use 20 for the broadest LTS coverage; bump to 22 once you've validated.
 - **`npm ci`** — assumes you committed `package-lock.json`. Faster + reproducible than `npm install`. Swap for `pnpm install --frozen-lockfile` or `yarn install --immutable` if you use a different package manager (and update the `cache: 'npm'` field to match).
-- **`actions/cache@v4` for `/usr/local/bin/movement`** — caches the Movement CLI binary across runs. Cold install is ~15 seconds; cache hits are ~1 second.
-- **SHA256 pin in `MOVEMENT_CLI_SHA256`** — Movement Labs re-uses the `bypass-homebrew` tag, so the URL alone is not a stable version pin. Verifying the SHA256 before `chmod`/`mv` rejects silent upstream replacements. When you adopt a new CLI build, update the SHA256 value (the cache key prefix automatically changes, busting the cache).
+- **`actions/cache@v4` for `${{ runner.temp }}/movement`** — caches the Movement CLI binary across runs in a user-writable path. Cold install is ~15 seconds; cache hits are ~1 second.
+- **SHA256 pins** — Movement Labs re-uses the `bypass-homebrew` tag, so the URL alone is not a stable version pin. `MOVEMENT_CLI_SHA256` verifies the downloaded tarball before `chmod`/`mv`; `MOVEMENT_CLI_BINARY_SHA256` verifies the cached/installed binary on both cache hits and fresh installs. When you adopt a new CLI build, update both SHA256 values and the cache key prefix.
 - **`npx movehat compile` + `--move`** — both invoke the locally-installed `movehat` from `node_modules`. No global install needed.
 
 ## Step 3 — When (and how) to enable TypeScript tests
@@ -146,7 +155,7 @@ The cached Movement CLI artifact's SHA256 differs from the pinned value in `MOVE
 
 ### `movement: command not found`
 
-The cache restored an empty `/usr/local/bin/movement` (rare; happens after a force-rotate). Delete the cache via Actions UI → Caches → search for `movement-cli-` → trash. The next run will re-install fresh.
+The cache restored an empty `${{ runner.temp }}/movement` (rare; happens after a force-rotate). Delete the cache via Actions UI → Caches → search for `movement-cli-` → trash. The next run will re-install fresh.
 
 ### `movehat: command not found`
 

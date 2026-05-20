@@ -303,11 +303,11 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 | Sub | Description | Issue | Status |
 |---|---|---|---|
-| M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | in PR |
+| M8.0 | ForkServer `/v1/view` proxy + docs flip | [#243](https://github.com/gilbertsahumada/movehat/issues/243) | ✅ shipped in PR #245 |
 | M8.1 | Fork-mode tutorial + `networks-and-modes` accuracy fix | [#239](https://github.com/gilbertsahumada/movehat/issues/239) | ✅ shipped in PR #244 |
-| M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | in PR |
-| M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | in PR |
-| M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | in PR |
+| M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | ✅ shipped in PR #246 |
+| M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | ✅ shipped in PR #247 |
+| M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | ✅ shipped in PR #248 |
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
 

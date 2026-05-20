@@ -17,7 +17,7 @@ The fork system caches **accounts and resources** from a remote network and serv
 
 What fork mode does **not** support today:
 
-- **Transaction submission** — `MoveContract.call(...)`, `harness.deployCodeObject(...)`, `harness.upgradeCodeObject(...)`, `harness.runMoveScript(...)`. The deploy/upgrade/script methods throw a synchronous error from the harness Proxy; direct `MoveContract.call` fails with HTTP 404 from the fork server (the `/v1/transactions` endpoint is not handled). A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+- **Transaction submission** — `MoveContract.call(...)`, `harness.deployCodeObject(...)`, `harness.upgradeCodeObject(...)`, `harness.runMoveScript(...)`. These throw a synchronous read-only error in fork mode before any transaction is submitted. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 - **View functions against fork-local mutations** — view calls are proxied upstream, so they don't see resources you mutated via `forkManager.setResource` or `forkManager.fundAccount`. They reflect the upstream network's state, not your local snapshot. Same writable-fork issue (#192).
 
 When you need transaction execution, use `Harness.createLocal()` (fresh chain) or `Harness.createLive(network)` (real RPC, real gas) — see [Networks and modes](./networks-and-modes).
@@ -161,7 +161,7 @@ it("rejects deploy on a fork-mode harness", async () => {
 });
 ```
 
-The same guard fires for `harness.upgradeCodeObject(...)` and `harness.runMoveScript(...)`. Direct `MoveContract.call(...)` is not guarded at the harness layer — it fails with a structured HTTP 404 from the fork server (the `/v1/transactions` endpoint is not implemented). Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
+The same guard fires for `harness.upgradeCodeObject(...)`, `harness.runMoveScript(...)`, and fork-mode `MoveContract.call(...)`. Transaction submission is blocked before it reaches the fork server because `/v1/transactions` is intentionally not implemented. Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
 ## Run
 
@@ -200,9 +200,9 @@ The warning is informational — the harness skips the deploy and continues. Mov
 
 Each first-time resource fetch hits the upstream mainnet RPC. If your test reads many resources, throttle the cold path by hitting them sequentially in `before` (so the cache is warm by the time the assertions run) and committing `.movehat/forks/test-local/` if you want CI runs to skip the cold fetch entirely.
 
-### `Endpoint not found: /v1/transactions` (HTTP 404)
+### `Harness.createFork is read-only`
 
-You called `MoveContract.call(...)` or otherwise attempted to submit a transaction. Fork mode is read-only — there is no `/v1/transactions` handler. Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192). For now, switch the test to `Harness.createLocal()` (fresh chain) when you need to execute transactions.
+You called `MoveContract.call(...)` or another transaction-submitting helper. Fork mode is read-only, so the harness rejects writes before they reach the fork server. Writable-fork support is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192). For now, switch the test to `Harness.createLocal()` (fresh chain) when you need to execute transactions.
 
 ### `Upstream view-fn call failed` (HTTP 502)
 
