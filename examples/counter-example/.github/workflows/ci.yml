@@ -65,7 +65,7 @@ jobs:
         env:
           # SHA256 of the extracted movement binary. This
           # validates both cache hits and fresh installs.
-          MOVEMENT_CLI_BINARY_SHA256: 7a6b13f45c7473de4f8abc05100743993763153fc6dbaab934a0c2e5d3df595b
+          MOVEMENT_CLI_BINARY_SHA256: 1101983bddae0e8f810d3a4b8e2b0f04d00f91ee5eb7f1cdefa3f93ad77ee1fa
         run: |
           echo "${MOVEMENT_CLI_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
           movement --version

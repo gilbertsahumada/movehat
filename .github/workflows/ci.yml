@@ -184,7 +184,7 @@ jobs:
           # SHA256 prefixes tie cache hits to the pinned tarball and binary.
           # The "bin" namespace avoids restoring older /usr/local/bin caches
           # that predate binary-level SHA verification.
-          key: movement-cli-bin-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa-7a6b13f4
+          key: movement-cli-bin-${{ runner.os }}-${{ runner.arch }}-f2bdf3fa-1101983b
 
       - name: Add Movement CLI to PATH
         run: echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
@@ -220,7 +220,7 @@ jobs:
 
       - name: Verify Movement CLI
         env:
-          MOVEMENT_CLI_BINARY_SHA256_LINUX_X64: 7a6b13f45c7473de4f8abc05100743993763153fc6dbaab934a0c2e5d3df595b
+          MOVEMENT_CLI_BINARY_SHA256_LINUX_X64: 1101983bddae0e8f810d3a4b8e2b0f04d00f91ee5eb7f1cdefa3f93ad77ee1fa
         run: |
           case "${{ runner.arch }}" in
             X64)   EXPECTED_BINARY_SHA256="${MOVEMENT_CLI_BINARY_SHA256_LINUX_X64}" ;;
