@@ -9,7 +9,7 @@
 
 import { readFileSync, writeFileSync, renameSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { resolve, dirname, join, basename, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const referenceDir = resolve(here, '..', '..', 'docs', 'content', 'docs', 'api', 'reference');
@@ -249,12 +249,21 @@ function processDir(dir) {
   writeMetaForDir(dir, title, allPages);
 }
 
-const mdFiles = walkMd(referenceDir);
-if (mdFiles.length === 0) {
-  console.error(`No .md files found under ${referenceDir} — did typedoc run?`);
-  process.exit(1);
+// Only run as a script when invoked directly via `node ...mjs`. Gating the
+// side-effect lets vitest import `groupPagesByCategory` for unit tests
+// without triggering `processDir(referenceDir)` (which would fail because
+// the typedoc output dir doesn't exist in the test sandbox).
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (isMain) {
+  const mdFiles = walkMd(referenceDir);
+  if (mdFiles.length === 0) {
+    console.error(`No .md files found under ${referenceDir} — did typedoc run?`);
+    process.exit(1);
+  }
+
+  processDir(referenceDir);
+
+  console.log(`Postprocessed ${mdFiles.length} TypeDoc pages under ${referenceDir}`);
 }
 
-processDir(referenceDir);
-
-console.log(`Postprocessed ${mdFiles.length} TypeDoc pages under ${referenceDir}`);
+export { groupPagesByCategory };

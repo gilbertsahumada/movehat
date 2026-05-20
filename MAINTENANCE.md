@@ -46,7 +46,7 @@ Public-API symbols (anything re-exported from `packages/movehat/src/index.ts`) f
 1. **Mark deprecated** — the symbol gets a `@deprecated` JSDoc tag in the next minor release; the changelog entry calls it out explicitly with a migration path. The symbol stays functional for the entire next minor cycle.
 2. **Remove** — the deprecated symbol is removed in the minor release **after** the one that marked it.
 
-Precedent: the `mh()` legacy runtime helper was `@deprecated` in M2 (v0.2.0 series) and removed in M6 (v0.2.0 release). The two-minor window plus the version-bump signal gave downstream users a clear migration path.
+Precedent: the `mh()` legacy runtime helper was `@deprecated` from M2 onward (during the pre-`0.1.0` `0.0.0-dev` phase) and removed in M6 with the `0.0.0-dev → 0.1.0` bump. The deprecation window plus the version-bump signal gave downstream users a clear migration path. See [ROADMAP.md](./ROADMAP.md) §M2 and §M6 for the implementation arc.
 
 For internal symbols (anything not re-exported from `index.ts`), no deprecation window applies — breaking internal changes can ship in patch releases.
 
@@ -56,7 +56,7 @@ Movehat shells out to the Movement CLI for compile, deploy, upgrade, and local-n
 
 **Pinning policy**: every Movehat release documents the Movement CLI version it was developed and tested against in the `CHANGELOG.md` entry. The reference CI workflow in [`examples/counter-example/.github/workflows/ci.yml`](./examples/counter-example/.github/workflows/ci.yml) pins the Movement CLI binary by SHA256 because Movement Labs publishes new builds under a moving tag (`bypass-homebrew`). When you adopt a new Movehat release, check its changelog for any noted Movement CLI compatibility shift.
 
-**Rotation procedure**: see the [CI tutorial troubleshooting section](./packages/docs/content/docs/guides/tutorial-ci.mdx) — `SHA256 mismatch`.
+**Rotation procedure**: see the [CI tutorial troubleshooting section](https://movehat.org/docs/guides/tutorial-ci#sha256-mismatch) on the docs site.
 
 ## Contributor onboarding
 

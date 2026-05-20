@@ -61,8 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The networks-and-modes guide shipped with the KPI 1 docs site
   contained two factually-wrong claims about fork-mode write
-  rejection. Corrected in PR #244 (M8.1); the corrected version is
-  what users see on movehat.org today.
+  rejection. Corrected in PR #244 (M8.1); the corrected version ships
+  to movehat.org with the next `develop → main` batch merge.
 
 ---
 
