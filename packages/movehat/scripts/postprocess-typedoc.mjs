@@ -90,6 +90,122 @@ const CATEGORY_TITLES = {
   enumerations: 'Enumerations',
 };
 
+// Maps each public-surface symbol (re-exported from `packages/movehat/src/index.ts`)
+// to a functional category for the sidebar. Drives the Fumadocs
+// "---Section---" separators inserted by `groupPagesByCategory`. Unknown
+// symbols fall through to "Other".
+const SYMBOL_CATEGORY = {
+  // Harness
+  Harness: 'Harness',
+  HarnessDisposedError: 'Harness',
+  HarnessMode: 'Harness',
+  // Account
+  AccountManager: 'Account',
+  StoredAccount: 'Account',
+  createTestAccount: 'Account',
+  // Contract
+  MoveContract: 'Contract',
+  TransactionResult: 'Contract',
+  getContract: 'Contract',
+  // Fork
+  ForkManager: 'Fork',
+  ForkServer: 'Fork',
+  ForkStorage: 'Fork',
+  MovementApiClient: 'Fork',
+  ForkMetadata: 'Fork',
+  ForkInfo: 'Fork',
+  AccountState: 'Fork',
+  LedgerInfo: 'Fork',
+  AccountData: 'Fork',
+  AccountResource: 'Fork',
+  SnapshotOptions: 'Fork',
+  compareForkState: 'Fork',
+  getForkInfo: 'Fork',
+  listSnapshots: 'Fork',
+  snapshot: 'Fork',
+  viewForkResource: 'Fork',
+  // Deployment helpers
+  DeployCodeObjectOptions: 'Deployment Helpers',
+  UpgradeCodeObjectOptions: 'Deployment Helpers',
+  CodeObjectInfo: 'Deployment Helpers',
+  RunViewFunctionOptions: 'Deployment Helpers',
+  RunMoveScriptOptions: 'Deployment Helpers',
+  MoveScriptResult: 'Deployment Helpers',
+  DeploymentInfo: 'Deployment Helpers',
+  assertTransactionSuccess: 'Deployment Helpers',
+  assertTransactionFailed: 'Deployment Helpers',
+  getAllDeployments: 'Deployment Helpers',
+  getDeployedAddress: 'Deployment Helpers',
+  loadDeployment: 'Deployment Helpers',
+  saveDeployment: 'Deployment Helpers',
+  // Errors
+  ModuleAlreadyDeployedError: 'Errors',
+  PostPublishError: 'Errors',
+  // Test setup / runtime (Other bucket — small, varied surface)
+  LocalNodeManager: 'Other',
+  LocalNodeOptions: 'Other',
+  LocalNodeInfo: 'Other',
+  LocalTestingContext: 'Other',
+  LocalTestOptions: 'Other',
+  MovehatConfig: 'Other',
+  MovehatRuntime: 'Other',
+  NetworkInfo: 'Other',
+  TestEnvironment: 'Other',
+  TestFixture: 'Other',
+  initRuntime: 'Other',
+  setupLocalTesting: 'Other',
+  setupMinimalFixture: 'Other',
+  setupTestEnvironment: 'Other',
+  setupTestFixture: 'Other',
+};
+
+// Order categories appear in the sidebar. Anything missing from this list
+// is dropped to the bottom under "Other".
+const CATEGORY_ORDER = [
+  'Harness',
+  'Account',
+  'Contract',
+  'Fork',
+  'Deployment Helpers',
+  'Errors',
+  'Other',
+];
+
+// Directories where we apply category grouping. `type-aliases/` is too
+// small (1 entry today) to benefit from grouping.
+const GROUPED_DIRS = new Set(['classes', 'functions', 'interfaces']);
+
+// Interleave Fumadocs "---SectionTitle---" separators into a sorted page
+// list, grouped by the symbol → category map. Within each category,
+// preserves the input order (caller is expected to pass alphabetically
+// sorted pages).
+function groupPagesByCategory(pages) {
+  const byCategory = new Map();
+  for (const page of pages) {
+    const category = SYMBOL_CATEGORY[page] ?? 'Other';
+    if (!byCategory.has(category)) byCategory.set(category, []);
+    byCategory.get(category).push(page);
+  }
+
+  const out = [];
+  for (const category of CATEGORY_ORDER) {
+    const items = byCategory.get(category);
+    if (!items || items.length === 0) continue;
+    out.push(`---${category}---`);
+    out.push(...items);
+  }
+
+  // Any category not in CATEGORY_ORDER falls under a final "Other"-style
+  // bucket. Defensive; SYMBOL_CATEGORY today maps every known symbol.
+  for (const [category, items] of byCategory) {
+    if (CATEGORY_ORDER.includes(category)) continue;
+    out.push(`---${category}---`);
+    out.push(...items);
+  }
+
+  return out;
+}
+
 function writeMetaForDir(dir, title, pages) {
   writeFileSync(join(dir, 'meta.json'), JSON.stringify({ title, pages }, null, 2) + '\n');
 }
@@ -126,7 +242,10 @@ function processDir(dir) {
 
   const dirName = basename(dir);
   const title = CATEGORY_TITLES[dirName] ?? 'Reference';
-  const allPages = [...finalPages, ...subdirs];
+  const orderedFinalPages = GROUPED_DIRS.has(dirName)
+    ? groupPagesByCategory(finalPages)
+    : finalPages;
+  const allPages = [...orderedFinalPages, ...subdirs];
   writeMetaForDir(dir, title, allPages);
 }
 
