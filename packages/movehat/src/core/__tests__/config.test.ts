@@ -374,4 +374,84 @@ describe("resolveNetworkConfig", () => {
     const resolved = await resolveNetworkConfig(user, "a");
     expect(resolved.profile).toBe("custom-profile");
   });
+
+  // Regression coverage for #40 — auto-injection of the deterministic test
+  // key (0x0..01) was previously gated only on the network NAME being
+  // 'testnet' / 'local'. A user-named 'testnet' pointing at a production
+  // URL silently inherited the weak key. Now name AND URL host must match.
+  describe("test-key auto-injection gate (#40)", () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it("injects test key for 'testnet' network with canonical Movement testnet URL", async () => {
+      const user = baseUserConfig({
+        testnet: {
+          url: "https://testnet.movementnetwork.xyz/v1",
+          chainId: "testnet",
+        },
+      });
+      const resolved = await resolveNetworkConfig(user, "testnet");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("injects test key for 'local' network with localhost URL", async () => {
+      const user = baseUserConfig({
+        local: { url: "http://localhost:8080/v1", chainId: "local" },
+      });
+      const resolved = await resolveNetworkConfig(user, "local");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("REFUSES to inject test key when 'testnet' name points at a non-test URL (the #40 trap)", async () => {
+      const user = baseUserConfig({
+        testnet: { url: "https://prod.example.com/v1", chainId: "testnet" },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+      const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));
+      expect(
+        warningMessages.some((m) => /not a recognized test endpoint/i.test(m))
+      ).toBe(true);
+    });
+
+    it("REFUSES to inject test key when 'local' name points at a remote URL", async () => {
+      const user = baseUserConfig({
+        local: { url: "https://prod.example.com/v1", chainId: "local" },
+      });
+      await expect(resolveNetworkConfig(user, "local")).rejects.toThrow(
+        /has no accounts configured/
+      );
+    });
+
+    it("treats 127.0.0.1 as a known test endpoint", async () => {
+      const user = baseUserConfig({
+        local: { url: "http://127.0.0.1:8080/v1", chainId: "local" },
+      });
+      const resolved = await resolveNetworkConfig(user, "local");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("rejects malformed URLs without injecting (URL parser returns false)", async () => {
+      const user = baseUserConfig({
+        testnet: { url: "not-a-url", chainId: "testnet" },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+    });
+  });
 });

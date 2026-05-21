@@ -21,6 +21,26 @@ interface ConfigCacheEntry {
 // needed.
 const configCache = new Map<string, ConfigCacheEntry>();
 
+// Hostnames recognized as safe targets for the deterministic test key
+// auto-injection. Any URL whose hostname is not in this set causes the
+// test-key path to be skipped even if the network NAME is 'testnet' or
+// 'local' (#40 — name-only gating was spoofable when users named a
+// production-pointing network 'testnet').
+const TEST_ENDPOINT_HOSTS = new Set([
+  "testnet.movementnetwork.xyz",
+  "localhost",
+  "127.0.0.1",
+  "::1",
+]);
+
+function isKnownTestEndpoint(url: string): boolean {
+  try {
+    return TEST_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Loads the user's movehat.config.{ts,js} from the current working directory.
  *
@@ -175,15 +195,36 @@ export async function resolveNetworkConfig(
     accounts = [process.env.PRIVATE_KEY];
   }
 
-  // 4. Validate we have at least one account (unless using testnet/local)
+  // 4. Validate we have at least one account (unless using testnet/local
+  //    AND the URL is a recognized test endpoint — name alone is not enough
+  //    per #40, since a user can name a network 'testnet' but point it at
+  //    a production RPC and would otherwise inherit the deterministic test
+  //    key with a production endpoint).
   if (accounts.length === 0 || !accounts[0]) {
-    // Special case: Auto-generate test accounts for testing networks
-    // testnet = public Movement test network (recommended)
-    // local = local fork server
-    if (selectedNetwork === "testnet" || selectedNetwork === "local") {
+    const isTestNetworkName =
+      selectedNetwork === "testnet" || selectedNetwork === "local";
+    const isTestEndpoint =
+      isTestNetworkName && isKnownTestEndpoint(networkConfig.url);
+
+    if (isTestNetworkName && !isTestEndpoint) {
+      // Name matches the reserved convention but URL is not a recognized
+      // test endpoint — block the deterministic test-key injection. Falls
+      // through to the standard "no accounts" throw below so the user gets
+      // actionable guidance.
+      logger.warning(
+        `Network '${selectedNetwork}' uses a name reserved for testnet/local ` +
+          `but '${networkConfig.url}' is not a recognized test endpoint. ` +
+          `Skipping auto-injection of the deterministic test key to protect ` +
+          `against accidental production use. Set PRIVATE_KEY explicitly, ` +
+          `configure 'accounts' in movehat.config.ts, or rename this network.`
+      );
+    }
+
+    if (isTestEndpoint) {
       // Security: Using a deterministic test account (like Hardhat's default accounts)
       // This is SAFE because:
-      // 1. Only used for testnet/local (never mainnet - that throws error below)
+      // 1. Only used for testnet/local against a known test endpoint
+      //    (network NAME + URL allowlist enforced above; bypassed otherwise)
       // 2. Perfect for transaction simulation (no real funds)
       // 3. Deterministic = consistent test results
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
@@ -193,8 +234,9 @@ export async function resolveNetworkConfig(
       logger.warning("[TESTNET] For mainnet, set PRIVATE_KEY in .env");
       logger.newline();
     } else {
-      // For any other network (especially mainnet), REQUIRE explicit configuration
-      // This prevents accidentally using the test key on production networks
+      // For any other network (mainnet, or testnet/local with a non-test
+      // URL), REQUIRE explicit configuration. This prevents accidentally
+      // using the test key on production networks.
       throw new Error(
         `Network '${selectedNetwork}' has no accounts configured.\n` +
         `\n` +
