@@ -271,3 +271,99 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(body.error_code).toBe("malformed_path");
   });
 });
+
+// Regression coverage for #48 — the path regex deliberately accepts
+// `0x[a-fA-F0-9]{1,64}` because Movement framework addresses use short forms
+// (0x1, 0xa, ...). What matters is that downstream consistently normalizes,
+// so short / padded / mixed-case inputs all collapse to the same canonical key.
+describe("ForkServer — GET /v1/accounts/:address normalization consistency (#48)", () => {
+  let forkDir: string;
+  let server: ForkServer | null = null;
+
+  beforeEach(() => {
+    forkDir = makeForkDir();
+    fakeApi.getAccount.mockReset();
+  });
+
+  afterEach(async () => {
+    if (server) {
+      await server.stop();
+      server = null;
+    }
+    rmSync(forkDir, { recursive: true, force: true });
+  });
+
+  async function startAndGetAccount(path: string): Promise<Response> {
+    server = new ForkServer(forkDir, 0);
+    await server.start();
+    const internal = (server as unknown as { server: { address(): AddressInfo } }).server;
+    const port = internal.address().port;
+    return fetch(`http://127.0.0.1:${port}${path}`);
+  }
+
+  const PADDED_ONE = "0x" + "0".repeat(63) + "1";
+
+  it("short address (0x1) reaches upstream with the canonical padded form", async () => {
+    fakeApi.getAccount.mockResolvedValue({
+      sequence_number: "0",
+      authentication_key: PADDED_ONE,
+    });
+
+    const res = await startAndGetAccount("/v1/accounts/0x1");
+
+    expect(res.status).toBe(200);
+    expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+    expect(fakeApi.getAccount.mock.calls[0]![0]).toBe(PADDED_ONE);
+  });
+
+  it("padded form (0x0..01) reaches upstream with the same canonical key", async () => {
+    fakeApi.getAccount.mockResolvedValue({
+      sequence_number: "0",
+      authentication_key: PADDED_ONE,
+    });
+
+    const res = await startAndGetAccount(`/v1/accounts/${PADDED_ONE}`);
+
+    expect(res.status).toBe(200);
+    expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+    // Same canonical form as the short-address test above — both collapse here.
+    expect(fakeApi.getAccount.mock.calls[0]![0]).toBe(PADDED_ONE);
+  });
+
+  it("once cached, the second form is served from local storage (no extra upstream call)", async () => {
+    // This is the consistency proof: after a short-form request populates
+    // the cache, a padded-form request for the same address must hit cache
+    // (zero additional upstream calls).
+    fakeApi.getAccount.mockResolvedValue({
+      sequence_number: "0",
+      authentication_key: PADDED_ONE,
+    });
+
+    const shortRes = await startAndGetAccount("/v1/accounts/0x1");
+    expect(shortRes.status).toBe(200);
+    expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+
+    // Fresh server, same forkDir → storage persists.
+    await server!.stop();
+    server = null;
+    const paddedRes = await startAndGetAccount(`/v1/accounts/${PADDED_ONE}`);
+    expect(paddedRes.status).toBe(200);
+    // No additional upstream call — same cache entry served both forms.
+    expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("mixed-case address (0xABCdef) is normalized to lowercase canonical form", async () => {
+    fakeApi.getAccount.mockResolvedValue({
+      sequence_number: "0",
+      authentication_key: "0x" + "0".repeat(58) + "abcdef",
+    });
+
+    const res = await startAndGetAccount("/v1/accounts/0xABCdef");
+
+    expect(res.status).toBe(200);
+    expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+    const callArg = fakeApi.getAccount.mock.calls[0]![0] as string;
+    // Canonical form: lowercase, 0x-prefixed, padded to 64 hex.
+    expect(callArg).toBe("0x" + "0".repeat(58) + "abcdef");
+  });
+});
