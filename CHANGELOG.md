@@ -116,8 +116,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accidental persistence of user-supplied keys to `.movehat/accounts/`.
 - Pre-publish gates tightened: `prepublishOnly` script, expanded
   `scripts/check-pack-contents.js` denylist, additional `publish.yml`
-  guards. Full security audit recorded at
-  `SECURITY_AUDIT_2026-05-20.md` at repo root.
+  guards. An internal security review was completed on 2026-05-20;
+  all confirmed Medium findings closed in this release. Contact the
+  maintainers via the channel in `SECURITY.md` for review details.
 
 ---
 
