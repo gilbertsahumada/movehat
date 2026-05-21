@@ -137,6 +137,72 @@ describe("loadUserConfig — mtime cache (#81, #62)", () => {
     );
     await expect(loadUserConfig()).rejects.toThrow(/No networks defined/);
   });
+
+  // Regression coverage for #47 — concurrent cold-cache loads of the
+  // same config previously raced on tsx's register/unregister cycle
+  // (for .ts files). The in-flight dedup map makes concurrent callers
+  // share one Promise regardless of extension.
+  //
+  // Note: tests use .js fixtures because vitest's vite-node loader
+  // collides with tsx's `register()` in-process (`Invalid loader value`
+  // error). The dedup mechanism lives BEFORE the .ts/.js branch in
+  // doLoadConfig — proving dedup with .js proves it for .ts in
+  // production where vitest is not in the loader chain.
+  describe("concurrent load dedup (#47)", () => {
+    it("Promise.all on cold cache returns the same loaded object", async () => {
+      writeFileSync(join(tmpCwd, "movehat.config.js"), CONFIG_A);
+
+      const [a, b, c] = await Promise.all([
+        loadUserConfig(),
+        loadUserConfig(),
+        loadUserConfig(),
+      ]);
+
+      // Reference equality proves all three callers received the SAME
+      // resolved module — only one load actually ran.
+      expect(a).toBe(b);
+      expect(b).toBe(c);
+      expect(a.defaultNetwork).toBe("testnet");
+    });
+
+    it("Promise.all rejection propagates the same error to all callers", async () => {
+      // Config without `networks` triggers the validation throw inside
+      // doLoadConfig, exercising the rejection path of the in-flight
+      // promise.
+      writeFileSync(
+        join(tmpCwd, "movehat.config.js"),
+        `export default { networks: {} };
+`
+      );
+
+      const results = await Promise.allSettled([
+        loadUserConfig(),
+        loadUserConfig(),
+      ]);
+
+      expect(results[0].status).toBe("rejected");
+      expect(results[1].status).toBe("rejected");
+      const r0 = results[0] as PromiseRejectedResult;
+      const r1 = results[1] as PromiseRejectedResult;
+      // Both callers see the same wrapped "Failed to load configuration"
+      // error (each catch produces a new Error instance, but the message
+      // and inner cause are identical — proves dedup serialized the
+      // single underlying failure to both).
+      expect(String(r0.reason)).toBe(String(r1.reason));
+      expect(String(r0.reason)).toMatch(/No networks defined|Failed to load/);
+    });
+
+    it("sequential calls after a concurrent burst still hit cache normally", async () => {
+      writeFileSync(join(tmpCwd, "movehat.config.js"), CONFIG_A);
+
+      // Cold-cache concurrent burst.
+      const [first] = await Promise.all([loadUserConfig(), loadUserConfig()]);
+      // Sequential call after the burst — should be a cache hit, same
+      // reference, no new load.
+      const sequential = await loadUserConfig();
+      expect(sequential).toBe(first);
+    });
+  });
 });
 
 const TEST_KEY =
