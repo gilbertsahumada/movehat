@@ -21,6 +21,14 @@ interface ConfigCacheEntry {
 // needed.
 const configCache = new Map<string, ConfigCacheEntry>();
 
+// In-flight load deduplication (#47). When two callers hit a cold cache
+// for the same config file concurrently, both would invoke
+// `register()` from `tsx/esm/api` and race on the unregister cleanup.
+// The dedup map ensures only ONE load runs per (path, mtime) burst —
+// concurrent callers await the same Promise. Cleared after the load
+// settles so a later edit (new mtime) can re-trigger a cold load.
+const inFlightLoads = new Map<string, Promise<MovehatUserConfig>>();
+
 // Hostnames recognized as safe targets for the deterministic test key
 // auto-injection. Any URL whose hostname is not in this set causes the
 // test-key path to be skipped even if the network NAME is 'testnet' or
@@ -83,37 +91,67 @@ export async function loadUserConfig(): Promise<MovehatUserConfig> {
       return cached.config;
     }
 
-    let configModule;
-
-    if (configPath.endsWith('.ts')) {
-      const { register } = await import('tsx/esm/api');
-      const unregister = register();
-
-      try {
-        const configUrl = pathToFileURL(configPath).href;
-        configModule = await import(configUrl + '?mtime=' + mtimeMs);
-      } finally {
-        unregister();
-      }
-    } else {
-      const configUrl = pathToFileURL(configPath).href;
-      configModule = await import(configUrl + '?mtime=' + mtimeMs);
+    // Dedup concurrent cold-cache loads of the same file (#47).
+    // Without this, two callers race on tsx's register/unregister and
+    // the second may run its `await import()` after the first calls
+    // unregister(), removing the loader mid-flight. All callers go
+    // through the same `return await loadPromise` below so the outer
+    // try/catch wraps a consistent error regardless of who started the
+    // load.
+    let loadPromise = inFlightLoads.get(configPath);
+    if (!loadPromise) {
+      loadPromise = doLoadConfig(configPath, mtimeMs);
+      inFlightLoads.set(configPath, loadPromise);
+      // Clean up after settles. `.catch(() => undefined)` after the
+      // finally chain swallows the cleanup-promise rejection so it
+      // does not become an unhandled rejection — the actual awaiters
+      // still see the original rejection via `return await loadPromise`.
+      void loadPromise
+        .finally(() => {
+          if (inFlightLoads.get(configPath) === loadPromise) {
+            inFlightLoads.delete(configPath);
+          }
+        })
+        .catch(() => undefined);
     }
-
-    const userConfig = configModule.default as MovehatUserConfig;
-
-    if (!userConfig.networks || Object.keys(userConfig.networks).length === 0) {
-      throw new Error(
-        "No networks defined in configuration. Add at least one network in the 'networks' field."
-      );
-    }
-
-    configCache.set(configPath, { mtimeMs, config: userConfig });
-
-    return userConfig;
+    return await loadPromise;
   } catch (error) {
     throw new Error(`Failed to load configuration file '${configPath}': ${error}`);
   }
+}
+
+async function doLoadConfig(
+  configPath: string,
+  mtimeMs: number
+): Promise<MovehatUserConfig> {
+  let configModule;
+
+  if (configPath.endsWith('.ts')) {
+    const { register } = await import('tsx/esm/api');
+    const unregister = register();
+
+    try {
+      const configUrl = pathToFileURL(configPath).href;
+      configModule = await import(configUrl + '?mtime=' + mtimeMs);
+    } finally {
+      unregister();
+    }
+  } else {
+    const configUrl = pathToFileURL(configPath).href;
+    configModule = await import(configUrl + '?mtime=' + mtimeMs);
+  }
+
+  const userConfig = configModule.default as MovehatUserConfig;
+
+  if (!userConfig.networks || Object.keys(userConfig.networks).length === 0) {
+    throw new Error(
+      "No networks defined in configuration. Add at least one network in the 'networks' field."
+    );
+  }
+
+  configCache.set(configPath, { mtimeMs, config: userConfig });
+
+  return userConfig;
 }
 
 /**
@@ -124,6 +162,7 @@ export async function loadUserConfig(): Promise<MovehatUserConfig> {
  */
 export function _resetConfigCache(): void {
   configCache.clear();
+  inFlightLoads.clear();
 }
 
 /**
