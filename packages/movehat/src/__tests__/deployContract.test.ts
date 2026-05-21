@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import * as yaml from "js-yaml";
-import { CliExecutionError } from "../errors.js";
+import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
 import { initRuntime } from "../runtime.js";
 import { Publisher } from "../core/Publisher.js";
 import type { ChildProcessAdapter, RunInput, RunResult } from "../utils/childProcessAdapter.js";
@@ -434,5 +434,142 @@ greeting = "0xcafe"
       errSpy.mockRestore();
       logSpy.mockRestore();
     }
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Lifecycle tests — happy path + idempotency guards. Added for #61.
+  // ──────────────────────────────────────────────────────────────────
+
+  it("happy path — writes deployment record with correct shape after successful publish", async () => {
+    const txHash = "0x" + "f".repeat(64);
+    const { adapter, calls } = makeAdapter({
+      build: { exitCode: 0, stdout: "build ok", stderr: "" },
+      publish: { exitCode: 0, stdout: `Transaction hash: ${txHash}`, stderr: "" },
+    });
+
+    const runtime = await initRuntime();
+    const deployment = await runtime.deployContract("mymodule", { adapter });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.args.slice(0, 2)).toEqual(["move", "build"]);
+    expect(calls[1]?.args.slice(0, 2)).toEqual(["move", "publish"]);
+
+    const deploymentFile = join(tmpCwd, "deployments", "testnet", "mymodule.json");
+    expect(existsSync(deploymentFile)).toBe(true);
+    const persisted = JSON.parse(readFileSync(deploymentFile, "utf8")) as Record<string, unknown>;
+    expect(persisted.moduleName).toBe("mymodule");
+    expect(persisted.network).toBe("testnet");
+    expect(persisted.txHash).toBe(txHash);
+    expect(persisted.address).toBe(deployment.address);
+    expect(persisted.deployer).toBe(deployment.address);
+    expect(typeof persisted.timestamp).toBe("number");
+  });
+
+  it("throws ModuleAlreadyDeployedError when a prior deployment exists and MH_CLI_REDEPLOY is unset", async () => {
+    const networkDir = join(tmpCwd, "deployments", "testnet");
+    mkdirSync(networkDir, { recursive: true });
+    const existing = {
+      address: "0x" + "1".repeat(64),
+      moduleName: "mymodule",
+      network: "testnet",
+      deployer: "0x" + "2".repeat(64),
+      timestamp: 1700000000000,
+      txHash: "0x" + "3".repeat(64),
+    };
+    writeFileSync(join(networkDir, "mymodule.json"), JSON.stringify(existing));
+
+    const origRedeploy = process.env.MH_CLI_REDEPLOY;
+    delete process.env.MH_CLI_REDEPLOY;
+
+    try {
+      const { adapter, calls } = makeAdapter({
+        build: { exitCode: 0, stdout: "", stderr: "" },
+        publish: { exitCode: 0, stdout: "", stderr: "" },
+      });
+      const runtime = await initRuntime();
+
+      let captured: unknown;
+      try {
+        await runtime.deployContract("mymodule", { adapter });
+      } catch (err) {
+        captured = err;
+      }
+
+      expect(captured).toBeInstanceOf(ModuleAlreadyDeployedError);
+      const err = captured as ModuleAlreadyDeployedError;
+      expect(err.moduleName).toBe("mymodule");
+      expect(err.network).toBe("testnet");
+      expect(err.address).toBe(existing.address);
+      expect(err.txHash).toBe(existing.txHash);
+
+      // Early-exit fired: the CLI was never invoked.
+      expect(calls).toHaveLength(0);
+    } finally {
+      if (origRedeploy === undefined) delete process.env.MH_CLI_REDEPLOY;
+      else process.env.MH_CLI_REDEPLOY = origRedeploy;
+    }
+  });
+
+  it("MH_CLI_REDEPLOY=true proceeds and overwrites the stale deployment record", async () => {
+    const networkDir = join(tmpCwd, "deployments", "testnet");
+    mkdirSync(networkDir, { recursive: true });
+    const stale = {
+      address: "0x" + "1".repeat(64),
+      moduleName: "mymodule",
+      network: "testnet",
+      deployer: "0x" + "2".repeat(64),
+      timestamp: 1700000000000,
+      txHash: "0x" + "3".repeat(64),
+    };
+    writeFileSync(join(networkDir, "mymodule.json"), JSON.stringify(stale));
+
+    const origRedeploy = process.env.MH_CLI_REDEPLOY;
+    process.env.MH_CLI_REDEPLOY = "true";
+
+    try {
+      const newHash = "0x" + "e".repeat(64);
+      const { adapter, calls } = makeAdapter({
+        build: { exitCode: 0, stdout: "build ok", stderr: "" },
+        publish: { exitCode: 0, stdout: `Transaction hash: ${newHash}`, stderr: "" },
+      });
+      const runtime = await initRuntime();
+      await runtime.deployContract("mymodule", { adapter });
+
+      expect(calls).toHaveLength(2);
+
+      const persisted = JSON.parse(
+        readFileSync(join(networkDir, "mymodule.json"), "utf8")
+      ) as Record<string, unknown>;
+      expect(persisted.txHash).toBe(newHash);
+      expect(persisted.txHash).not.toBe(stale.txHash);
+    } finally {
+      if (origRedeploy === undefined) delete process.env.MH_CLI_REDEPLOY;
+      else process.env.MH_CLI_REDEPLOY = origRedeploy;
+    }
+  });
+
+  it("build failure prevents publish and leaves no deployment record on disk", async () => {
+    const { adapter, calls } = makeAdapter({
+      build: { exitCode: 1, stdout: "", stderr: "compile error: unresolved reference" },
+      publish: { exitCode: 0, stdout: "", stderr: "" },
+    });
+
+    const runtime = await initRuntime();
+
+    let captured: unknown;
+    try {
+      await runtime.deployContract("mymodule", { adapter });
+    } catch (err) {
+      captured = err;
+    }
+
+    expect(captured).toBeInstanceOf(CliExecutionError);
+
+    // Only build was attempted; publish never invoked.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args.slice(0, 2)).toEqual(["move", "build"]);
+
+    // No deployment file was written.
+    expect(existsSync(join(tmpCwd, "deployments", "testnet", "mymodule.json"))).toBe(false);
   });
 });
