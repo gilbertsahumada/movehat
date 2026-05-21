@@ -24,6 +24,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          # docs-deploy never pushes back to the repo (Pages upload uses
+          # OIDC, not git push), so persisting GITHUB_TOKEN is unnecessary
+          # token exposure. See CodeRabbit #265 + zizmor 'artipacked'.
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d  # v3.0.0
