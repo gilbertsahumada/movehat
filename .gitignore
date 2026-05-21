@@ -66,5 +66,6 @@ pnpm-debug.log*
 !MAINTENANCE.md
 !MOVEMENT_CLI_COMPAT.md
 !NOTICE.md
+!CODE_OF_CONDUCT.md
 !.github/**/*.md
 *.pdf

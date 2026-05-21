@@ -1,12 +1,21 @@
 // Export all helpers for end users
 export * from "./helpers/index.js";
-export type { MovehatConfig } from "./types/config.js";
+export type {
+  MovehatConfig,
+  NetworkConfig,
+  LocalTestingMode,
+} from "./types/config.js";
 
 // Movehat Runtime Environment. `initRuntime` is a public utility but
 // external callers should prefer Harness; it's the construction primitive
 // `Harness.createLive` uses.
 export { initRuntime } from "./runtime.js";
+export type { InitRuntimeOptions } from "./runtime.js";
 export type { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
+
+// Re-export the ChildProcessAdapter interface so end-users can supply
+// a custom adapter (e.g. sandboxed CLI execution in tests).
+export type { ChildProcessAdapter } from "./utils/childProcessAdapter.js";
 
 // Export Fork system
 export { ForkManager } from "./fork/manager.js";
