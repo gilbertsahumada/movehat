@@ -21,6 +21,47 @@ interface ConfigCacheEntry {
 // needed.
 const configCache = new Map<string, ConfigCacheEntry>();
 
+// In-flight load deduplication (#47). When two callers hit a cold cache
+// for the same config file concurrently, both would invoke
+// `register()` from `tsx/esm/api` and race on the unregister cleanup.
+// The dedup map ensures only ONE load runs per (path, mtime) burst —
+// concurrent callers await the same Promise. Cleared after the load
+// settles so a later edit (new mtime) can re-trigger a cold load.
+const inFlightLoads = new Map<string, Promise<MovehatUserConfig>>();
+
+// Hostnames recognized as safe targets for the deterministic test key
+// auto-injection. Any URL whose hostname is not in this set causes the
+// test-key path to be skipped even if the network NAME is 'testnet' or
+// 'local' (#40 — name-only gating was spoofable when users named a
+// production-pointing network 'testnet').
+const TEST_ENDPOINT_HOSTS = new Set([
+  "testnet.movementnetwork.xyz",
+  "localhost",
+  "127.0.0.1",
+  "::1",
+]);
+
+function isKnownTestEndpoint(url: string): boolean {
+  try {
+    return TEST_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+// Render a URL for log output without exposing userinfo (`user:pass@`)
+// or query strings (`?apiKey=…`). Returns the protocol + host + pathname
+// only, which is enough for the operator to identify the endpoint
+// without leaking embedded credentials to CI logs.
+function sanitizeUrlForLog(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
 /**
  * Loads the user's movehat.config.{ts,js} from the current working directory.
  *
@@ -63,37 +104,67 @@ export async function loadUserConfig(): Promise<MovehatUserConfig> {
       return cached.config;
     }
 
-    let configModule;
-
-    if (configPath.endsWith('.ts')) {
-      const { register } = await import('tsx/esm/api');
-      const unregister = register();
-
-      try {
-        const configUrl = pathToFileURL(configPath).href;
-        configModule = await import(configUrl + '?mtime=' + mtimeMs);
-      } finally {
-        unregister();
-      }
-    } else {
-      const configUrl = pathToFileURL(configPath).href;
-      configModule = await import(configUrl + '?mtime=' + mtimeMs);
+    // Dedup concurrent cold-cache loads of the same file (#47).
+    // Without this, two callers race on tsx's register/unregister and
+    // the second may run its `await import()` after the first calls
+    // unregister(), removing the loader mid-flight. All callers go
+    // through the same `return await loadPromise` below so the outer
+    // try/catch wraps a consistent error regardless of who started the
+    // load.
+    let loadPromise = inFlightLoads.get(configPath);
+    if (!loadPromise) {
+      loadPromise = doLoadConfig(configPath, mtimeMs);
+      inFlightLoads.set(configPath, loadPromise);
+      // Clean up after settles. `.catch(() => undefined)` after the
+      // finally chain swallows the cleanup-promise rejection so it
+      // does not become an unhandled rejection — the actual awaiters
+      // still see the original rejection via `return await loadPromise`.
+      void loadPromise
+        .finally(() => {
+          if (inFlightLoads.get(configPath) === loadPromise) {
+            inFlightLoads.delete(configPath);
+          }
+        })
+        .catch(() => undefined);
     }
-
-    const userConfig = configModule.default as MovehatUserConfig;
-
-    if (!userConfig.networks || Object.keys(userConfig.networks).length === 0) {
-      throw new Error(
-        "No networks defined in configuration. Add at least one network in the 'networks' field."
-      );
-    }
-
-    configCache.set(configPath, { mtimeMs, config: userConfig });
-
-    return userConfig;
+    return await loadPromise;
   } catch (error) {
     throw new Error(`Failed to load configuration file '${configPath}': ${error}`);
   }
+}
+
+async function doLoadConfig(
+  configPath: string,
+  mtimeMs: number
+): Promise<MovehatUserConfig> {
+  let configModule;
+
+  if (configPath.endsWith('.ts')) {
+    const { register } = await import('tsx/esm/api');
+    const unregister = register();
+
+    try {
+      const configUrl = pathToFileURL(configPath).href;
+      configModule = await import(configUrl + '?mtime=' + mtimeMs);
+    } finally {
+      unregister();
+    }
+  } else {
+    const configUrl = pathToFileURL(configPath).href;
+    configModule = await import(configUrl + '?mtime=' + mtimeMs);
+  }
+
+  const userConfig = configModule.default as MovehatUserConfig;
+
+  if (!userConfig.networks || Object.keys(userConfig.networks).length === 0) {
+    throw new Error(
+      "No networks defined in configuration. Add at least one network in the 'networks' field."
+    );
+  }
+
+  configCache.set(configPath, { mtimeMs, config: userConfig });
+
+  return userConfig;
 }
 
 /**
@@ -104,6 +175,7 @@ export async function loadUserConfig(): Promise<MovehatUserConfig> {
  */
 export function _resetConfigCache(): void {
   configCache.clear();
+  inFlightLoads.clear();
 }
 
 /**
@@ -175,15 +247,36 @@ export async function resolveNetworkConfig(
     accounts = [process.env.PRIVATE_KEY];
   }
 
-  // 4. Validate we have at least one account (unless using testnet/local)
+  // 4. Validate we have at least one account (unless using testnet/local
+  //    AND the URL is a recognized test endpoint — name alone is not enough
+  //    per #40, since a user can name a network 'testnet' but point it at
+  //    a production RPC and would otherwise inherit the deterministic test
+  //    key with a production endpoint).
   if (accounts.length === 0 || !accounts[0]) {
-    // Special case: Auto-generate test accounts for testing networks
-    // testnet = public Movement test network (recommended)
-    // local = local fork server
-    if (selectedNetwork === "testnet" || selectedNetwork === "local") {
+    const isTestNetworkName =
+      selectedNetwork === "testnet" || selectedNetwork === "local";
+    const isTestEndpoint =
+      isTestNetworkName && isKnownTestEndpoint(networkConfig.url);
+
+    if (isTestNetworkName && !isTestEndpoint) {
+      // Name matches the reserved convention but URL is not a recognized
+      // test endpoint — block the deterministic test-key injection. Falls
+      // through to the standard "no accounts" throw below so the user gets
+      // actionable guidance.
+      logger.warning(
+        `Network '${selectedNetwork}' uses a name reserved for testnet/local ` +
+          `but '${sanitizeUrlForLog(networkConfig.url)}' is not a recognized test endpoint. ` +
+          `Skipping auto-injection of the deterministic test key to protect ` +
+          `against accidental production use. Set PRIVATE_KEY explicitly, ` +
+          `configure 'accounts' in movehat.config.ts, or rename this network.`
+      );
+    }
+
+    if (isTestEndpoint) {
       // Security: Using a deterministic test account (like Hardhat's default accounts)
       // This is SAFE because:
-      // 1. Only used for testnet/local (never mainnet - that throws error below)
+      // 1. Only used for testnet/local against a known test endpoint
+      //    (network NAME + URL allowlist enforced above; bypassed otherwise)
       // 2. Perfect for transaction simulation (no real funds)
       // 3. Deterministic = consistent test results
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
@@ -193,8 +286,9 @@ export async function resolveNetworkConfig(
       logger.warning("[TESTNET] For mainnet, set PRIVATE_KEY in .env");
       logger.newline();
     } else {
-      // For any other network (especially mainnet), REQUIRE explicit configuration
-      // This prevents accidentally using the test key on production networks
+      // For any other network (mainnet, or testnet/local with a non-test
+      // URL), REQUIRE explicit configuration. This prevents accidentally
+      // using the test key on production networks.
       throw new Error(
         `Network '${selectedNetwork}' has no accounts configured.\n` +
         `\n` +

@@ -137,6 +137,72 @@ describe("loadUserConfig — mtime cache (#81, #62)", () => {
     );
     await expect(loadUserConfig()).rejects.toThrow(/No networks defined/);
   });
+
+  // Regression coverage for #47 — concurrent cold-cache loads of the
+  // same config previously raced on tsx's register/unregister cycle
+  // (for .ts files). The in-flight dedup map makes concurrent callers
+  // share one Promise regardless of extension.
+  //
+  // Note: tests use .js fixtures because vitest's vite-node loader
+  // collides with tsx's `register()` in-process (`Invalid loader value`
+  // error). The dedup mechanism lives BEFORE the .ts/.js branch in
+  // doLoadConfig — proving dedup with .js proves it for .ts in
+  // production where vitest is not in the loader chain.
+  describe("concurrent load dedup (#47)", () => {
+    it("Promise.all on cold cache returns the same loaded object", async () => {
+      writeFileSync(join(tmpCwd, "movehat.config.js"), CONFIG_A);
+
+      const [a, b, c] = await Promise.all([
+        loadUserConfig(),
+        loadUserConfig(),
+        loadUserConfig(),
+      ]);
+
+      // Reference equality proves all three callers received the SAME
+      // resolved module — only one load actually ran.
+      expect(a).toBe(b);
+      expect(b).toBe(c);
+      expect(a.defaultNetwork).toBe("testnet");
+    });
+
+    it("Promise.all rejection propagates the same error to all callers", async () => {
+      // Config without `networks` triggers the validation throw inside
+      // doLoadConfig, exercising the rejection path of the in-flight
+      // promise.
+      writeFileSync(
+        join(tmpCwd, "movehat.config.js"),
+        `export default { networks: {} };
+`
+      );
+
+      const results = await Promise.allSettled([
+        loadUserConfig(),
+        loadUserConfig(),
+      ]);
+
+      expect(results[0].status).toBe("rejected");
+      expect(results[1].status).toBe("rejected");
+      const r0 = results[0] as PromiseRejectedResult;
+      const r1 = results[1] as PromiseRejectedResult;
+      // Both callers see the same wrapped "Failed to load configuration"
+      // error (each catch produces a new Error instance, but the message
+      // and inner cause are identical — proves dedup serialized the
+      // single underlying failure to both).
+      expect(String(r0.reason)).toBe(String(r1.reason));
+      expect(String(r0.reason)).toMatch(/No networks defined|Failed to load/);
+    });
+
+    it("sequential calls after a concurrent burst still hit cache normally", async () => {
+      writeFileSync(join(tmpCwd, "movehat.config.js"), CONFIG_A);
+
+      // Cold-cache concurrent burst.
+      const [first] = await Promise.all([loadUserConfig(), loadUserConfig()]);
+      // Sequential call after the burst — should be a cache hit, same
+      // reference, no new load.
+      const sequential = await loadUserConfig();
+      expect(sequential).toBe(first);
+    });
+  });
 });
 
 const TEST_KEY =
@@ -373,5 +439,110 @@ describe("resolveNetworkConfig", () => {
     };
     const resolved = await resolveNetworkConfig(user, "a");
     expect(resolved.profile).toBe("custom-profile");
+  });
+
+  // Regression coverage for #40 — auto-injection of the deterministic test
+  // key (0x0..01) was previously gated only on the network NAME being
+  // 'testnet' / 'local'. A user-named 'testnet' pointing at a production
+  // URL silently inherited the weak key. Now name AND URL host must match.
+  describe("test-key auto-injection gate (#40)", () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it("injects test key for 'testnet' network with canonical Movement testnet URL", async () => {
+      const user = baseUserConfig({
+        testnet: {
+          url: "https://testnet.movementnetwork.xyz/v1",
+          chainId: "testnet",
+        },
+      });
+      const resolved = await resolveNetworkConfig(user, "testnet");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("injects test key for 'local' network with localhost URL", async () => {
+      const user = baseUserConfig({
+        local: { url: "http://localhost:8080/v1", chainId: "local" },
+      });
+      const resolved = await resolveNetworkConfig(user, "local");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("REFUSES to inject test key when 'testnet' name points at a non-test URL (the #40 trap)", async () => {
+      const user = baseUserConfig({
+        testnet: { url: "https://prod.example.com/v1", chainId: "testnet" },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+      const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));
+      expect(
+        warningMessages.some((m) => /not a recognized test endpoint/i.test(m))
+      ).toBe(true);
+    });
+
+    it("REFUSES to inject test key when 'local' name points at a remote URL", async () => {
+      const user = baseUserConfig({
+        local: { url: "https://prod.example.com/v1", chainId: "local" },
+      });
+      await expect(resolveNetworkConfig(user, "local")).rejects.toThrow(
+        /has no accounts configured/
+      );
+    });
+
+    it("sanitizes URL credentials and query params in the warning (CR #265)", async () => {
+      // URLs with userinfo or API keys should never leak into logs.
+      const user = baseUserConfig({
+        testnet: {
+          url: "https://alice:s3cr3t@prod.example.com/v1?apiKey=sk-private",
+          chainId: "testnet",
+        },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+      const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));
+      const warnText = warningMessages.find((m) =>
+        /not a recognized test endpoint/i.test(m)
+      );
+      expect(warnText).toBeDefined();
+      // Sanitized: must drop userinfo + query string.
+      expect(warnText!).not.toContain("alice");
+      expect(warnText!).not.toContain("s3cr3t");
+      expect(warnText!).not.toContain("apiKey");
+      expect(warnText!).not.toContain("sk-private");
+      // But keep enough for the operator to identify the endpoint.
+      expect(warnText!).toContain("prod.example.com");
+    });
+
+    it("treats 127.0.0.1 as a known test endpoint", async () => {
+      const user = baseUserConfig({
+        local: { url: "http://127.0.0.1:8080/v1", chainId: "local" },
+      });
+      const resolved = await resolveNetworkConfig(user, "local");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
+    it("rejects malformed URLs without injecting (URL parser returns false)", async () => {
+      const user = baseUserConfig({
+        testnet: { url: "not-a-url", chainId: "testnet" },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+    });
   });
 });

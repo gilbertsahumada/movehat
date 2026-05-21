@@ -4,12 +4,17 @@
  * @internal — not exported from `src/index.ts`.
  */
 
+import { logger } from '../ui/index.js';
+
 /**
  * Extract the transaction hash from a `movement` CLI subcommand's stdout.
  *
- * Tries the context-bearing pattern first (`transaction hash: 0x…`,
- * `txn hash: 0x…`, `hash: 0x…`) and falls back to any 64-char hex
- * literal in the buffer. Returns `undefined` if no candidate matches.
+ * Only the context-bearing pattern is accepted (`transaction hash: 0x…`,
+ * `txn hash: 0x…`, `hash: 0x…`). When the context is absent we log a
+ * warning and return `undefined` so callers decide whether to throw —
+ * the previous behavior of falling back to "any 64-hex literal" was
+ * fragile: a padded module address or state root printed before the
+ * actual txhash would silently corrupt the cached deployment record.
  *
  * Shared by `core/Publisher.ts` (publish), `harness/codeObject.ts`
  * (deploy-object / upgrade-object), and `harness/script.ts`
@@ -22,6 +27,9 @@ export function parseTxHash(stdout: string): string | undefined {
     /(?:transaction\s*(?:hash)?|txn\s*(?:hash)?|hash):\s*(0x[a-fA-F0-9]{64})\b/i
   );
   if (withContext?.[1]) return withContext[1];
-  const fallback = stdout.match(/\b(0x[a-fA-F0-9]{64})\b/);
-  return fallback?.[1];
+  logger.warning(
+    `parseTxHash: no contextual 'transaction|txn|hash: 0x…' match in ${stdout.length}-byte CLI output. ` +
+      `Returning undefined; the caller decides whether to error.`
+  );
+  return undefined;
 }

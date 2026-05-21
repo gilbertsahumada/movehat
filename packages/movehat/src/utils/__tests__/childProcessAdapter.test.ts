@@ -288,4 +288,58 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
       setTimeoutSpy.mockRestore();
     }
   });
+
+  // Regression coverage for the arg-shape pass-through that fake-adapter unit
+  // tests cannot exercise. The original bug was './move' being eaten somewhere
+  // between Movehat and the Movement CLI; spawn(cmd, args) is the contract we
+  // need to keep honoring forever.
+  describe('arg-shape pass-through', () => {
+    async function spawnAndCaptureArgv(extraArgs: string[]): Promise<string[]> {
+      // `--` after the script tells Node to treat following args as positional
+      // (not Node flags), so '--package-dir' etc. survive intact in argv.
+      const result = await defaultChildProcessAdapter.run({
+        command: NODE,
+        args: [
+          '-e',
+          'process.stdout.write(JSON.stringify(process.argv.slice(1)))',
+          '--',
+          ...extraArgs,
+        ],
+      });
+      expect(result.exitCode).toBe(0);
+      return JSON.parse(result.stdout);
+    }
+
+    it('passes path-with-slash literally (the ./move regression)', async () => {
+      expect(await spawnAndCaptureArgv(['./move'])).toEqual(['./move']);
+    });
+
+    it('passes args with embedded spaces as single argv entries', async () => {
+      expect(await spawnAndCaptureArgv(['hello world', 'foo'])).toEqual(['hello world', 'foo']);
+    });
+
+    it('passes flag-style args with equals signs', async () => {
+      expect(
+        await spawnAndCaptureArgv(['--package-dir', '.', '--named-addresses', 'counter=0x1'])
+      ).toEqual(['--package-dir', '.', '--named-addresses', 'counter=0x1']);
+    });
+
+    it('passes shell metacharacters literally (no shell interpretation)', async () => {
+      expect(
+        await spawnAndCaptureArgv(['$HOME', '`whoami`', '$(ls)', '|', '&&'])
+      ).toEqual(['$HOME', '`whoami`', '$(ls)', '|', '&&']);
+    });
+
+    it('passes empty-string args as empty entries (not dropped)', async () => {
+      expect(await spawnAndCaptureArgv(['first', '', 'third'])).toEqual(['first', '', 'third']);
+    });
+
+    it('passes unicode args correctly', async () => {
+      expect(await spawnAndCaptureArgv(['español', '日本語', '🚀'])).toEqual([
+        'español',
+        '日本語',
+        '🚀',
+      ]);
+    });
+  });
 });
