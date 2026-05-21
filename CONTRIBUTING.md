@@ -118,6 +118,29 @@ The templates in `packages/movehat/src/templates/` are what users get when they 
 
 **Important:** Templates use `"movehat": "workspace:*"` during development. This is automatically replaced with the actual version when publishing via GitHub Actions.
 
+## Git Hooks
+
+This project uses [Husky](https://typicode.github.io/husky/) to install three local git hooks in `.husky/`. They are installed automatically by `pnpm install` (via the `prepare` script).
+
+| Hook | What it runs |
+|---|---|
+| `pre-commit` | Lightweight checks placeholder (currently empty — reserved for future `lint-staged` or similar). |
+| `commit-msg` | `pnpm exec commitlint --edit "$1"` — enforces the conventional commit format (`type(scope): subject`, allowed types: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`). |
+| `pre-push` | `pnpm --filter movehat test` (unit suite) + `pnpm typecheck:example` (Tier 1 example typecheck). Optionally runs E2E + can skip the example typecheck — see env flags below. |
+
+### Skip flags (use sparingly)
+
+Set on the push command for the run only:
+
+- `MOVEHAT_E2E=1 git push` — also run E2E tests in the pre-push hook (slow; usually reserved for release verification).
+- `MOVEHAT_SKIP_EXAMPLE_CHECK=1 git push` — skip the example typecheck (for intentional WIP pushes where the public surface temporarily breaks the example). The unit-test gate remains mandatory regardless.
+
+### Bypassing hooks
+
+**Never use `--no-verify`** to skip hook execution without a documented reason. If a hook fails, the right response is to fix the underlying issue, not bypass the check. This matches the policy in `CLAUDE.md` §8 (self-review gate) and ensures CI never sees broken state that local hooks would have caught.
+
+For one-off legitimate bypasses (e.g., recovering from a corrupted state mid-rebase), document the reason in the commit message and post a follow-up PR to address whatever the hook would have caught.
+
 ## Project Architecture
 
 ### Workspace Structure
