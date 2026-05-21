@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-05-21
+
+7 audit-pass items closed across two layers — test coverage hardening and
+security gate tightening. No public API changes; all behavior shifts are
+strictly safer (silent → loud failure modes).
+
+### Security
+
+- `loadUserConfig` deduplicates concurrent cold-cache loads of the same
+  config file via an in-flight Promise map. Previously two parallel
+  callers raced on tsx's `register()` / `unregister()` cycle and the
+  second's `await import()` could lose the loader mid-flight. Closes #47.
+- Test-key auto-injection for `testnet` / `local` networks now requires
+  BOTH the network NAME and the URL hostname to be in an allowlist
+  (`testnet.movementnetwork.xyz`, `localhost`, `127.0.0.1`, `::1`).
+  A user-named `testnet` pointing at a production URL no longer inherits
+  the deterministic test key silently — instead a warning fires and the
+  standard "no accounts configured" error gives actionable guidance.
+  URL is sanitized in the log output (drops userinfo + query strings)
+  to avoid leaking embedded credentials. Closes #40.
+- `movehat run` resolves the `tsx` CLI from the bundled movehat copy
+  first instead of the project cwd. Closes the supply-chain risk where
+  a malicious `node_modules/tsx/dist/cli.mjs` in an untrusted project
+  directory would silently execute. Opt-in env var
+  `MOVEHAT_TSX_FROM_CWD=1` preserves the old behavior for power users
+  who pin a different tsx version. Closes #52.
+- All third-party GitHub Actions in `.github/workflows/*` pinned to
+  40-char commit SHAs (not floating major tags) to close supply-chain
+  drift from a maintainer-compromised tag re-point. Closes #214.
+- `actions/checkout` in `docs-deploy.yml` now uses
+  `persist-credentials: false` to avoid GITHUB_TOKEN persistence on
+  the OIDC-based Pages deploy path.
+
+### Fixed
+
+- `parseTxHash` no longer falls back to "any 64-hex literal in stdout"
+  when the contextual `transaction|txn|hash:` pattern misses. The
+  fallback was fragile — a padded module address or state root printed
+  before the actual transaction hash would silently return the wrong
+  hash. Now returns `undefined` + logs a warning; the 3 callers
+  (`Publisher`, `codeObject`, `script`) handle the missing value
+  appropriately. Closes #51.
+
+### Tests
+
+- New integration test in `childProcessAdapter.test.ts` proves the
+  spawn adapter passes args un-mangled (`./path`, embedded spaces,
+  shell metacharacters, empty strings, unicode). Catches a regression
+  class that PR #97 hit and unit tests with fake adapters missed.
+  Closes #98.
+- New consistency tests for `ForkServer.GET /v1/accounts/:address`
+  prove short (`0x1`), padded (`0x000…01`), and mixed-case (`0xABC`)
+  inputs all collapse to the same canonical key. The permissive regex
+  is intentional (Movement uses short framework addresses); the
+  consistency test locks in the existing normalization behavior.
+  Closes #48.
+
+### Internal
+
+- Unit suite: 507 → 539 tests (+32 across the audit-pass batch).
+- Removed public `SECURITY_AUDIT_2026-05-20.md` from the repo tree
+  (history retained). `SECURITY.md` remains the public reporting
+  channel. CHANGELOG entry for the M8 release updated to reflect the
+  removal.
+
 ## [0.2.5] - 2026-05-21
 
 ### Added
