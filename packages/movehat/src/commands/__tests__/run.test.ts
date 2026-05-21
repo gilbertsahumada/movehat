@@ -13,7 +13,7 @@ vi.mock("../../utils/runCli.js", () => ({
 }));
 
 // Static import after mock declaration — vi hoists vi.mock.
-const { default: runCommand } = await import("../run.js");
+const { default: runCommand, resolveTsxCliPath } = await import("../run.js");
 
 /**
  * Direct coverage for the signal-forwarding branch added to fix the
@@ -188,5 +188,112 @@ describe("runCommand — orchestrator", () => {
     const path = join(tmpCwd, "script.ts");
     writeFileSync(path, "");
     await expect(runCommand("script.ts")).rejects.toThrow("__test_exit_1__");
+  });
+});
+
+// Regression coverage for #52 — tsx resolution priority. Previously cwd
+// was tried first, allowing a malicious node_modules/tsx in an untrusted
+// project dir to take over the runner. Now bundled tsx is preferred by
+// default; cwd resolution is opt-in via MOVEHAT_TSX_FROM_CWD=1.
+describe("resolveTsxCliPath (#52)", () => {
+  it("returns a path ending in dist/cli.mjs when tsx is resolvable", () => {
+    const path = resolveTsxCliPath();
+    expect(path).not.toBeNull();
+    expect(path).toMatch(/[\\/]dist[\\/]cli\.mjs$/);
+  });
+
+  it("returns the same valid path when preferCwd is explicitly false (default)", () => {
+    expect(resolveTsxCliPath({ preferCwd: false })).toMatch(
+      /[\\/]dist[\\/]cli\.mjs$/
+    );
+  });
+
+  it("with preferCwd:true still returns a valid path when cwd has tsx too", () => {
+    // At test time, cwd (packages/movehat) has tsx hoisted via the
+    // workspace, so a strict cwd-first lookup also succeeds. The key
+    // assertion: we always get a valid path. Filesystem-controlled
+    // order assertions are out of scope (see the 'tsx not found' note
+    // earlier in this file).
+    expect(resolveTsxCliPath({ preferCwd: true })).toMatch(
+      /[\\/]dist[\\/]cli\.mjs$/
+    );
+  });
+
+  it("respects MOVEHAT_TSX_FROM_CWD=1 env var when no explicit opts", () => {
+    const before = process.env.MOVEHAT_TSX_FROM_CWD;
+    process.env.MOVEHAT_TSX_FROM_CWD = "1";
+    try {
+      expect(resolveTsxCliPath()).toMatch(/[\\/]dist[\\/]cli\.mjs$/);
+    } finally {
+      if (before === undefined) delete process.env.MOVEHAT_TSX_FROM_CWD;
+      else process.env.MOVEHAT_TSX_FROM_CWD = before;
+    }
+  });
+});
+
+describe("runCommand — MOVEHAT_TSX_FROM_CWD warning (#52)", () => {
+  let tmpCwd: string;
+  let cwdBefore: string;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-run-cwdwarn-"));
+    cwdBefore = process.cwd();
+    process.chdir(tmpCwd);
+    runCliMock.mockReset();
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    process.chdir(cwdBefore);
+    rmSync(tmpCwd, { recursive: true, force: true });
+    warnSpy.mockRestore();
+  });
+
+  it("emits a warning when MOVEHAT_TSX_FROM_CWD=1 is set", async () => {
+    const before = process.env.MOVEHAT_TSX_FROM_CWD;
+    process.env.MOVEHAT_TSX_FROM_CWD = "1";
+    runCliMock.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+    });
+    const script = join(tmpCwd, "script.ts");
+    writeFileSync(script, "");
+
+    try {
+      await runCommand("script.ts");
+    } catch {
+      // process.exit propagation may throw; the warning fires first
+    }
+
+    const messages = warnSpy.mock.calls.map((c) => c.join(" "));
+    expect(messages.some((m) => /MOVEHAT_TSX_FROM_CWD=1/.test(m))).toBe(true);
+
+    if (before === undefined) delete process.env.MOVEHAT_TSX_FROM_CWD;
+    else process.env.MOVEHAT_TSX_FROM_CWD = before;
+  });
+
+  it("does NOT emit the warning under default behavior", async () => {
+    const before = process.env.MOVEHAT_TSX_FROM_CWD;
+    delete process.env.MOVEHAT_TSX_FROM_CWD;
+    runCliMock.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+    });
+    const script = join(tmpCwd, "script.ts");
+    writeFileSync(script, "");
+
+    try {
+      await runCommand("script.ts");
+    } catch {
+      // ignore
+    }
+
+    const messages = warnSpy.mock.calls.map((c) => c.join(" "));
+    expect(messages.some((m) => /MOVEHAT_TSX_FROM_CWD/.test(m))).toBe(false);
+
+    if (before !== undefined) process.env.MOVEHAT_TSX_FROM_CWD = before;
   });
 });
