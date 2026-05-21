@@ -283,7 +283,7 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [ ] Distributed opportunistically across milestones (e.g., #41 fits naturally in M1, #44 in M0)
 - [ ] No critical (`security` + `bug`) audit issues left open at the time of M6
 
-### M8 — KPI 2 delivery: TypeDoc polish + tutorials + maintenance policy (~5 days, issue [#238](https://github.com/gilbertsahumada/movehat/issues/238))
+### M8 — ✅ shipped in PR #250 (develop → main batch, commit `3e8749a`) — KPI 2 delivery: TypeDoc polish + tutorials + maintenance policy (~5 days, issue [#238](https://github.com/gilbertsahumada/movehat/issues/238))
 **Goal**: Close the formal KPI 2 commitments listed in `grant/KPI1.md` §E.2.
 
 **Definition of Done**:
@@ -296,8 +296,8 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 - [x] Maintenance policy linked from `contributing/index.mdx` (M8.4b — dropped the separate `contributing/maintenance.mdx` due to Next `/raw/` EISDIR collision; cross-ref added to `contributing/index.mdx` instead, same discoverability)
 - [x] `grant/KPI2.pdf` generated, sign-off date set (M8.4c)
 - [x] Telegram draft in `grant/email-draft-kpi2.md` references `KPI2.pdf` + delivery commit hash (M8.4c)
-- [ ] CI green on `develop → main` batch PR
-- [ ] `docs-deploy.yml` succeeds on the batch merge; all three new tutorial pages return HTTP 200
+- [x] CI green on `develop → main` batch PR (#250 — 10/10 green)
+- [x] `docs-deploy.yml` succeeds on the batch merge; all three new tutorial pages return HTTP 200 (verified 2026-05-20)
 
 **Sub-PRs**:
 
@@ -308,6 +308,24 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 | M8.2 | Deploy-to-live tutorial | [#240](https://github.com/gilbertsahumada/movehat/issues/240) | ✅ shipped in PR #246 |
 | M8.3 | CI integration tutorial + reference workflow | [#241](https://github.com/gilbertsahumada/movehat/issues/241) | ✅ shipped in PR #247 |
 | M8.4 | TypeDoc structural cleanup + MAINTENANCE.md + KPI2 report | [#242](https://github.com/gilbertsahumada/movehat/issues/242) | ✅ shipped in PR #248 |
+
+**Commits shipped** (in the develop → main batch merge commit `3e8749a`):
+
+| Sub | Description | PR | Commits |
+|---|---|---|---|
+| M8.0 | ForkServer `/v1/view` proxy + fork-contract guard | #245 | `d7460b5`, `625e26e`, `df942d4` |
+| M8.1 | Fork-mode tutorial + networks-and-modes fix | #244 | `84b0173`, `9f8abb4` |
+| M8.2 | Deploy-to-live tutorial | #246 | `ef964b8`, `e564235` |
+| M8.3 | CI tutorial + reference workflow | #247 | `8373554`, `ebd1020` |
+| M8.4 | TypeDoc grouping + MAINTENANCE.md + KPI2 report | #248 | `e9afa15`, `9d57ed9`, `dbf8966`, `9837106`, `6826bb0` |
+| post-merge | CodeRabbit doc + view-body-413 fixes | direct to develop | `3a7839e` |
+| post-merge | Security hardening sweep | direct to develop | `44e6da2`, `c910a12`, `6947d94`, `efe5ef2` |
+| post-merge | CI / test stability follow-ups | direct to develop | `fbfeccf`, `6122c4a`, `36d14cf`, `69afb26` |
+
+**Follow-up issues filed during M8**:
+- #251 — `chore: migrate CI primary Node version from 20 to 22 before Sept 16, 2026`
+- #74 closed in §10 audit pass (superseded by M8 closure)
+- CodeRabbit cache writability concern from PR #250 review addressed in-batch via commits `36d14cf` + `69afb26` (no separate issue needed)
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
 
