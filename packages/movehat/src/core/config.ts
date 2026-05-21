@@ -49,6 +49,19 @@ function isKnownTestEndpoint(url: string): boolean {
   }
 }
 
+// Render a URL for log output without exposing userinfo (`user:pass@`)
+// or query strings (`?apiKey=…`). Returns the protocol + host + pathname
+// only, which is enough for the operator to identify the endpoint
+// without leaking embedded credentials to CI logs.
+function sanitizeUrlForLog(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return "<invalid-url>";
+  }
+}
+
 /**
  * Loads the user's movehat.config.{ts,js} from the current working directory.
  *
@@ -252,7 +265,7 @@ export async function resolveNetworkConfig(
       // actionable guidance.
       logger.warning(
         `Network '${selectedNetwork}' uses a name reserved for testnet/local ` +
-          `but '${networkConfig.url}' is not a recognized test endpoint. ` +
+          `but '${sanitizeUrlForLog(networkConfig.url)}' is not a recognized test endpoint. ` +
           `Skipping auto-injection of the deterministic test key to protect ` +
           `against accidental production use. Set PRIVATE_KEY explicitly, ` +
           `configure 'accounts' in movehat.config.ts, or rename this network.`

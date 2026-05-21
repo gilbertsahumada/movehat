@@ -501,6 +501,31 @@ describe("resolveNetworkConfig", () => {
       );
     });
 
+    it("sanitizes URL credentials and query params in the warning (CR #265)", async () => {
+      // URLs with userinfo or API keys should never leak into logs.
+      const user = baseUserConfig({
+        testnet: {
+          url: "https://alice:s3cr3t@prod.example.com/v1?apiKey=sk-private",
+          chainId: "testnet",
+        },
+      });
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /has no accounts configured/
+      );
+      const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));
+      const warnText = warningMessages.find((m) =>
+        /not a recognized test endpoint/i.test(m)
+      );
+      expect(warnText).toBeDefined();
+      // Sanitized: must drop userinfo + query string.
+      expect(warnText!).not.toContain("alice");
+      expect(warnText!).not.toContain("s3cr3t");
+      expect(warnText!).not.toContain("apiKey");
+      expect(warnText!).not.toContain("sk-private");
+      // But keep enough for the operator to identify the endpoint.
+      expect(warnText!).toContain("prod.example.com");
+    });
+
     it("treats 127.0.0.1 as a known test endpoint", async () => {
       const user = baseUserConfig({
         local: { url: "http://127.0.0.1:8080/v1", chainId: "local" },
