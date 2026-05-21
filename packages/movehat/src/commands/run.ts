@@ -6,6 +6,47 @@ import { runCli } from "../utils/runCli.js";
 import { logger } from "../ui/index.js";
 import type { RunResult } from "../utils/childProcessAdapter.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const requireFromHere = createRequire(import.meta.url);
+
+/**
+ * Resolve the tsx CLI entrypoint (`<tsx-pkg>/dist/cli.mjs`) used by
+ * `movehat run` to execute user scripts. Prefers movehat's bundled tsx
+ * by default; falls back to the cwd's tsx only if bundled is missing
+ * (defensive — should not happen for normal installs). Set
+ * `MOVEHAT_TSX_FROM_CWD=1` or pass `preferCwd: true` to flip the
+ * order — power-users who pinned a different tsx in their project.
+ *
+ * Security: the default order closes #52 (untrusted cwd could ship a
+ * malicious `node_modules/tsx/dist/cli.mjs`).
+ *
+ * Exported so the resolution logic can be unit-tested without
+ * spawning a real process.
+ */
+export function resolveTsxCliPath(opts?: { preferCwd?: boolean }): string | null {
+  const preferCwd =
+    opts?.preferCwd ?? process.env.MOVEHAT_TSX_FROM_CWD === "1";
+  const bundledRoot = __dirname;
+  const cwdRoot = process.cwd();
+  const lookupOrder = preferCwd
+    ? [cwdRoot, bundledRoot]
+    : [bundledRoot, cwdRoot];
+
+  for (const root of lookupOrder) {
+    try {
+      const tsxEntry = requireFromHere.resolve("tsx", { paths: [root] });
+      // require.resolve("tsx") returns .../tsx/dist/loader.mjs; walk up
+      // to the package root and into dist/cli.mjs.
+      const packageRoot = dirname(dirname(tsxEntry));
+      const cliPath = join(packageRoot, "dist", "cli.mjs");
+      if (existsSync(cliPath)) return cliPath;
+    } catch {
+      // Lookup failed at this root; try the next one.
+    }
+  }
+  return null;
+}
+
 /**
  * Apply the exit policy for a child whose output was inherited by the
  * parent. When the child dies via signal, re-raise it on the parent so
@@ -58,41 +99,16 @@ export default async function runCommand(scriptPath: string) {
   }
   logger.newline();
 
-  // Find tsx binary - try multiple locations for compatibility
-  // Uses require.resolve for cross-platform compatibility (works on Windows, macOS, Linux)
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-
-  // Create require function for ESM (needed to use require.resolve in ESM modules)
-  const require = createRequire(import.meta.url);
-
-  let tsxPath: string;
-  try {
-    // Try to resolve tsx package from user's project first
-    const tsxPackagePath = require.resolve("tsx", { paths: [process.cwd()] });
-    // require.resolve("tsx") returns .../tsx/dist/loader.mjs
-    // We need to go up to the tsx package root, then into dist/cli.mjs
-    const tsxPackageRoot = dirname(dirname(tsxPackagePath));
-    tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
-
-    // Verify the file exists
-    if (!existsSync(tsxPath)) {
-      throw new Error("cli.mjs not found");
-    }
-  } catch {
-    try {
-      // Fallback to movehat's own tsx
-      const tsxPackagePath = require.resolve("tsx", { paths: [__dirname] });
-      const tsxPackageRoot = dirname(dirname(tsxPackagePath));
-      tsxPath = join(tsxPackageRoot, "dist", "cli.mjs");
-
-      if (!existsSync(tsxPath)) {
-        throw new Error("cli.mjs not found");
-      }
-    } catch {
-      tsxPath = "";
-    }
+  // Find tsx binary — bundled-first per #52 (supply-chain hardening).
+  // Cwd resolution stays available behind an opt-in env var for users
+  // who pinned a different tsx in their project.
+  if (process.env.MOVEHAT_TSX_FROM_CWD === "1") {
+    logger.warning(
+      "MOVEHAT_TSX_FROM_CWD=1: resolving tsx from cwd first. " +
+        "Only use this in trusted project directories."
+    );
   }
+  const tsxPath = resolveTsxCliPath();
 
   if (!tsxPath) {
     logger.error("tsx binary not found");
