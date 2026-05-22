@@ -78,7 +78,7 @@ Run with: `movehat test --move` (ultra-fast, milliseconds)
 Tests written in TypeScript that run on a **local Movement blockchain** using the Hardhat-style `Harness` API:
 
 ```typescript
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 
 describe("Counter Contract", () => {
   let harness;
@@ -91,7 +91,7 @@ describe("Counter Contract", () => {
       accountLabels: ["deployer", "alice", "bob"],
       autoDeploy: ["counter"],
     });
-    deployer = AccountManager.getLabeledAccounts().deployer;
+    deployer = harness.accounts.deployer;
     const addr = harness.runtime.getDeploymentAddress("counter");
     counter = harness.runtime.getContract(addr, "counter");
   });

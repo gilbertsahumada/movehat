@@ -1,7 +1,7 @@
 // @ts-nocheck - This is a template file, dependencies are installed in user projects
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 
 describe("Counter Contract", () => {
   let harness;
@@ -23,10 +23,11 @@ describe("Counter Contract", () => {
       autoDeploy: ["counter"],
     });
 
-    const labeled = AccountManager.getLabeledAccounts();
-    deployer = labeled.deployer;
-    alice = labeled.alice;
-    bob = labeled.bob;
+    // harness.accounts is a snapshot of the labeled accounts created
+    // during Harness construction. Two `Harness.createLocal({ accountLabels:
+    // ["alice"] })` calls in the same process now produce DIFFERENT
+    // alice accounts (per-Harness isolation introduced in 0.2.7).
+    ({ deployer, alice, bob } = harness.accounts);
 
     const counterAddr = harness.runtime.getDeploymentAddress("counter");
     counter = harness.runtime.getContract(counterAddr, "counter");

@@ -21,14 +21,14 @@ The rest of this page expands each row with code and explains the gotchas.
 Spins up a Movement local node (`movement node run-localnet`), funds the labeled accounts from the local faucet, and (optionally) auto-deploys your modules. Used everywhere you want a fresh blockchain that lives only as long as your test or script.
 
 ```typescript
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 
 const harness = await Harness.createLocal({
   accountLabels: ["deployer", "alice", "bob"],
   autoDeploy: ["counter"],
 });
 
-const alice = AccountManager.getLabeledAccounts().alice!;
+const alice = harness.accounts.alice!;
 const counter = harness.runtime.getContract(
   harness.runtime.getDeploymentAddress("counter")!,
   "counter"

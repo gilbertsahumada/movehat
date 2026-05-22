@@ -118,7 +118,7 @@ Tests in this tutorial use `Harness.createLocal()` — they spawn a local Moveme
 Create `tests/registry.test.ts`:
 
 ```typescript
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 import type { MoveContract } from "movehat/helpers";
 import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
@@ -137,9 +137,8 @@ describe("Registry Contract", () => {
       autoDeploy: ["registry"],
     });
 
-    const labeled = AccountManager.getLabeledAccounts();
-    alice = labeled.alice!;
-    bob = labeled.bob!;
+    alice = harness.accounts.alice!;
+    bob = harness.accounts.bob!;
 
     registryAddr = harness.runtime.getDeploymentAddress("registry")!;
     registry = harness.runtime.getContract(registryAddr, "registry");
@@ -174,14 +173,15 @@ describe("Registry Contract", () => {
   });
 
   it("is_registered flips false → true after register", async () => {
-    const carol = AccountManager.getLabeledAccounts().alice!;
+    const carol = harness.accounts.alice!;
     const before = await registry.view<boolean>("is_registered", [
       carol.accountAddress.toString(),
     ]);
     expect(before).to.equal(true); // alice registered above
 
-    // A brand new unregistered address
-    const newAccount = await AccountManager.createAccount();
+    // A brand new unregistered address — created on the harness's
+    // own AccountManager (so it's scoped to this Harness instance).
+    const newAccount = harness.runtime.accountManager.createAccount();
     const after = await registry.view<boolean>("is_registered", [
       newAccount.accountAddress.toString(),
     ]);
@@ -205,7 +205,7 @@ describe("Registry Contract", () => {
 
 Key points:
 
-- **`accountLabels` must include `"deployer"`** — `Harness.createLocal` uses that label to bootstrap the runtime. Other labels (`alice`, `bob`) are arbitrary identifiers your test body reads via `AccountManager.getLabeledAccounts()`.
+- **`accountLabels` must include `"deployer"`** — `Harness.createLocal` uses that label to bootstrap the runtime. Other labels (`alice`, `bob`) are arbitrary identifiers your test body reads via `harness.accounts.<label>`.
 - **`autoDeploy: ["registry"]`** publishes your new module automatically when the harness starts. The deployer is the account labeled `"deployer"`.
 - **`harness.cleanup()` in `after`** shuts down the local node so the next test spec (Counter, in your case) can start its own clean instance.
 

@@ -50,7 +50,7 @@ Write tests in TypeScript that run on a **real local Movement blockchain** using
 ```typescript
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 import type { MoveContract } from "movehat/helpers";
 import type { Account } from "@aptos-labs/ts-sdk";
 
@@ -66,9 +66,8 @@ describe("Counter Contract", () => {
       autoDeploy: ["counter"],
     });
 
-    const labeled = AccountManager.getLabeledAccounts();
-    deployer = labeled.deployer!;
-    alice = labeled.alice!;
+    deployer = harness.accounts.deployer!;
+    alice = harness.accounts.alice!;
 
     const addr = harness.runtime.getDeploymentAddress("counter")!;
     counter = harness.runtime.getContract(addr, "counter");
