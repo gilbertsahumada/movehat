@@ -73,22 +73,26 @@ vi.mock("../../runtime.js", () => ({
 
 vi.mock("../../core/AccountManager.js", () => {
   let _seq = 0;
-  return {
-    AccountManager: {
-      createBatch(labels: readonly string[]) {
-        const out: Record<string, { accountAddress: { toString(): string } }> = {};
-        for (const l of labels) {
-          _seq++;
-          const addr = "0x" + _seq.toString(16).padStart(64, "0");
-          out[l] = { accountAddress: { toString: () => addr } };
-        }
-        return out;
-      },
-      exportPrivateKeys(_labels: readonly string[]) {
-        return { deployer: "0x" + "1".repeat(64) };
-      },
-    },
-  };
+  // Mock the AccountManager AS A CLASS so `new AccountManager()` works
+  // (M9.2 introduced the instance API; setupLocalTesting now constructs
+  // a per-context instance and calls createBatch / exportPrivateKeys
+  // on it). The mocked instance only needs to satisfy the two methods
+  // setupLocalTesting actually invokes here.
+  class AccountManager {
+    createBatch(labels: readonly string[]) {
+      const out: Record<string, { accountAddress: { toString(): string } }> = {};
+      for (const l of labels) {
+        _seq++;
+        const addr = "0x" + _seq.toString(16).padStart(64, "0");
+        out[l] = { accountAddress: { toString: () => addr } };
+      }
+      return out;
+    }
+    exportPrivateKeys(_labels: readonly string[]) {
+      return { deployer: "0x" + "1".repeat(64) };
+    }
+  }
+  return { AccountManager };
 });
 
 // Imported after mocks so vi.hoisted ordering applies.

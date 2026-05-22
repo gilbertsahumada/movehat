@@ -1,4 +1,4 @@
-import { Harness, AccountManager } from "movehat";
+import { Harness } from "movehat";
 import type { MoveContract } from "movehat/helpers";
 import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
@@ -25,9 +25,12 @@ describe("Counter Contract", () => {
       autoDeploy: ["counter"],
     });
 
-    const labeled = AccountManager.getLabeledAccounts();
-    deployer = labeled.deployer!;
-    alice = labeled.alice!;
+    // harness.accounts snapshots the labeled accounts at construction
+    // time (per-Harness isolation introduced in 0.2.7). Non-null
+    // assertions are needed because the example's tsconfig enables
+    // noUncheckedIndexedAccess.
+    deployer = harness.accounts.deployer!;
+    alice = harness.accounts.alice!;
 
     counterAddr = harness.runtime.getDeploymentAddress("counter")!;
     counter = harness.runtime.getContract(counterAddr, "counter");

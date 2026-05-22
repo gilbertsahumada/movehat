@@ -134,11 +134,15 @@ describe("initRuntime", () => {
 
   it("createAccount returns a fresh account each call (pool grows)", async () => {
     const runtime = await initRuntime();
-    const before = AccountManager.getPoolSize();
+    // Pool size is measured on the runtime's OWN AccountManager — not on
+    // the static facade's singleton. M9.2 made each runtime own its
+    // per-instance manager; `runtime.createAccount()` adds to that
+    // instance's pool, not the shared singleton.
+    const before = runtime.accountManager.getPoolSize();
     const a = runtime.createAccount();
     const b = runtime.createAccount();
     expect(a.accountAddress.toString()).not.toBe(b.accountAddress.toString());
-    expect(AccountManager.getPoolSize()).toBe(before + 2);
+    expect(runtime.accountManager.getPoolSize()).toBe(before + 2);
   });
 
   it("getAccount loads from a private key hex", async () => {
@@ -158,6 +162,27 @@ describe("initRuntime", () => {
     expect(switched.network.rpc).toContain("custom.example.com");
     // Original runtime is unaffected — switchNetwork builds fresh.
     expect(runtime.network.name).toBe("testnet");
+  });
+
+  it("switchNetwork preserves a caller-supplied accountManager across the network switch", async () => {
+    // M9.2 wired `accountManager` through InitRuntimeOptions. The
+    // switchNetwork closure spreads `...options` into the recursive
+    // initRuntime call, so a caller-supplied manager survives the
+    // switch (labels created on it are still visible). Without this
+    // spread, the new runtime would default-construct a fresh manager
+    // and labels would silently disappear post-switch. This test pins
+    // the spread behavior — refactoring switchNetwork to drop it must
+    // fail here, not in a downstream user's test suite.
+    const mgr = new AccountManager();
+    mgr.createAccount("alice");
+
+    const runtime = await initRuntime({ accountManager: mgr });
+    expect(runtime.accountManager).toBe(mgr);
+    expect(runtime.accountManager.hasLabel("alice")).toBe(true);
+
+    const switched = await runtime.switchNetwork("custom");
+    expect(switched.accountManager).toBe(mgr);
+    expect(switched.accountManager.hasLabel("alice")).toBe(true);
   });
 
   it("getDeployment / getDeployments / getDeploymentAddress return null/empty for an unused network", async () => {

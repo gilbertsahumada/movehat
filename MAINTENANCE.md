@@ -12,7 +12,7 @@ Movehat follows three release rhythms:
 - **Minor releases** (`0.2.x → 0.3.0`) — ship when the public surface gains new exports, when behavior changes in a backwards-compatible way, or when pre-1.0 breaking changes accumulate. Typical cadence: every 4–8 weeks. Each minor release has a `CHANGELOG.md` entry listing what changed and any deprecation announcements.
 - **Major releases** (`0.x → 1.0.0`) — single planned event when the API stabilizes. Pre-1.0 breaking changes ship in minor bumps; once 1.0 lands, breaking changes ship in majors only.
 
-**Per-milestone batch merges**: feature work lands on the `develop` branch via sub-PRs. When a milestone closes, a single `develop → main` batch PR ships everything together, followed by a release PR that bumps the version and updates the changelog. This pattern is documented in [`CLAUDE.md` §7](./CLAUDE.md). The `publish.yml` workflow gates the npm push on a matching `CHANGELOG.md` section.
+**Per-milestone batch merges**: feature work lands on the `develop` branch via sub-PRs. Each sub-PR that closes an issue updates `CHANGELOG.md` `[Unreleased]` in the same PR (see [`CLAUDE.md` §11](./CLAUDE.md)). When a milestone closes, a single `develop → main` batch PR ships everything together, followed by a release PR that bumps the version and renames `[Unreleased]` → `[X.Y.Z] - DATE` (mechanical, no prose writing). This pattern is documented in [`CLAUDE.md` §7](./CLAUDE.md) (batch flow) + §11 (CHANGELOG ownership). The `publish.yml` workflow gates the npm push on a matching `CHANGELOG.md` section.
 
 ## Issue triage SLA
 

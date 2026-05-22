@@ -7,6 +7,7 @@ import {
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { MovehatConfig } from "../types/config.js";
+import { logger } from "../ui/index.js";
 
 export interface StoredAccount {
   label?: string | undefined;
@@ -29,62 +30,105 @@ export interface SaveAccountPoolOptions {
   includeImported?: boolean | undefined;
 }
 
+export interface AccountManagerOptions {
+  /**
+   * Filesystem location where `saveAccountPool` writes `test-pool.json`
+   * and `loadAccountPool` reads from. When omitted, the path is computed
+   * LAZILY on each call from `join(process.cwd(), ".movehat", "accounts")`
+   * — so `process.chdir()` between construction and pool I/O is respected.
+   *
+   * Pass an explicit value when per-instance isolation matters (parallel
+   * test files, harness pools that must not collide with another suite's).
+   *
+   * The process-wide static facade exposed on the `AccountManager` class
+   * itself uses a separate singleton whose `poolPath` is EAGERLY captured
+   * at module-import time. That preserves the legacy F8(b) behavior for
+   * any code still on the static API during the 0.2.7 deprecation window;
+   * the static facade is removed in 0.3.0.
+   */
+  poolPath?: string | undefined;
+}
+
 /**
  * Centralized Account Manager for movehat
  *
  * Manages all account creation, loading, and lifecycle operations.
- * Provides a pool of reusable test accounts with labels for better test readability.
+ * Provides a pool of reusable test accounts with labels for better test
+ * readability.
+ *
+ * Two API surfaces are exposed:
+ *
+ * **Instance API (recommended; M9.1+)** — `new AccountManager(options?)`
+ * gives a fully isolated pool. Two instances in the same process have
+ * independent labelMaps, private-key maps, and account pools. Each
+ * `Harness` constructed in 0.3.0+ will own one of these; user code
+ * accesses labeled accounts via `harness.accounts.<label>` (Harness
+ * snapshots them at construction time).
+ *
+ * **Static facade (deprecated; will be removed in 0.3.0)** — every
+ * former static method (`AccountManager.createAccount(...)`, etc.) still
+ * works and forwards to a single process-wide singleton. This preserves
+ * the existing label-sharing behavior across calls during the
+ * deprecation window. Migration target is the instance API; see M9 meta
+ * (#270) and migration guide at `/docs/upgrading/0.3.0` (published in
+ * M9.4).
  */
 export class AccountManager {
-  // Class-static maps: shared across every consumer in the same Node
-  // process (e.g. two Harness instances). Re-using a label across
-  // "sessions" overwrites the labelMap entry. Documented + fixed by
-  // contract in `AccountManager.global-state.test.ts` (audit F8).
-  private static pool: Map<string, Account> = new Map(); // address → Account
-  private static privateKeys: Map<string, string> = new Map(); // address → privateKey hex
-  private static labelMap: Map<string, string> = new Map(); // label → address
-  private static generatedAccountAddresses: Set<string> = new Set();
-  private static poolLoaded = false;
-  // `defaultPoolPath` is captured ONCE at module-import time. A later
-  // `process.chdir(...)` does NOT redirect the save destination — pass
-  // an explicit `poolPath` to `saveAccountPool`/`loadAccountPool` when
-  // per-test isolation matters. See audit finding F8.
-  private static defaultPoolPath = join(process.cwd(), ".movehat", "accounts");
+  // ── Instance state ──────────────────────────────────────────────
+  // All former class-static fields are now instance fields. Two
+  // `new AccountManager()` calls produce fully isolated state. The
+  // static facade below operates on a single module-level singleton,
+  // so existing callers see no behavior change.
+  private readonly pool: Map<string, Account> = new Map(); // address → Account
+  private readonly privateKeys: Map<string, string> = new Map(); // address → privateKey hex
+  private readonly labelMap: Map<string, string> = new Map(); // label → address
+  private readonly generatedAccountAddresses: Set<string> = new Set();
+  private poolLoaded = false;
+  private readonly poolPathOverride: string | undefined;
+
+  constructor(options: AccountManagerOptions = {}) {
+    this.poolPathOverride = options.poolPath;
+  }
 
   /**
-   * Get a test account from the pool. If label is provided and exists, returns that account.
-   * Otherwise creates a new account with the optional label.
-   *
-   * @param label Optional label for the account (e.g., "alice", "bob", "deployer")
-   * @returns An Account instance
-   *
-   * @example
-   * const alice = AccountManager.getTestAccount("alice");
-   * const randomAccount = AccountManager.getTestAccount();
+   * Resolved pool directory. When the caller supplied an explicit
+   * `poolPath` to the constructor, that value is returned verbatim.
+   * Otherwise the path is computed LAZILY from the current
+   * `process.cwd()` on each access — so `process.chdir()` performed
+   * between construction and pool I/O takes effect, unlike the legacy
+   * static-only API which captured cwd at module import time
+   * (audit finding F8(b)).
    */
-  static getTestAccount(label?: string): Account {
+  private get poolPath(): string {
+    return this.poolPathOverride ?? join(process.cwd(), ".movehat", "accounts");
+  }
+
+  // ── Instance methods (real implementations) ─────────────────────
+
+  /**
+   * Get a test account from the pool. If label is provided and exists,
+   * returns that account. Otherwise creates a new account with the
+   * optional label.
+   *
+   * @param label Optional label for the account (e.g., "alice", "bob")
+   * @returns An Account instance
+   */
+  getTestAccount(label?: string): Account {
     if (label) {
-      const existingAccount = this.getAccountByLabel(label);
-      if (existingAccount) {
-        return existingAccount;
+      const existing = this.getAccountByLabel(label);
+      if (existing) {
+        return existing;
       }
     }
-
     return this.createAccount(label, false);
   }
 
   /**
-   * Create a new account and optionally add it to the pool with a label
-   *
-   * @param label Optional label for the account
-   * @param fund Whether to fund the account (handled externally)
-   * @returns A new Account instance
-   *
-   * @example
-   * const deployer = AccountManager.createAccount("deployer");
-   * const bob = AccountManager.createAccount("bob", true);
+   * Create a new account and optionally add it to the pool with a
+   * label. The `fund` parameter is accepted for API symmetry; actual
+   * funding is the caller's responsibility.
    */
-  static createAccount(label?: string, fund: boolean = false): Account {
+  createAccount(label?: string, _fund: boolean = false): Account {
     const account = Account.generate();
     const address = account.accountAddress.toString();
 
@@ -100,18 +144,9 @@ export class AccountManager {
   }
 
   /**
-   * Get an account by its label
-   *
-   * @param label The label to look up
-   * @returns The Account if found, undefined otherwise
-   *
-   * @example
-   * const alice = AccountManager.getAccountByLabel("alice");
-   * if (alice) {
-   *   console.log(`Alice's address: ${alice.accountAddress.toString()}`);
-   * }
+   * Get an account by its label, or undefined if not present.
    */
-  static getAccountByLabel(label: string): Account | undefined {
+  getAccountByLabel(label: string): Account | undefined {
     const address = this.labelMap.get(label);
     if (!address) {
       return undefined;
@@ -120,136 +155,98 @@ export class AccountManager {
   }
 
   /**
-   * Load account from environment variable
+   * Load account from environment variable.
    *
-   * @param envVar The environment variable name (defaults to "PRIVATE_KEY")
-   * @returns Account instance
-   * @throws Error if environment variable is not set
-   *
-   * @example
-   * const account = AccountManager.loadAccountFromEnv("MH_PRIVATE_KEY");
+   * @throws Error if the environment variable is not set
    */
-  static loadAccountFromEnv(envVar: string = "PRIVATE_KEY"): Account {
+  loadAccountFromEnv(envVar: string = "PRIVATE_KEY"): Account {
     const privateKeyHex = process.env[envVar];
-
     if (!privateKeyHex) {
       throw new Error(
         `Environment variable ${envVar} not found. ` +
-        `Set it in your .env file or environment.`
+          `Set it in your .env file or environment.`,
       );
     }
-
     return this.loadAccountFromPrivateKey(privateKeyHex);
   }
 
   /**
-   * Load account from a private key hex string
-   *
-   * @param privateKeyHex The private key as a hex string (with or without 0x prefix)
-   * @returns Account instance
-   *
-   * @example
-   * const account = AccountManager.loadAccountFromPrivateKey("0xabc123...");
+   * Load account from a private key hex string (with or without 0x prefix).
    */
-  static loadAccountFromPrivateKey(privateKeyHex: string): Account {
+  loadAccountFromPrivateKey(privateKeyHex: string): Account {
     // Format into AIP-80 shape (`ed25519-priv-0x…`) before constructing
     // the SDK type. Without this, raw-hex inputs trigger a noisy
     // deprecation warning from `@aptos-labs/ts-sdk` on every call.
     const account = this.accountFromPrivateKey(privateKeyHex);
     this.trackAccount(account, privateKeyHex, "imported");
-
     return account;
   }
 
   /**
-   * Load all accounts from movehat config
-   *
-   * @param config The resolved MovehatConfig
-   * @returns Array of Account instances
-   *
-   * @example
-   * const config = await resolveNetworkConfig(userConfig);
-   * const accounts = AccountManager.loadAccountsFromConfig(config);
+   * Load all accounts from movehat config.
    */
-  static loadAccountsFromConfig(config: MovehatConfig): Account[] {
+  loadAccountsFromConfig(config: MovehatConfig): Account[] {
     const accounts: Account[] = [];
-
     for (const privateKeyHex of config.allAccounts) {
       try {
         const account = this.loadAccountFromPrivateKey(privateKeyHex);
         accounts.push(account);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Warning: Failed to load account from config: ${msg}`
-        );
+        logger.warning(`Failed to load account from config: ${msg}`);
       }
     }
-
     return accounts;
   }
 
   /**
-   * Get all labeled accounts in the pool
-   *
-   * @returns Record of label to Account mappings
-   *
-   * @example
-   * const labeled = AccountManager.getLabeledAccounts();
-   * console.log(`Deployer: ${labeled.deployer?.accountAddress.toString()}`);
+   * Get all labeled accounts in the pool.
    */
-  static getLabeledAccounts(): Record<string, Account> {
+  getLabeledAccounts(): Record<string, Account> {
     const result: Record<string, Account> = {};
-
     for (const [label, address] of this.labelMap.entries()) {
       const account = this.pool.get(address);
       if (account) {
         result[label] = account;
       }
     }
-
     return result;
   }
 
   /**
-   * Save the current account pool to disk for persistence
-   *
-   * @param poolPath Optional custom path (defaults to .movehat/accounts)
-   *
-   * @example
-   * AccountManager.saveAccountPool();
+   * Save the current account pool to disk for persistence.
    */
-  static saveAccountPool(): void;
-  static saveAccountPool(poolPath: string): void;
-  static saveAccountPool(options: SaveAccountPoolOptions): void;
-  static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
-  static saveAccountPool(
+  saveAccountPool(): void;
+  saveAccountPool(poolPath: string): void;
+  saveAccountPool(options: SaveAccountPoolOptions): void;
+  saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
+  saveAccountPool(
     poolPathOrOptions?: string | SaveAccountPoolOptions,
     options: SaveAccountPoolOptions = {},
   ): void {
-    const poolPath =
+    const explicitPath =
       typeof poolPathOrOptions === "string" ? poolPathOrOptions : undefined;
     const effectiveOptions =
       typeof poolPathOrOptions === "object" && poolPathOrOptions !== null
         ? poolPathOrOptions
         : options;
     const includeImported = effectiveOptions.includeImported ?? false;
-    const basePath = poolPath || this.defaultPoolPath;
+    const basePath = explicitPath || this.poolPath;
 
     // Ensure directory exists with restrictive perms (the pool file holds
     // plaintext private keys, so the directory must not be world-readable).
-    // Note: mkdirSync's mode is masked by the process umask, so we chmod
-    // explicitly afterwards to guarantee 0o700 regardless of umask.
+    // mkdirSync's mode is masked by the process umask; chmod explicitly
+    // afterwards to guarantee 0o700.
     if (!existsSync(basePath)) {
       mkdirSync(basePath, { recursive: true, mode: 0o700 });
     }
     chmodSync(basePath, 0o700);
 
-    // Build stored accounts array
     const storedAccounts: StoredAccount[] = [];
     const labelMapObject: Record<string, string> = {};
 
     for (const [address, account] of this.pool.entries()) {
+      void account;
       if (!includeImported && !this.generatedAccountAddresses.has(address)) {
         continue;
       }
@@ -266,7 +263,7 @@ export class AccountManager {
 
       const privateKey = this.privateKeys.get(address);
       if (!privateKey) {
-        console.warn(`Warning: No private key found for account ${address}, skipping`);
+        logger.warning(`No private key found for account ${address}, skipping`);
         continue;
       }
 
@@ -283,10 +280,6 @@ export class AccountManager {
       labelMap: labelMapObject,
     };
 
-    // Write to file with owner-only permissions — file contains plaintext
-    // private keys for test accounts. writeFileSync's mode is masked by
-    // the process umask, so we chmod explicitly afterwards to guarantee
-    // 0o600 regardless of umask.
     const poolFilePath = join(basePath, "test-pool.json");
     writeFileSync(poolFilePath, JSON.stringify(poolData, null, 2), {
       encoding: "utf-8",
@@ -296,22 +289,15 @@ export class AccountManager {
   }
 
   /**
-   * Load account pool from disk
-   *
-   * @param poolPath Optional custom path (defaults to .movehat/accounts)
-   * @returns true if pool was loaded, false if file doesn't exist
-   *
-   * @example
-   * if (AccountManager.loadAccountPool()) {
-   *   console.log("Pool loaded successfully");
-   * }
+   * Load account pool from disk. Returns true if a pool file was found
+   * and parsed, false if the file does not exist or parsing failed.
    */
-  static loadAccountPool(poolPath?: string): boolean {
+  loadAccountPool(poolPath?: string): boolean {
     if (this.poolLoaded) {
-      return true; // Already loaded
+      return true;
     }
 
-    const basePath = poolPath || this.defaultPoolPath;
+    const basePath = poolPath || this.poolPath;
     const poolFilePath = join(basePath, "test-pool.json");
 
     if (!existsSync(poolFilePath)) {
@@ -319,15 +305,11 @@ export class AccountManager {
     }
 
     try {
-      const poolData: AccountPool = JSON.parse(
-        readFileSync(poolFilePath, "utf-8")
-      );
+      const poolData: AccountPool = JSON.parse(readFileSync(poolFilePath, "utf-8"));
 
-      // Clear existing pool
       this.pool.clear();
       this.labelMap.clear();
 
-      // Restore accounts
       for (const stored of poolData.accounts) {
         const account = this.accountFromPrivateKey(stored.privateKey);
         this.trackAccount(account, stored.privateKey, "generated");
@@ -348,23 +330,15 @@ export class AccountManager {
       return true;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `Warning: Failed to load account pool: ${msg}`
-      );
+      logger.warning(`Failed to load account pool: ${msg}`);
       return false;
     }
   }
 
   /**
-   * Clear the entire account pool
-   * Useful for test isolation
-   *
-   * @example
-   * after(() => {
-   *   AccountManager.clearPool();
-   * });
+   * Clear the entire account pool. Useful for test isolation.
    */
-  static clearPool(): void {
+  clearPool(): void {
     this.pool.clear();
     this.privateKeys.clear();
     this.labelMap.clear();
@@ -373,46 +347,30 @@ export class AccountManager {
   }
 
   /**
-   * Get the current size of the account pool
-   *
-   * @returns Number of accounts in the pool
+   * Number of accounts in the pool.
    */
-  static getPoolSize(): number {
+  getPoolSize(): number {
     return this.pool.size;
   }
 
   /**
-   * Get all accounts in the pool
-   *
-   * @returns Array of all Account instances
+   * All accounts in the pool.
    */
-  static getAllAccounts(): Account[] {
+  getAllAccounts(): Account[] {
     return Array.from(this.pool.values());
   }
 
   /**
-   * Check if a label is already in use
-   *
-   * @param label The label to check
-   * @returns true if label exists, false otherwise
+   * Whether a label is currently bound to an account in this pool.
    */
-  static hasLabel(label: string): boolean {
+  hasLabel(label: string): boolean {
     return this.labelMap.has(label);
   }
 
   /**
-   * Get or create an account with a specific label
-   * If the label exists, returns the existing account
-   * Otherwise creates a new account with that label
-   *
-   * @param label The label for the account
-   * @returns Account instance
-   *
-   * @example
-   * const alice = AccountManager.getOrCreateLabeled("alice");
-   * const aliceAgain = AccountManager.getOrCreateLabeled("alice"); // Same account
+   * Get or create an account with a specific label.
    */
-  static getOrCreateLabeled(label: string): Account {
+  getOrCreateLabeled(label: string): Account {
     const existing = this.getAccountByLabel(label);
     if (existing) {
       return existing;
@@ -421,37 +379,24 @@ export class AccountManager {
   }
 
   /**
-   * Batch create multiple labeled accounts
-   *
-   * @param labels Array of labels to create
-   * @returns Record of label to Account mappings
-   *
-   * @example
-   * const accounts = AccountManager.createBatch(["alice", "bob", "charlie"]);
-   * console.log(accounts.alice.accountAddress.toString());
+   * Batch create multiple labeled accounts.
    */
-  static createBatch(labels: readonly string[]): Record<string, Account> {
+  createBatch(labels: readonly string[]): Record<string, Account> {
     const result: Record<string, Account> = {};
-
     for (const label of labels) {
       result[label] = this.getOrCreateLabeled(label);
     }
-
     return result;
   }
 
   /**
-   * Export account private keys for backup/sharing
-   * WARNING: Only use this for test accounts, never production keys
-   *
-   * @param labels Optional array of labels to export (exports all if not provided)
-   * @returns Record of label/address to private key hex string
+   * Export account private keys for backup/sharing.
+   * WARNING: Only use this for test accounts, never production keys.
    */
-  static exportPrivateKeys(labels?: string[]): Record<string, string> {
+  exportPrivateKeys(labels?: string[]): Record<string, string> {
     const result: Record<string, string> = {};
 
     if (labels) {
-      // Export specific labels
       for (const label of labels) {
         const address = this.labelMap.get(label);
         if (address) {
@@ -462,7 +407,6 @@ export class AccountManager {
         }
       }
     } else {
-      // Export all labeled accounts
       for (const [label, address] of this.labelMap.entries()) {
         const privateKey = this.privateKeys.get(address);
         if (privateKey) {
@@ -474,7 +418,7 @@ export class AccountManager {
     return result;
   }
 
-  private static accountFromPrivateKey(privateKeyHex: string): Account {
+  private accountFromPrivateKey(privateKeyHex: string): Account {
     const formatted = PrivateKey.formatPrivateKey(
       privateKeyHex,
       PrivateKeyVariants.Ed25519,
@@ -483,13 +427,12 @@ export class AccountManager {
     return Account.fromPrivateKey({ privateKey });
   }
 
-  private static trackAccount(
+  private trackAccount(
     account: Account,
     privateKeyHex: string,
     source: "generated" | "imported",
   ): void {
     const address = account.accountAddress.toString();
-
     this.pool.set(address, account);
     this.privateKeys.set(address, privateKeyHex);
 
@@ -499,4 +442,147 @@ export class AccountManager {
       this.generatedAccountAddresses.delete(address);
     }
   }
+
+  // ── Static facade (deprecated; removed in 0.3.0) ────────────────
+  //
+  // Every former static method below forwards to `__defaultManager`,
+  // a module-level singleton constructed once at import time. This
+  // preserves the legacy "process-wide pool shared across consumers"
+  // behavior so existing callers see no change during the 0.2.7
+  // deprecation window. The singleton is constructed with its
+  // `poolPath` eagerly captured from the import-time `process.cwd()`
+  // — preserving F8(b) for the static API specifically.
+  //
+  // Removal happens in M9.4 (0.3.0). Until then the runtime warning
+  // added in M9.3 nudges users toward `harness.accounts.<label>` or
+  // `harness.runtime.accountManager.*`.
+
+  static getTestAccount(label?: string): Account {
+    __warnDeprecated("getTestAccount");
+    return __defaultManager.getTestAccount(label);
+  }
+
+  static createAccount(label?: string, fund: boolean = false): Account {
+    __warnDeprecated("createAccount");
+    return __defaultManager.createAccount(label, fund);
+  }
+
+  static getAccountByLabel(label: string): Account | undefined {
+    __warnDeprecated("getAccountByLabel");
+    return __defaultManager.getAccountByLabel(label);
+  }
+
+  static loadAccountFromEnv(envVar: string = "PRIVATE_KEY"): Account {
+    __warnDeprecated("loadAccountFromEnv");
+    return __defaultManager.loadAccountFromEnv(envVar);
+  }
+
+  static loadAccountFromPrivateKey(privateKeyHex: string): Account {
+    __warnDeprecated("loadAccountFromPrivateKey");
+    return __defaultManager.loadAccountFromPrivateKey(privateKeyHex);
+  }
+
+  static loadAccountsFromConfig(config: MovehatConfig): Account[] {
+    __warnDeprecated("loadAccountsFromConfig");
+    return __defaultManager.loadAccountsFromConfig(config);
+  }
+
+  static getLabeledAccounts(): Record<string, Account> {
+    __warnDeprecated("getLabeledAccounts");
+    return __defaultManager.getLabeledAccounts();
+  }
+
+  static saveAccountPool(): void;
+  static saveAccountPool(poolPath: string): void;
+  static saveAccountPool(options: SaveAccountPoolOptions): void;
+  static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
+  static saveAccountPool(
+    poolPathOrOptions?: string | SaveAccountPoolOptions,
+    options: SaveAccountPoolOptions = {},
+  ): void {
+    __warnDeprecated("saveAccountPool");
+    // Re-dispatch via the instance overloads, preserving caller intent.
+    if (poolPathOrOptions === undefined) {
+      __defaultManager.saveAccountPool();
+    } else if (typeof poolPathOrOptions === "string") {
+      __defaultManager.saveAccountPool(poolPathOrOptions, options);
+    } else {
+      __defaultManager.saveAccountPool(poolPathOrOptions);
+    }
+  }
+
+  static loadAccountPool(poolPath?: string): boolean {
+    __warnDeprecated("loadAccountPool");
+    return __defaultManager.loadAccountPool(poolPath);
+  }
+
+  static clearPool(): void {
+    __warnDeprecated("clearPool");
+    __defaultManager.clearPool();
+  }
+
+  static getPoolSize(): number {
+    __warnDeprecated("getPoolSize");
+    return __defaultManager.getPoolSize();
+  }
+
+  static getAllAccounts(): Account[] {
+    __warnDeprecated("getAllAccounts");
+    return __defaultManager.getAllAccounts();
+  }
+
+  static hasLabel(label: string): boolean {
+    __warnDeprecated("hasLabel");
+    return __defaultManager.hasLabel(label);
+  }
+
+  static getOrCreateLabeled(label: string): Account {
+    __warnDeprecated("getOrCreateLabeled");
+    return __defaultManager.getOrCreateLabeled(label);
+  }
+
+  static createBatch(labels: readonly string[]): Record<string, Account> {
+    __warnDeprecated("createBatch");
+    return __defaultManager.createBatch(labels);
+  }
+
+  static exportPrivateKeys(labels?: string[]): Record<string, string> {
+    __warnDeprecated("exportPrivateKeys");
+    return __defaultManager.exportPrivateKeys(labels);
+  }
+}
+
+// Module-level singleton backing the static facade. The eager poolPath
+// capture mirrors the pre-M9 behavior — `process.chdir` after import
+// does NOT redirect static-facade pool I/O. F8(b) is preserved for
+// the static API and only flips for callers using the instance API.
+const __defaultManager = new AccountManager({
+  poolPath: join(process.cwd(), ".movehat", "accounts"),
+});
+
+// Once-per-method-per-process deprecation tracking for the static
+// facade. The warning fires on the FIRST call to each static method
+// per process, then stays silent for subsequent calls. A user with
+// 50 tests calling `AccountManager.getLabeledAccounts()` sees the
+// warning once, not 50 times.
+//
+// Exported as `_resetDeprecationWarnings` for tests that need to
+// verify warning behavior across multiple `it` blocks (vitest workers
+// share module state within a single test file).
+const __warnedMethods = new Set<string>();
+
+/** @internal — test-only. Resets the once-per-method dedup Set. */
+export function _resetDeprecationWarnings(): void {
+  __warnedMethods.clear();
+}
+
+function __warnDeprecated(method: string): void {
+  if (__warnedMethods.has(method)) return;
+  __warnedMethods.add(method);
+  logger.warning(
+    `AccountManager.${method} is deprecated and will be removed in 0.3.0. ` +
+      `Use 'harness.accounts.<label>' for labeled-account access, or ` +
+      `'harness.runtime.accountManager.${method}' for direct manager calls. ` +
+      `See migration tracker: https://github.com/gilbertsahumada/movehat/issues/270`,
+  );
 }

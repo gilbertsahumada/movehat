@@ -1,3 +1,4 @@
+import type { Account } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type { LocalNodeManager } from "../node/LocalNodeManager.js";
 import type { ForkServer } from "../fork/server.js";
@@ -36,14 +37,42 @@ interface HarnessInit {
  * a Proxy that synchronously throws {@link HarnessDisposedError} on any
  * post-`cleanup()` call to one of the deployment / script / view methods.
  *
- * AccountManager note: the underlying account pool is a process-wide
- * static (see `core/AccountManager.ts`). Two Harness instances in the
- * same process share account labels; this is the same constraint that
- * already governs `setupTestFixture`.
+ * Account isolation: each Harness owns a per-instance `AccountManager`
+ * (see `core/AccountManager.ts`) reachable at `harness.runtime.accountManager`.
+ * Two Harness instances in the same process have independent account
+ * pools and label maps — `Harness.createLocal({ accountLabels: ["alice"] })`
+ * twice produces two DIFFERENT alice accounts.
+ *
+ * Labeled accounts created during construction (via `accountLabels` in
+ * `createLocal`) are snapshotted onto `harness.accounts` at construction
+ * time. Late additions via `harness.runtime.accountManager.createAccount(...)`
+ * are NOT reflected in the `accounts` Record — that's a snapshot, not a
+ * live view. For live mode (`Harness.createLive`), `accounts` is `{}`
+ * because the live factory does not create labeled accounts; reach into
+ * `harness.runtime.accountManager.*` for advanced operations.
+ *
+ * The `AccountManager` class-static methods remain available in 0.2.x
+ * for backward compatibility (deprecation warning lands in 0.2.7,
+ * removal in 0.3.0 — see #270). New code should prefer
+ * `harness.accounts.<label>` for the common read path.
  */
 export class Harness {
   public readonly mode: HarnessMode;
   public readonly runtime: MovehatRuntime;
+
+  /**
+   * Labeled accounts snapshotted from `runtime.accountManager` at
+   * construction time. For `createLocal`, this is populated from the
+   * `accountLabels` option. For `createFork`, populated the same way.
+   * For `createLive`, empty (live mode does not create labeled accounts;
+   * use `harness.runtime.accountManager.loadAccountFromPrivateKey(...)`
+   * for direct key loading).
+   *
+   * Typed `Readonly` so the snapshot can't be mutated via
+   * `harness.accounts.alice = X`. Reach into
+   * `harness.runtime.accountManager.*` when you need mutable access.
+   */
+  public readonly accounts: Readonly<Record<string, Account>>;
 
   /** @internal */
   public readonly localNode?: LocalNodeManager;
@@ -57,6 +86,7 @@ export class Harness {
   private constructor(init: HarnessInit) {
     this.mode = init.mode;
     this.runtime = init.runtime;
+    this.accounts = init.runtime.accountManager.getLabeledAccounts();
     if (init.localNode) this.localNode = init.localNode;
     if (init.forkServer) this.forkServer = init.forkServer;
     if (init.forkManager) this.forkManager = init.forkManager;

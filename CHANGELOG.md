@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Post-0.2.6 polish batch — 6 audit-pass / cleanup items closed without
+public API change. All additive or docs-only; shipped to `main` in
+PR #274 on 2026-05-21. Backfilled 2026-05-22 when the per-PR CHANGELOG
+convention was adopted (see CLAUDE.md §11).
+
+### Added
+
+- Re-export 4 public types from `movehat`: `InitRuntimeOptions`,
+  `NetworkConfig`, `LocalTestingMode`, `ChildProcessAdapter`. Addresses
+  TypeDoc warnings about unexported public-API symbols and lets users
+  reference network configuration, runtime initialization, and custom
+  child-process adapters directly from the main entry point. Closes #159.
+- `CODE_OF_CONDUCT.md` at repo root using Contributor Covenant 2.1,
+  with the contact placeholder substituted to `gilbertsahumada@gmail.com`.
+  Closes #202.
+- `AccountManager` instance API alongside the existing class-static
+  surface. Construct via `new AccountManager(options?)` for a fully
+  isolated pool (independent `labelMap`, `pool`, private-key map). New
+  `AccountManagerOptions` interface exposes `{ poolPath?: string }`;
+  when omitted, `poolPath` is evaluated lazily on each call (respecting
+  `process.chdir()` between construction and pool I/O — the inverse of
+  the legacy F8(b) static-API behavior). The static facade is preserved
+  in 0.2.x for back-compat — every former static call forwards to a
+  process-wide singleton whose `poolPath` is eagerly captured at module
+  import (the legacy behavior). Removal of the static facade ships in
+  0.3.0 (#270). Closes #277.
+- Per-Harness account isolation. Each `Harness` now owns its own
+  `AccountManager` instance reachable at `harness.runtime.accountManager`.
+  New `Harness.accounts: Readonly<Record<string, Account>>` field exposes labeled
+  accounts created at construction time (`accountLabels` in
+  `createLocal` / `createFork` options) as a snapshot — late additions
+  via `harness.runtime.accountManager.createAccount(...)` are not
+  reflected. `Harness.createLive` produces an empty `accounts` Record
+  (live mode does not create labeled accounts). New optional
+  `InitRuntimeOptions.accountManager?` lets callers (`setupLocalTesting`,
+  `setupTestFixture`) construct accounts before runtime init and thread
+  the same instance through. Two `Harness.createLocal({ accountLabels:
+  ["alice"] })` calls in the same process now produce DIFFERENT alice
+  accounts — fixes the long-standing F8(a) label collision quirk that
+  silently shadowed accounts across test files. Legacy `AccountManager.X()`
+  static API still works unchanged via the singleton facade from M9.1
+  (deprecation warning in 0.2.7, removal in 0.3.0). Closes #279.
+
+### Deprecated
+
+- `AccountManager` class-static methods (`AccountManager.createAccount`,
+  `AccountManager.getLabeledAccounts`, `AccountManager.createBatch`, and
+  the other 14 static facade methods) now emit a one-time
+  `logger.warning` on the first call per method per process. The
+  warning points users at `harness.accounts.<label>` for the common
+  read path and `harness.runtime.accountManager.<method>` for advanced
+  operations. The static facade still forwards to the module-level
+  singleton unchanged — only the warning is new. Removal of the static
+  API ships in 0.3.0 along with the migration guide. Closes #283.
+
+### Changed
+
+- `movehat init` template (`packages/movehat/src/templates/tests/Counter.test.ts`)
+  and the canonical `examples/counter-example/tests/Counter.test.ts` now
+  use `harness.accounts.<label>` instead of
+  `AccountManager.getLabeledAccounts()`. New projects scaffolded with
+  `movehat init` start on the forward-compatible pattern that survives
+  the 0.3.0 break. Docs at
+  `getting-started/quickstart`, `guides/multi-contract`, `guides/testing`,
+  `guides/networks-and-modes`, and `api/harness` all rewritten to the
+  new pattern. The `api/harness.mdx` "AccountManager Shared Pool"
+  section that previously documented the F8 quirk as intentional
+  behavior has been replaced with a "Per-Harness Account Isolation"
+  section reflecting the post-M9 reality. Closes #283.
+- Primary Node.js version in all GitHub Actions workflows bumped from
+  `'20'` → `'22'`. CI matrix still covers both during the transition
+  window; demotion of Node 20 is a separate decision for ~Aug 2026
+  (Node 20 reaches EOL April 2026; GitHub Actions removes the Node 20
+  runner on Sept 16, 2026). Closes #251.
+- Docs Node.js floor aligned to v20+ in `installation.mdx` and
+  `contributing/index.mdx` — matches the CI matrix and the v22 primary
+  bump above. Closes #85.
+- New `## Git Hooks` section in `CONTRIBUTING.md` documenting the 3
+  husky hooks (pre-commit, commit-msg, pre-push), their skip flags
+  (`MOVEHAT_E2E=1`, `MOVEHAT_SKIP_EXAMPLE_CHECK=1`), and the no-bypass
+  policy (no `--no-verify` without a documented reason — matches
+  CLAUDE.md §8). Closes #201.
+
+### Tests
+
+- 4 new unit tests for `Publisher.deploy()` covering happy path,
+  `ModuleAlreadyDeployedError` early-exit when a prior deployment
+  exists, `MH_CLI_REDEPLOY=true` bypass behavior, and build-failure
+  idempotency (publish never invoked, no deployment record persisted).
+  Coverage on `src/core/Publisher.ts`: lines 66.17% → 83.82%,
+  statements 63.38% → 80.28%, branches 44.18% → 58.13%. Total unit
+  tests: 539 → 543. Closes #61.
+
 ## [0.2.6] - 2026-05-21
 
 7 audit-pass items closed across two layers — test coverage hardening and
