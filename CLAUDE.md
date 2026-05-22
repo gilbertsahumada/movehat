@@ -281,6 +281,28 @@ How to apply:
 
 Why this matters: the issue tracker is the durable record of decisions. PRs are the change-set; issues are the *why* + the linked-discussion thread. An open issue that's actually resolved is friction for everyone — new contributors think there's open work, maintainers re-investigate already-decided questions, the auto-generated "open issues" badge on the README misleads users about the project's health.
 
+## 11. CHANGELOG.md — every sub-PR that closes an issue updates `[Unreleased]`
+
+**Every sub-PR that closes an issue (per §10) MUST update `CHANGELOG.md`'s `[Unreleased]` section in the same PR.** The release PR (`release/X.Y.Z`) then moves `[Unreleased]` content into a new `[X.Y.Z] - DATE` section — it does not write entries from scratch.
+
+The rule:
+
+- Categorize each entry under one of: `### Added`, `### Changed`, `### Fixed`, `### Security`, `### Tests`, `### Internal`, `### Deprecated`, `### Removed`, `### Breaking` (the last is pre-1.0 only — see [MAINTENANCE.md](./MAINTENANCE.md) for the SemVer policy).
+- Mirror the prose density of existing 0.2.x entries: 2-4 sentences per bullet, with the *why* / context, not just *what*. A reader scanning `npm view movehat` or the file should understand the change without opening the diff.
+- Reference the closing issue at the end of the bullet (`Closes #N`).
+- Sub-PRs that are pure refactors, internal-test-only, or have zero user-visible effect MAY skip the entry. Document the skip in the PR body so the release PR knows not to look for one.
+
+Why this matters: the prior model (release-PR dredges through commits since the last tag) is fragile — the release author has to recover context they may not have, and entries get lost. The per-PR model keeps the running record accurate so the release PR is a mechanical `[Unreleased]` → `[X.Y.Z] - DATE` rename + `package.json` version bump.
+
+How to apply:
+
+1. When writing a sub-PR that closes an issue, also edit `CHANGELOG.md`: add a bullet under the appropriate `### Section` inside `[Unreleased]`. Create the section header if it doesn't exist yet for this release window.
+2. The release PR (`release/X.Y.Z`) opens with a focused diff: the `[Unreleased]` header line becomes `[X.Y.Z] - YYYY-MM-DD` and the `package.json` version bumps. No prose writing — only curation if entries need re-ordering for narrative flow.
+
+Audit cadence: when opening a release PR, grep `[Unreleased]` against the commit log since the last tag (`git log v<prev>..HEAD --oneline`). Discrepancies mean a sub-PR forgot its entry — file a follow-up `docs(changelog):` commit before tagging the release.
+
+This rule was adopted on 2026-05-22 after the post-0.2.6 polish batch (PR #274) shipped without CHANGELOG entries; the backfill PR #275 populated `[Unreleased]` retroactively. `MAINTENANCE.md` was updated in the same change to reflect the new model.
+
 ---
 
 ## Project-Specific Context
