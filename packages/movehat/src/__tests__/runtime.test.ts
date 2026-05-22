@@ -134,11 +134,15 @@ describe("initRuntime", () => {
 
   it("createAccount returns a fresh account each call (pool grows)", async () => {
     const runtime = await initRuntime();
-    const before = AccountManager.getPoolSize();
+    // Pool size is measured on the runtime's OWN AccountManager — not on
+    // the static facade's singleton. M9.2 made each runtime own its
+    // per-instance manager; `runtime.createAccount()` adds to that
+    // instance's pool, not the shared singleton.
+    const before = runtime.accountManager.getPoolSize();
     const a = runtime.createAccount();
     const b = runtime.createAccount();
     expect(a.accountAddress.toString()).not.toBe(b.accountAddress.toString());
-    expect(AccountManager.getPoolSize()).toBe(before + 2);
+    expect(runtime.accountManager.getPoolSize()).toBe(before + 2);
   });
 
   it("getAccount loads from a private key hex", async () => {

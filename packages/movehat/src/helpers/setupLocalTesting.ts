@@ -165,8 +165,13 @@ async function setupWithLocalNode(
   // leaks and port 8080 stays bound until the OS reaps it (manifests as
   // "Movement command failed" on the next test:example run).
   try {
+    // Per-context AccountManager. Threaded into initRuntime below so
+    // the runtime exposes the SAME instance — the labels created by
+    // createBatch here are visible on `runtime.accountManager`.
+    const accountManager = new AccountManager();
+
     logger.step(`Generating ${accountLabels.length} test accounts...`);
-    const accounts = AccountManager.createBatch(accountLabels);
+    const accounts = accountManager.createBatch(accountLabels);
 
     for (const [label, account] of Object.entries(accounts)) {
       logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
@@ -180,7 +185,7 @@ async function setupWithLocalNode(
 
     logger.step("Initializing runtime for local network...");
 
-    const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
+    const deployerPrivateKey = accountManager.exportPrivateKeys(["deployer"]).deployer;
 
     if (!deployerPrivateKey) {
       throw new Error("Failed to get deployer private key");
@@ -188,6 +193,7 @@ async function setupWithLocalNode(
 
     const runtime = await initRuntime({
       network: "local",
+      accountManager,
       configOverride: {
         networks: {
           local: {
@@ -331,8 +337,11 @@ async function setupWithFork(
   try {
     await new Promise((resolve) => setTimeout(resolve, 500));
 
+    // Per-context AccountManager (mirror of setupWithLocalNode pattern).
+    const accountManager = new AccountManager();
+
     logger.step(`Generating ${accountLabels.length} test accounts...`);
-    const accounts = AccountManager.createBatch(accountLabels);
+    const accounts = accountManager.createBatch(accountLabels);
 
     for (const [label, account] of Object.entries(accounts)) {
       logger.plain(`   ${label}: ${account.accountAddress.toString()}`);
@@ -348,7 +357,7 @@ async function setupWithFork(
 
     logger.step("Initializing runtime for local network...");
 
-    const deployerPrivateKey = AccountManager.exportPrivateKeys(["deployer"]).deployer;
+    const deployerPrivateKey = accountManager.exportPrivateKeys(["deployer"]).deployer;
 
     if (!deployerPrivateKey) {
       throw new Error("Failed to get deployer private key");
@@ -356,6 +365,7 @@ async function setupWithFork(
 
     const runtime = await initRuntime({
       network: "local",
+      accountManager,
       configOverride: {
         networks: {
           local: {

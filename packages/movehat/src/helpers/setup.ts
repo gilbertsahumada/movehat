@@ -31,8 +31,10 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
 
   const aptos = new Aptos(aptosConfig);
 
-  // Load account using AccountManager
-  const account = AccountManager.loadAccountFromPrivateKey(config.privateKey);
+  // Load account using a throwaway AccountManager instance. This helper
+  // returns Aptos+Account directly (no runtime exposure), so a local
+  // instance suffices — no shared pool needed.
+  const account = new AccountManager().loadAccountFromPrivateKey(config.privateKey);
 
   logger.success("Test environment ready");
   logger.plain(`   Account: ${account.accountAddress.toString()}`);
@@ -48,7 +50,8 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
 }
 
 export function createTestAccount(): Account {
-    return AccountManager.createAccount();
+    // Throwaway instance — see setupTestEnvironment for rationale.
+    return new AccountManager().createAccount();
 }
 
 

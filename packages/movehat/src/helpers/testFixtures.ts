@@ -1,7 +1,6 @@
 import type { Account } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type { MoveContract } from "../core/contract.js";
-import { AccountManager } from "../core/AccountManager.js";
 import { setupLocalTesting } from "./setupLocalTesting.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
@@ -29,10 +28,11 @@ export interface TestFixture<TModules extends string = string> {
   /**
    * Stop the local node / fork server this fixture started.
    *
-   * Does **not** clear the shared `AccountManager` pool — clearing it
-   * would break parallel `setupTestFixture` invocations that share the
-   * pool. The pool grows for the lifetime of the process; the process
-   * exit reclaims it.
+   * Each fixture owns its own `AccountManager` instance (via
+   * `setupLocalTesting` → `initRuntime`), so there is no shared pool
+   * to clear — accounts are garbage-collected when the fixture goes
+   * out of scope. Parallel `setupTestFixture` invocations have fully
+   * isolated label maps and pools (M9.2, #270).
    */
   teardown: () => Promise<void>;
 }
@@ -104,7 +104,7 @@ export async function setupTestFixture<TModules extends readonly string[]>(
   try {
     const mh = ctx.runtime;
 
-    const labeledAccounts = AccountManager.getLabeledAccounts();
+    const labeledAccounts = mh.accountManager.getLabeledAccounts();
 
     // any: TestFixture.accounts has a structural shape with required
     // `deployer/alice/bob` plus a `[key: string]: Account` index. The
@@ -119,7 +119,7 @@ export async function setupTestFixture<TModules extends readonly string[]>(
     };
 
     for (const label of accountLabels) {
-      accounts[label] = labeledAccounts[label] || AccountManager.getOrCreateLabeled(label);
+      accounts[label] = labeledAccounts[label] || mh.accountManager.getOrCreateLabeled(label);
     }
 
     const contracts = {} as Record<TModules[number], MoveContract>;
@@ -182,7 +182,7 @@ export async function setupMinimalFixture(
   try {
     const mh = ctx.runtime;
 
-    const labeledAccounts = AccountManager.getLabeledAccounts();
+    const labeledAccounts = mh.accountManager.getLabeledAccounts();
 
     // any: see setupTestFixture above — same dynamic-key builder pattern.
     const accounts: any = {
@@ -191,7 +191,7 @@ export async function setupMinimalFixture(
     };
 
     for (const label of accountLabels) {
-      accounts[label] = labeledAccounts[label] || AccountManager.getOrCreateLabeled(label);
+      accounts[label] = labeledAccounts[label] || mh.accountManager.getOrCreateLabeled(label);
     }
 
     logger.newline();

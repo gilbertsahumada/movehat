@@ -33,6 +33,22 @@ convention was adopted (see CLAUDE.md §11).
   process-wide singleton whose `poolPath` is eagerly captured at module
   import (the legacy behavior). Removal of the static facade ships in
   0.3.0 (#270). Closes #277.
+- Per-Harness account isolation. Each `Harness` now owns its own
+  `AccountManager` instance reachable at `harness.runtime.accountManager`.
+  New `Harness.accounts: Record<string, Account>` field exposes labeled
+  accounts created at construction time (`accountLabels` in
+  `createLocal` / `createFork` options) as a snapshot — late additions
+  via `harness.runtime.accountManager.createAccount(...)` are not
+  reflected. `Harness.createLive` produces an empty `accounts` Record
+  (live mode does not create labeled accounts). New optional
+  `InitRuntimeOptions.accountManager?` lets callers (`setupLocalTesting`,
+  `setupTestFixture`) construct accounts before runtime init and thread
+  the same instance through. Two `Harness.createLocal({ accountLabels:
+  ["alice"] })` calls in the same process now produce DIFFERENT alice
+  accounts — fixes the long-standing F8(a) label collision quirk that
+  silently shadowed accounts across test files. Legacy `AccountManager.X()`
+  static API still works unchanged via the singleton facade from M9.1
+  (deprecation warning in 0.2.7, removal in 0.3.0). Closes #279.
 
 ### Changed
 

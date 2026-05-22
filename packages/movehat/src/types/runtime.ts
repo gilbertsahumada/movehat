@@ -2,6 +2,7 @@ import { Aptos, Account } from "@aptos-labs/ts-sdk";
 import { MovehatConfig } from "./config.js";
 import { MoveContract } from "../core/contract.js";
 import { DeploymentInfo } from "../core/deployments.js";
+import type { AccountManager } from "../core/AccountManager.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 
 export interface NetworkInfo {
@@ -25,6 +26,13 @@ export interface MovehatRuntime {
 
   // All accounts for this network
   accounts: Account[];
+
+  // Per-runtime AccountManager instance. Holds the account pool +
+  // label map scoped to this runtime — two `initRuntime()` calls
+  // produce independent managers. Use `harness.accounts.<label>` for
+  // the common read path; reach into this manager for advanced ops
+  // (createBatch, exportPrivateKeys, saveAccountPool, etc.).
+  accountManager: AccountManager;
 
   // Helper functions
   getContract: (address: string, moduleName: string) => MoveContract;
