@@ -23,6 +23,18 @@ export interface InitRuntimeOptions {
   network?: string;
   accountIndex?: number;
   configOverride?: Partial<MovehatUserConfig>;
+  /**
+   * Optional pre-constructed `AccountManager` instance. When supplied,
+   * the returned runtime's `accountManager` field is THIS instance —
+   * so labeled accounts created BEFORE `initRuntime` are visible on
+   * the runtime. When omitted, `initRuntime` constructs a fresh
+   * `new AccountManager()` per call.
+   *
+   * `setupLocalTesting` uses this option to thread one manager through
+   * `createBatch` → `exportPrivateKeys` → `initRuntime` so the deployer
+   * key it extracts ends up on the same manager the runtime exposes.
+   */
+  accountManager?: AccountManager;
 }
 
 /**
@@ -62,9 +74,12 @@ export async function initRuntime(
   });
   const aptos = new Aptos(aptosConfig);
 
-  // Setup accounts using AccountManager
+  // Setup accounts using AccountManager. Use the caller-supplied
+  // instance when threaded in (preserves labels created before
+  // initRuntime); otherwise construct a fresh one.
+  const accountManager = options.accountManager ?? new AccountManager();
   const accountIndex = options.accountIndex || 0;
-  const accounts: Account[] = AccountManager.loadAccountsFromConfig(config);
+  const accounts: Account[] = accountManager.loadAccountsFromConfig(config);
 
   // Primary account (accounts[0] or selected index)
   const account = accounts[accountIndex];
@@ -115,11 +130,11 @@ export async function initRuntime(
   };
 
   const createAccount = (): Account => {
-    return AccountManager.createAccount();
+    return accountManager.createAccount();
   };
 
   const getAccountHelper = (privateKeyHex: string): Account => {
-    return AccountManager.loadAccountFromPrivateKey(privateKeyHex);
+    return accountManager.loadAccountFromPrivateKey(privateKeyHex);
   };
 
   const getAccountByIndex = (index: number): Account => {
@@ -141,6 +156,7 @@ export async function initRuntime(
     aptos,
     account,
     accounts,
+    accountManager,
     getContract: getContractHelper,
     deployContract,
     getDeployment,
