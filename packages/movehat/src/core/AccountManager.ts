@@ -7,6 +7,7 @@ import {
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { MovehatConfig } from "../types/config.js";
+import { logger } from "../ui/index.js";
 
 export interface StoredAccount {
   label?: string | undefined;
@@ -457,30 +458,37 @@ export class AccountManager {
   // `harness.runtime.accountManager.*`.
 
   static getTestAccount(label?: string): Account {
+    __warnDeprecated("getTestAccount");
     return __defaultManager.getTestAccount(label);
   }
 
   static createAccount(label?: string, fund: boolean = false): Account {
+    __warnDeprecated("createAccount");
     return __defaultManager.createAccount(label, fund);
   }
 
   static getAccountByLabel(label: string): Account | undefined {
+    __warnDeprecated("getAccountByLabel");
     return __defaultManager.getAccountByLabel(label);
   }
 
   static loadAccountFromEnv(envVar: string = "PRIVATE_KEY"): Account {
+    __warnDeprecated("loadAccountFromEnv");
     return __defaultManager.loadAccountFromEnv(envVar);
   }
 
   static loadAccountFromPrivateKey(privateKeyHex: string): Account {
+    __warnDeprecated("loadAccountFromPrivateKey");
     return __defaultManager.loadAccountFromPrivateKey(privateKeyHex);
   }
 
   static loadAccountsFromConfig(config: MovehatConfig): Account[] {
+    __warnDeprecated("loadAccountsFromConfig");
     return __defaultManager.loadAccountsFromConfig(config);
   }
 
   static getLabeledAccounts(): Record<string, Account> {
+    __warnDeprecated("getLabeledAccounts");
     return __defaultManager.getLabeledAccounts();
   }
 
@@ -492,6 +500,7 @@ export class AccountManager {
     poolPathOrOptions?: string | SaveAccountPoolOptions,
     options: SaveAccountPoolOptions = {},
   ): void {
+    __warnDeprecated("saveAccountPool");
     // Re-dispatch via the instance overloads, preserving caller intent.
     if (poolPathOrOptions === undefined) {
       __defaultManager.saveAccountPool();
@@ -503,34 +512,42 @@ export class AccountManager {
   }
 
   static loadAccountPool(poolPath?: string): boolean {
+    __warnDeprecated("loadAccountPool");
     return __defaultManager.loadAccountPool(poolPath);
   }
 
   static clearPool(): void {
+    __warnDeprecated("clearPool");
     __defaultManager.clearPool();
   }
 
   static getPoolSize(): number {
+    __warnDeprecated("getPoolSize");
     return __defaultManager.getPoolSize();
   }
 
   static getAllAccounts(): Account[] {
+    __warnDeprecated("getAllAccounts");
     return __defaultManager.getAllAccounts();
   }
 
   static hasLabel(label: string): boolean {
+    __warnDeprecated("hasLabel");
     return __defaultManager.hasLabel(label);
   }
 
   static getOrCreateLabeled(label: string): Account {
+    __warnDeprecated("getOrCreateLabeled");
     return __defaultManager.getOrCreateLabeled(label);
   }
 
   static createBatch(labels: readonly string[]): Record<string, Account> {
+    __warnDeprecated("createBatch");
     return __defaultManager.createBatch(labels);
   }
 
   static exportPrivateKeys(labels?: string[]): Record<string, string> {
+    __warnDeprecated("exportPrivateKeys");
     return __defaultManager.exportPrivateKeys(labels);
   }
 }
@@ -542,3 +559,30 @@ export class AccountManager {
 const __defaultManager = new AccountManager({
   poolPath: join(process.cwd(), ".movehat", "accounts"),
 });
+
+// Once-per-method-per-process deprecation tracking for the static
+// facade. The warning fires on the FIRST call to each static method
+// per process, then stays silent for subsequent calls. A user with
+// 50 tests calling `AccountManager.getLabeledAccounts()` sees the
+// warning once, not 50 times.
+//
+// Exported as `_resetDeprecationWarnings` for tests that need to
+// verify warning behavior across multiple `it` blocks (vitest workers
+// share module state within a single test file).
+const __warnedMethods = new Set<string>();
+
+/** @internal — test-only. Resets the once-per-method dedup Set. */
+export function _resetDeprecationWarnings(): void {
+  __warnedMethods.clear();
+}
+
+function __warnDeprecated(method: string): void {
+  if (__warnedMethods.has(method)) return;
+  __warnedMethods.add(method);
+  logger.warning(
+    `AccountManager.${method} is deprecated and will be removed in 0.3.0. ` +
+      `Use 'harness.accounts.<label>' for labeled-account access, or ` +
+      `'harness.runtime.accountManager.${method}' for direct manager calls. ` +
+      `See migration tracker: https://github.com/gilbertsahumada/movehat/issues/270`,
+  );
+}

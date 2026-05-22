@@ -50,8 +50,32 @@ convention was adopted (see CLAUDE.md §11).
   static API still works unchanged via the singleton facade from M9.1
   (deprecation warning in 0.2.7, removal in 0.3.0). Closes #279.
 
+### Deprecated
+
+- `AccountManager` class-static methods (`AccountManager.createAccount`,
+  `AccountManager.getLabeledAccounts`, `AccountManager.createBatch`, and
+  the other 14 static facade methods) now emit a one-time
+  `logger.warning` on the first call per method per process. The
+  warning points users at `harness.accounts.<label>` for the common
+  read path and `harness.runtime.accountManager.<method>` for advanced
+  operations. The static facade still forwards to the module-level
+  singleton unchanged — only the warning is new. Removal of the static
+  API ships in 0.3.0 along with the migration guide. Closes #283.
+
 ### Changed
 
+- `movehat init` template (`packages/movehat/src/templates/tests/Counter.test.ts`)
+  and the canonical `examples/counter-example/tests/Counter.test.ts` now
+  use `harness.accounts.<label>` instead of
+  `AccountManager.getLabeledAccounts()`. New projects scaffolded with
+  `movehat init` start on the forward-compatible pattern that survives
+  the 0.3.0 break. Docs at
+  `getting-started/quickstart`, `guides/multi-contract`, `guides/testing`,
+  `guides/networks-and-modes`, and `api/harness` all rewritten to the
+  new pattern. The `api/harness.mdx` "AccountManager Shared Pool"
+  section that previously documented the F8 quirk as intentional
+  behavior has been replaced with a "Per-Harness Account Isolation"
+  section reflecting the post-M9 reality. Closes #283.
 - Primary Node.js version in all GitHub Actions workflows bumped from
   `'20'` → `'22'`. CI matrix still covers both during the transition
   window; demotion of Node 20 is a separate decision for ~Aug 2026
