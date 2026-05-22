@@ -22,6 +22,17 @@ convention was adopted (see CLAUDE.md §11).
 - `CODE_OF_CONDUCT.md` at repo root using Contributor Covenant 2.1,
   with the contact placeholder substituted to `gilbertsahumada@gmail.com`.
   Closes #202.
+- `AccountManager` instance API alongside the existing class-static
+  surface. Construct via `new AccountManager(options?)` for a fully
+  isolated pool (independent `labelMap`, `pool`, private-key map). New
+  `AccountManagerOptions` interface exposes `{ poolPath?: string }`;
+  when omitted, `poolPath` is evaluated lazily on each call (respecting
+  `process.chdir()` between construction and pool I/O — the inverse of
+  the legacy F8(b) static-API behavior). The static facade is preserved
+  in 0.2.x for back-compat — every former static call forwards to a
+  process-wide singleton whose `poolPath` is eagerly captured at module
+  import (the legacy behavior). Removal of the static facade ships in
+  0.3.0 (#270). Closes #277.
 
 ### Changed
 
