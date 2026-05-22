@@ -164,6 +164,27 @@ describe("initRuntime", () => {
     expect(runtime.network.name).toBe("testnet");
   });
 
+  it("switchNetwork preserves a caller-supplied accountManager across the network switch", async () => {
+    // M9.2 wired `accountManager` through InitRuntimeOptions. The
+    // switchNetwork closure spreads `...options` into the recursive
+    // initRuntime call, so a caller-supplied manager survives the
+    // switch (labels created on it are still visible). Without this
+    // spread, the new runtime would default-construct a fresh manager
+    // and labels would silently disappear post-switch. This test pins
+    // the spread behavior — refactoring switchNetwork to drop it must
+    // fail here, not in a downstream user's test suite.
+    const mgr = new AccountManager();
+    mgr.createAccount("alice");
+
+    const runtime = await initRuntime({ accountManager: mgr });
+    expect(runtime.accountManager).toBe(mgr);
+    expect(runtime.accountManager.hasLabel("alice")).toBe(true);
+
+    const switched = await runtime.switchNetwork("custom");
+    expect(switched.accountManager).toBe(mgr);
+    expect(switched.accountManager.hasLabel("alice")).toBe(true);
+  });
+
   it("getDeployment / getDeployments / getDeploymentAddress return null/empty for an unused network", async () => {
     const runtime = await initRuntime();
     // Nothing deployed in the tmp cwd, so these all short-circuit.

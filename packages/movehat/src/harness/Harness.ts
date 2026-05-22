@@ -67,8 +67,12 @@ export class Harness {
    * For `createLive`, empty (live mode does not create labeled accounts;
    * use `harness.runtime.accountManager.loadAccountFromPrivateKey(...)`
    * for direct key loading).
+   *
+   * Typed `Readonly` so the snapshot can't be mutated via
+   * `harness.accounts.alice = X`. Reach into
+   * `harness.runtime.accountManager.*` when you need mutable access.
    */
-  public readonly accounts: Record<string, Account>;
+  public readonly accounts: Readonly<Record<string, Account>>;
 
   /** @internal */
   public readonly localNode?: LocalNodeManager;
