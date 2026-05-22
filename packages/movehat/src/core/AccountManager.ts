@@ -193,7 +193,7 @@ export class AccountManager {
         accounts.push(account);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.warn(`Warning: Failed to load account from config: ${msg}`);
+        logger.warning(`Failed to load account from config: ${msg}`);
       }
     }
     return accounts;
@@ -263,7 +263,7 @@ export class AccountManager {
 
       const privateKey = this.privateKeys.get(address);
       if (!privateKey) {
-        console.warn(`Warning: No private key found for account ${address}, skipping`);
+        logger.warning(`No private key found for account ${address}, skipping`);
         continue;
       }
 
@@ -330,7 +330,7 @@ export class AccountManager {
       return true;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      console.warn(`Warning: Failed to load account pool: ${msg}`);
+      logger.warning(`Failed to load account pool: ${msg}`);
       return false;
     }
   }
