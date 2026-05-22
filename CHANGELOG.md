@@ -35,7 +35,7 @@ convention was adopted (see CLAUDE.md §11).
   0.3.0 (#270). Closes #277.
 - Per-Harness account isolation. Each `Harness` now owns its own
   `AccountManager` instance reachable at `harness.runtime.accountManager`.
-  New `Harness.accounts: Record<string, Account>` field exposes labeled
+  New `Harness.accounts: Readonly<Record<string, Account>>` field exposes labeled
   accounts created at construction time (`accountLabels` in
   `createLocal` / `createFork` options) as a snapshot — late additions
   via `harness.runtime.accountManager.createAccount(...)` are not
