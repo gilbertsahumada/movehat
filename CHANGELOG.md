@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Post-0.2.6 polish batch — 6 audit-pass / cleanup items closed without
+public API change. All additive or docs-only; shipped to `main` in
+PR #274 on 2026-05-21. Backfilled 2026-05-22 when the per-PR CHANGELOG
+convention was adopted (see CLAUDE.md §11).
+
+### Added
+
+- Re-export 4 public types from `movehat`: `InitRuntimeOptions`,
+  `NetworkConfig`, `LocalTestingMode`, `ChildProcessAdapter`. Addresses
+  TypeDoc warnings about unexported public-API symbols and lets users
+  reference network configuration, runtime initialization, and custom
+  child-process adapters directly from the main entry point. Closes #159.
+- `CODE_OF_CONDUCT.md` at repo root using Contributor Covenant 2.1,
+  with the contact placeholder substituted to `gilbertsahumada@gmail.com`.
+  Closes #202.
+
+### Changed
+
+- Primary Node.js version in all GitHub Actions workflows bumped from
+  `'20'` → `'22'`. CI matrix still covers both during the transition
+  window; demotion of Node 20 is a separate decision for ~Aug 2026
+  (Node 20 reaches EOL April 2026; GitHub Actions removes the Node 20
+  runner on Sept 16, 2026). Closes #251.
+- Docs Node.js floor aligned to v20+ in `installation.mdx` and
+  `contributing/index.mdx` — matches the CI matrix and the v22 primary
+  bump above. Closes #85.
+- New `## Git Hooks` section in `CONTRIBUTING.md` documenting the 3
+  husky hooks (pre-commit, commit-msg, pre-push), their skip flags
+  (`MOVEHAT_E2E=1`, `MOVEHAT_SKIP_EXAMPLE_CHECK=1`), and the no-bypass
+  policy (no `--no-verify` without a documented reason — matches
+  CLAUDE.md §8). Closes #201.
+
+### Tests
+
+- 4 new unit tests for `Publisher.deploy()` covering happy path,
+  `ModuleAlreadyDeployedError` early-exit when a prior deployment
+  exists, `MH_CLI_REDEPLOY=true` bypass behavior, and build-failure
+  idempotency (publish never invoked, no deployment record persisted).
+  Coverage on `src/core/Publisher.ts`: lines 66.17% → 83.82%,
+  statements 63.38% → 80.28%, branches 44.18% → 58.13%. Total unit
+  tests: 539 → 543. Closes #61.
+
 ## [0.2.6] - 2026-05-21
 
 7 audit-pass items closed across two layers — test coverage hardening and
