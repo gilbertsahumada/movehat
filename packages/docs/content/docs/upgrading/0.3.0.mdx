@@ -1,0 +1,218 @@
+---
+title: Upgrading to 0.3.0
+description: Migration guide for the AccountManager static-facade removal in movehat 0.3.0
+icon: ArrowUpCircle
+---
+
+Movehat 0.3.0 removes the `AccountManager` static facade that was deprecated in 0.2.7. This page covers the migration paths for every previously-static call site.
+
+> **TL;DR** — replace `AccountManager.<method>(...)` with either:
+>
+> - `harness.accounts.<label>` for labeled-account access (the common case), or
+> - `harness.runtime.accountManager.<method>(...)` for advanced operations.
+
+## What changed
+
+In 0.2.7 the per-Harness instance API shipped alongside the static facade, and every static method (`AccountManager.createAccount`, `AccountManager.getLabeledAccounts`, etc.) emitted a one-time `logger.warning` on first call. The static facade was preserved for a one-minor-release deprecation window per [MAINTENANCE.md §6](https://github.com/gilbertsahumada/movehat/blob/main/MAINTENANCE.md#deprecation-policy).
+
+In 0.3.0 the static methods are **removed entirely**. Calls to them now fail at runtime with:
+
+```
+TypeError: AccountManager.createAccount is not a function
+```
+
+The instance API — `new AccountManager(options?)` plus its instance methods — is the only surface.
+
+## Why
+
+Each `Harness` now owns its own isolated `AccountManager`. Two `Harness.createLocal({ accountLabels: ["alice"] })` calls in the same process produce **different** alice accounts. The static facade contradicted that contract by routing every static call through a single process-wide singleton, so users who mixed static and instance APIs could end up with surprisingly shared (or surprisingly separate) state depending on which path they took. Removing the facade closes [audit finding F8](https://github.com/gilbertsahumada/movehat/issues/213) and leaves one obvious way to access accounts.
+
+## Common case — labeled account access
+
+This is what 90%+ of test files do.
+
+**Before (0.2.x):**
+
+```typescript
+import { Harness, AccountManager } from "movehat";
+
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice", "bob"],
+  autoDeploy: ["counter"],
+});
+
+const labeled = AccountManager.getLabeledAccounts();
+const deployer = labeled.deployer!;
+const alice = labeled.alice!;
+const bob = labeled.bob!;
+```
+
+**After (0.3.0):**
+
+```typescript
+import { Harness } from "movehat";
+
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice", "bob"],
+  autoDeploy: ["counter"],
+});
+
+const { deployer, alice, bob } = harness.accounts;
+```
+
+Two wins:
+
+- One fewer import (`AccountManager` not needed here).
+- One fewer line — `harness.accounts` is the snapshot the harness took at construction time.
+
+If your `tsconfig` enables `noUncheckedIndexedAccess` (as the `counter-example` does), you'll need a non-null assertion for the individual label access:
+
+```typescript
+const deployer = harness.accounts.deployer!;
+```
+
+The destructure form (`const { deployer, alice, bob } = harness.accounts;`) does not need the assertion.
+
+## Advanced — direct manager calls
+
+For the operations that don't fit the labeled-snapshot shape — generating fresh accounts mid-test, exporting private keys for a sub-script, persisting the pool across runs — the per-Harness instance is reachable at `harness.runtime.accountManager`.
+
+**Before (0.2.x):**
+
+```typescript
+import { AccountManager } from "movehat";
+
+const batch = AccountManager.createBatch(["payer1", "payer2", "payer3"]);
+const keys = AccountManager.exportPrivateKeys();
+AccountManager.saveAccountPool(".movehat/accounts");
+```
+
+**After (0.3.0):**
+
+```typescript
+const batch = harness.runtime.accountManager.createBatch([
+  "payer1",
+  "payer2",
+  "payer3",
+]);
+const keys = harness.runtime.accountManager.exportPrivateKeys();
+harness.runtime.accountManager.saveAccountPool(".movehat/accounts");
+```
+
+Every previously-static method has the same name and the same signature on the instance.
+
+## Outside a Harness
+
+If your script uses `AccountManager` without ever constructing a `Harness` — for example a one-off CLI utility that generates accounts and writes them to disk — instantiate the manager directly:
+
+**Before (0.2.x):**
+
+```typescript
+import { AccountManager } from "movehat";
+
+const acc = AccountManager.getOrCreateLabeled("treasury");
+AccountManager.saveAccountPool();
+```
+
+**After (0.3.0):**
+
+```typescript
+import { AccountManager } from "movehat";
+
+const mgr = new AccountManager();
+const acc = mgr.getOrCreateLabeled("treasury");
+mgr.saveAccountPool();
+```
+
+The constructor accepts a single `options` object; the only currently-supported field is `poolPath`:
+
+```typescript
+const mgr = new AccountManager({
+  poolPath: "/path/to/custom/.movehat/accounts",
+});
+```
+
+## Per-instance pool semantics
+
+The static facade used a single process-wide pool. Two static calls in the same process would always see the same accounts.
+
+The instance API does **not** share state. Each `new AccountManager()` (and therefore each `Harness`) gets its own:
+
+- `pool` (address → Account)
+- `labelMap` (label → address)
+- `privateKeys` (address → hex)
+
+If your tests previously relied on label sharing across `Harness` instances (e.g. `Harness.createLocal({ accountLabels: ["alice"] })` followed later by another `Harness.createLocal({ accountLabels: ["alice"] })` expecting the same alice), you must now either:
+
+- Share the same `Harness` instance across the tests that need the same accounts, or
+- Save the pool from the first manager (`mgr.saveAccountPool(path)`) and load it into the second (`other.loadAccountPool(path)`).
+
+### `harness.accounts` is a snapshot, not a live view
+
+`harness.accounts` captures the labeled accounts at Harness construction time. Accounts created later via `harness.runtime.accountManager.createAccount("late_label")` are **not** retroactively added to `harness.accounts`. If you create accounts after construction, access them through `harness.runtime.accountManager.getAccountByLabel("late_label")` (or destructure them into a separate local map). This is intentional — the snapshot pattern makes the common-case destructuring (`const { alice, bob } = harness.accounts`) safe by guaranteeing the shape never mutates underneath the caller.
+
+## `process.chdir` and `poolPath`
+
+The static facade captured `process.cwd()` eagerly at module import time (audit finding F8(b)), so `process.chdir()` between import and `saveAccountPool()` had no effect. The instance API resolves `poolPath` lazily on each call, so `process.chdir()` between construction and save is respected:
+
+```typescript
+const mgr = new AccountManager();
+mgr.createAccount("test_account");
+
+process.chdir("/tmp/different-cwd");
+mgr.saveAccountPool();
+// Saves under /tmp/different-cwd/.movehat/accounts — NOT the cwd at import time.
+```
+
+Pass an explicit `poolPath` if you want the legacy "captured-at-construction" behavior:
+
+```typescript
+const mgr = new AccountManager({
+  poolPath: join(initialCwd, ".movehat", "accounts"),
+});
+```
+
+## FAQ
+
+### I don't have a `Harness`. Can I still get the same accounts I had before?
+
+Yes — `new AccountManager()` gives you the same instance methods. If you need the same key material as before, load it from your saved pool file or your `PRIVATE_KEY` env var:
+
+```typescript
+const mgr = new AccountManager();
+mgr.loadAccountPool();          // reads .movehat/accounts/test-pool.json
+const acc = mgr.loadAccountFromEnv();  // reads process.env.PRIVATE_KEY
+```
+
+### My CI was relying on `AccountManager.clearPool()` between test files
+
+The static `clearPool()` cleared the process-wide singleton. With per-instance pools, each test file's `Harness` already has its own state — there's nothing to clear between files. Delete the `beforeEach(() => AccountManager.clearPool())` calls; they're no-ops in 0.3.0.
+
+### My CI shows the deprecation warning I silenced with `--silent` flooded into stderr
+
+Once you migrate to `harness.accounts.<label>` (or `harness.runtime.accountManager.<method>`), the warning stops firing because the static methods that produced it are gone. Migration is the fix, not silencing.
+
+### What about `AccountManager.getTestAccount`?
+
+Same shape — call it on the instance:
+
+```typescript
+// Before
+const acc = AccountManager.getTestAccount("temp_account");
+
+// After (inside a Harness-aware context)
+const acc = harness.runtime.accountManager.getTestAccount("temp_account");
+
+// After (standalone)
+const mgr = new AccountManager();
+const acc = mgr.getTestAccount("temp_account");
+```
+
+## Reference
+
+- [M9 meta-issue (#270)](https://github.com/gilbertsahumada/movehat/issues/270) — full deprecation arc M9.1 → M9.4
+- [F8 audit finding (#213)](https://github.com/gilbertsahumada/movehat/issues/213) — root cause for the refactor
+- [0.2.7 release notes](https://github.com/gilbertsahumada/movehat/releases/tag/v0.2.7) — the deprecation announcement
+- [MAINTENANCE.md §6](https://github.com/gilbertsahumada/movehat/blob/main/MAINTENANCE.md#deprecation-policy) — one-minor-release deprecation window policy
+
+If you hit a migration case not covered here, [open an issue](https://github.com/gilbertsahumada/movehat/issues/new) with the previously-static call you used and the context — we'll extend this guide.

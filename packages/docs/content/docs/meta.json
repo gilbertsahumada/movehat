@@ -26,6 +26,8 @@
     "cli/fork",
     "---API Reference---",
     "api/harness",
+    "---Upgrading---",
+    "upgrading/0.3.0",
     "---Community---",
     "contributing/index"
   ]

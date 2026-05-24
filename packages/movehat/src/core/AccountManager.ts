@@ -39,46 +39,25 @@ export interface AccountManagerOptions {
    *
    * Pass an explicit value when per-instance isolation matters (parallel
    * test files, harness pools that must not collide with another suite's).
-   *
-   * The process-wide static facade exposed on the `AccountManager` class
-   * itself uses a separate singleton whose `poolPath` is EAGERLY captured
-   * at module-import time. That preserves the legacy F8(b) behavior for
-   * any code still on the static API during the 0.2.7 deprecation window;
-   * the static facade is removed in 0.3.0.
    */
   poolPath?: string | undefined;
 }
 
 /**
- * Centralized Account Manager for movehat
+ * Centralized Account Manager for movehat.
  *
- * Manages all account creation, loading, and lifecycle operations.
- * Provides a pool of reusable test accounts with labels for better test
- * readability.
+ * Manages account creation, loading, and lifecycle. Provides a pool of
+ * reusable test accounts with labels for better test readability.
  *
- * Two API surfaces are exposed:
- *
- * **Instance API (recommended; M9.1+)** — `new AccountManager(options?)`
- * gives a fully isolated pool. Two instances in the same process have
- * independent labelMaps, private-key maps, and account pools. Each
- * `Harness` constructed in 0.3.0+ will own one of these; user code
- * accesses labeled accounts via `harness.accounts.<label>` (Harness
- * snapshots them at construction time).
- *
- * **Static facade (deprecated; will be removed in 0.3.0)** — every
- * former static method (`AccountManager.createAccount(...)`, etc.) still
- * works and forwards to a single process-wide singleton. This preserves
- * the existing label-sharing behavior across calls during the
- * deprecation window. Migration target is the instance API; see M9 meta
- * (#270) and migration guide at `/docs/upgrading/0.3.0` (published in
- * M9.4).
+ * `new AccountManager(options?)` gives a fully isolated pool. Two
+ * instances in the same process have independent labelMaps,
+ * private-key maps, and account pools. Each `Harness` owns one of
+ * these; user code accesses labeled accounts via
+ * `harness.accounts.<label>` (Harness snapshots them at construction
+ * time).
  */
 export class AccountManager {
   // ── Instance state ──────────────────────────────────────────────
-  // All former class-static fields are now instance fields. Two
-  // `new AccountManager()` calls produce fully isolated state. The
-  // static facade below operates on a single module-level singleton,
-  // so existing callers see no behavior change.
   private readonly pool: Map<string, Account> = new Map(); // address → Account
   private readonly privateKeys: Map<string, string> = new Map(); // address → privateKey hex
   private readonly labelMap: Map<string, string> = new Map(); // label → address
@@ -442,147 +421,4 @@ export class AccountManager {
       this.generatedAccountAddresses.delete(address);
     }
   }
-
-  // ── Static facade (deprecated; removed in 0.3.0) ────────────────
-  //
-  // Every former static method below forwards to `__defaultManager`,
-  // a module-level singleton constructed once at import time. This
-  // preserves the legacy "process-wide pool shared across consumers"
-  // behavior so existing callers see no change during the 0.2.7
-  // deprecation window. The singleton is constructed with its
-  // `poolPath` eagerly captured from the import-time `process.cwd()`
-  // — preserving F8(b) for the static API specifically.
-  //
-  // Removal happens in M9.4 (0.3.0). Until then the runtime warning
-  // added in M9.3 nudges users toward `harness.accounts.<label>` or
-  // `harness.runtime.accountManager.*`.
-
-  static getTestAccount(label?: string): Account {
-    __warnDeprecated("getTestAccount");
-    return __defaultManager.getTestAccount(label);
-  }
-
-  static createAccount(label?: string, fund: boolean = false): Account {
-    __warnDeprecated("createAccount");
-    return __defaultManager.createAccount(label, fund);
-  }
-
-  static getAccountByLabel(label: string): Account | undefined {
-    __warnDeprecated("getAccountByLabel");
-    return __defaultManager.getAccountByLabel(label);
-  }
-
-  static loadAccountFromEnv(envVar: string = "PRIVATE_KEY"): Account {
-    __warnDeprecated("loadAccountFromEnv");
-    return __defaultManager.loadAccountFromEnv(envVar);
-  }
-
-  static loadAccountFromPrivateKey(privateKeyHex: string): Account {
-    __warnDeprecated("loadAccountFromPrivateKey");
-    return __defaultManager.loadAccountFromPrivateKey(privateKeyHex);
-  }
-
-  static loadAccountsFromConfig(config: MovehatConfig): Account[] {
-    __warnDeprecated("loadAccountsFromConfig");
-    return __defaultManager.loadAccountsFromConfig(config);
-  }
-
-  static getLabeledAccounts(): Record<string, Account> {
-    __warnDeprecated("getLabeledAccounts");
-    return __defaultManager.getLabeledAccounts();
-  }
-
-  static saveAccountPool(): void;
-  static saveAccountPool(poolPath: string): void;
-  static saveAccountPool(options: SaveAccountPoolOptions): void;
-  static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
-  static saveAccountPool(
-    poolPathOrOptions?: string | SaveAccountPoolOptions,
-    options: SaveAccountPoolOptions = {},
-  ): void {
-    __warnDeprecated("saveAccountPool");
-    // Re-dispatch via the instance overloads, preserving caller intent.
-    if (poolPathOrOptions === undefined) {
-      __defaultManager.saveAccountPool();
-    } else if (typeof poolPathOrOptions === "string") {
-      __defaultManager.saveAccountPool(poolPathOrOptions, options);
-    } else {
-      __defaultManager.saveAccountPool(poolPathOrOptions);
-    }
-  }
-
-  static loadAccountPool(poolPath?: string): boolean {
-    __warnDeprecated("loadAccountPool");
-    return __defaultManager.loadAccountPool(poolPath);
-  }
-
-  static clearPool(): void {
-    __warnDeprecated("clearPool");
-    __defaultManager.clearPool();
-  }
-
-  static getPoolSize(): number {
-    __warnDeprecated("getPoolSize");
-    return __defaultManager.getPoolSize();
-  }
-
-  static getAllAccounts(): Account[] {
-    __warnDeprecated("getAllAccounts");
-    return __defaultManager.getAllAccounts();
-  }
-
-  static hasLabel(label: string): boolean {
-    __warnDeprecated("hasLabel");
-    return __defaultManager.hasLabel(label);
-  }
-
-  static getOrCreateLabeled(label: string): Account {
-    __warnDeprecated("getOrCreateLabeled");
-    return __defaultManager.getOrCreateLabeled(label);
-  }
-
-  static createBatch(labels: readonly string[]): Record<string, Account> {
-    __warnDeprecated("createBatch");
-    return __defaultManager.createBatch(labels);
-  }
-
-  static exportPrivateKeys(labels?: string[]): Record<string, string> {
-    __warnDeprecated("exportPrivateKeys");
-    return __defaultManager.exportPrivateKeys(labels);
-  }
-}
-
-// Module-level singleton backing the static facade. The eager poolPath
-// capture mirrors the pre-M9 behavior — `process.chdir` after import
-// does NOT redirect static-facade pool I/O. F8(b) is preserved for
-// the static API and only flips for callers using the instance API.
-const __defaultManager = new AccountManager({
-  poolPath: join(process.cwd(), ".movehat", "accounts"),
-});
-
-// Once-per-method-per-process deprecation tracking for the static
-// facade. The warning fires on the FIRST call to each static method
-// per process, then stays silent for subsequent calls. A user with
-// 50 tests calling `AccountManager.getLabeledAccounts()` sees the
-// warning once, not 50 times.
-//
-// Exported as `_resetDeprecationWarnings` for tests that need to
-// verify warning behavior across multiple `it` blocks (vitest workers
-// share module state within a single test file).
-const __warnedMethods = new Set<string>();
-
-/** @internal — test-only. Resets the once-per-method dedup Set. */
-export function _resetDeprecationWarnings(): void {
-  __warnedMethods.clear();
-}
-
-function __warnDeprecated(method: string): void {
-  if (__warnedMethods.has(method)) return;
-  __warnedMethods.add(method);
-  logger.warning(
-    `AccountManager.${method} is deprecated and will be removed in 0.3.0. ` +
-      `Use 'harness.accounts.<label>' for labeled-account access, or ` +
-      `'harness.runtime.accountManager.${method}' for direct manager calls. ` +
-      `See migration tracker: https://github.com/gilbertsahumada/movehat/issues/270`,
-  );
 }

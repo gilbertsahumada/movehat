@@ -12,32 +12,36 @@ import { join } from "path";
 import { AccountManager } from "../AccountManager.js";
 import type { MovehatConfig } from "../../types/config.js";
 
+const TEST_KEY_A =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+const TEST_KEY_B =
+  "0x0000000000000000000000000000000000000000000000000000000000000002";
+
 describe("AccountManager.saveAccountPool", () => {
   let tmpDir: string;
+  let mgr: AccountManager;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "movehat-acc-pool-"));
-    AccountManager.clearPool();
+    mgr = new AccountManager();
   });
 
   afterEach(() => {
-    AccountManager.clearPool();
     if (existsSync(tmpDir)) {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("writes test-pool.json with 0o600 permissions", () => {
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
 
     const poolDir = join(tmpDir, "accounts");
-    AccountManager.saveAccountPool(poolDir);
+    mgr.saveAccountPool(poolDir);
 
     const poolFile = join(poolDir, "test-pool.json");
     expect(existsSync(poolFile)).toBe(true);
 
-    // Mode check is POSIX-only; skip on Windows where mode bits don't apply.
     if (platform() !== "win32") {
       const stat = statSync(poolFile);
       const mode = stat.mode & 0o777;
@@ -46,10 +50,10 @@ describe("AccountManager.saveAccountPool", () => {
   });
 
   it("creates the pool directory with 0o700 permissions when missing", () => {
-    AccountManager.createAccount("alice");
+    mgr.createAccount("alice");
 
     const poolDir = join(tmpDir, "fresh-accounts");
-    AccountManager.saveAccountPool(poolDir);
+    mgr.saveAccountPool(poolDir);
 
     expect(existsSync(poolDir)).toBe(true);
 
@@ -61,11 +65,11 @@ describe("AccountManager.saveAccountPool", () => {
   });
 
   it("omits imported private-key accounts by default", () => {
-    const generated = AccountManager.createAccount("alice");
-    AccountManager.loadAccountFromPrivateKey(TEST_KEY_A);
+    const generated = mgr.createAccount("alice");
+    mgr.loadAccountFromPrivateKey(TEST_KEY_A);
 
     const poolDir = join(tmpDir, "accounts");
-    AccountManager.saveAccountPool(poolDir);
+    mgr.saveAccountPool(poolDir);
 
     const poolData = JSON.parse(
       readFileSync(join(poolDir, "test-pool.json"), "utf-8")
@@ -78,11 +82,11 @@ describe("AccountManager.saveAccountPool", () => {
   });
 
   it("persists imported private-key accounts only when includeImported is explicit", () => {
-    AccountManager.createAccount("alice");
-    const imported = AccountManager.loadAccountFromPrivateKey(TEST_KEY_A);
+    mgr.createAccount("alice");
+    const imported = mgr.loadAccountFromPrivateKey(TEST_KEY_A);
 
     const poolDir = join(tmpDir, "accounts-with-imported");
-    AccountManager.saveAccountPool(poolDir, { includeImported: true });
+    mgr.saveAccountPool(poolDir, { includeImported: true });
 
     const poolData = JSON.parse(
       readFileSync(join(poolDir, "test-pool.json"), "utf-8")
@@ -96,77 +100,69 @@ describe("AccountManager.saveAccountPool", () => {
   });
 });
 
-const TEST_KEY_A =
-  "0x0000000000000000000000000000000000000000000000000000000000000001";
-const TEST_KEY_B =
-  "0x0000000000000000000000000000000000000000000000000000000000000002";
-
 describe("AccountManager — create / lookup / label", () => {
-  beforeEach(() => {
-    AccountManager.clearPool();
-  });
+  let mgr: AccountManager;
 
-  afterEach(() => {
-    AccountManager.clearPool();
+  beforeEach(() => {
+    mgr = new AccountManager();
   });
 
   it("getTestAccount(label) creates on first call, returns the same on second", () => {
-    const first = AccountManager.getTestAccount("alice");
-    const second = AccountManager.getTestAccount("alice");
+    const first = mgr.getTestAccount("alice");
+    const second = mgr.getTestAccount("alice");
     expect(second.accountAddress.toString()).toBe(first.accountAddress.toString());
   });
 
   it("getTestAccount() with no label creates a fresh unlabeled account", () => {
-    const a = AccountManager.getTestAccount();
-    const b = AccountManager.getTestAccount();
+    const a = mgr.getTestAccount();
+    const b = mgr.getTestAccount();
     expect(a.accountAddress.toString()).not.toBe(b.accountAddress.toString());
   });
 
   it("createAccount tracks the new account in the pool", () => {
-    expect(AccountManager.getPoolSize()).toBe(0);
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
-    expect(AccountManager.getPoolSize()).toBe(2);
+    expect(mgr.getPoolSize()).toBe(0);
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
+    expect(mgr.getPoolSize()).toBe(2);
   });
 
   it("getAccountByLabel returns undefined for an unknown label", () => {
-    expect(AccountManager.getAccountByLabel("missing")).toBeUndefined();
+    expect(mgr.getAccountByLabel("missing")).toBeUndefined();
   });
 
   it("getLabeledAccounts returns a map of every labeled account", () => {
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
-    AccountManager.createAccount(); // unlabeled — should NOT appear
-    const labeled = AccountManager.getLabeledAccounts();
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
+    mgr.createAccount(); // unlabeled — should NOT appear
+    const labeled = mgr.getLabeledAccounts();
     expect(Object.keys(labeled).sort()).toEqual(["alice", "bob"]);
   });
 
   it("hasLabel reflects the label map state", () => {
-    expect(AccountManager.hasLabel("alice")).toBe(false);
-    AccountManager.createAccount("alice");
-    expect(AccountManager.hasLabel("alice")).toBe(true);
+    expect(mgr.hasLabel("alice")).toBe(false);
+    mgr.createAccount("alice");
+    expect(mgr.hasLabel("alice")).toBe(true);
   });
 
   it("getOrCreateLabeled returns the existing labeled account on second call", () => {
-    const first = AccountManager.getOrCreateLabeled("alice");
-    const second = AccountManager.getOrCreateLabeled("alice");
+    const first = mgr.getOrCreateLabeled("alice");
+    const second = mgr.getOrCreateLabeled("alice");
     expect(second.accountAddress.toString()).toBe(first.accountAddress.toString());
-    expect(AccountManager.getPoolSize()).toBe(1);
+    expect(mgr.getPoolSize()).toBe(1);
   });
 
   it("createBatch creates one account per label and returns the map", () => {
-    const accounts = AccountManager.createBatch(["alice", "bob", "charlie"]);
+    const accounts = mgr.createBatch(["alice", "bob", "charlie"]);
     expect(Object.keys(accounts).sort()).toEqual(["alice", "bob", "charlie"]);
-    expect(AccountManager.getPoolSize()).toBe(3);
+    expect(mgr.getPoolSize()).toBe(3);
   });
 
   it("getAllAccounts returns every account in insertion order", () => {
-    const a = AccountManager.createAccount("alice");
-    const b = AccountManager.createAccount("bob");
-    const addrs = AccountManager.getAllAccounts().map((acc) =>
+    const a = mgr.createAccount("alice");
+    const b = mgr.createAccount("bob");
+    const addrs = mgr.getAllAccounts().map((acc) =>
       acc.accountAddress.toString()
     );
-    // Insertion order is preserved by the underlying Map iteration.
     expect(addrs).toEqual([
       a.accountAddress.toString(),
       b.accountAddress.toString(),
@@ -174,39 +170,39 @@ describe("AccountManager — create / lookup / label", () => {
   });
 
   it("clearPool resets pool, label map, and poolLoaded flag", () => {
-    AccountManager.createAccount("alice");
-    expect(AccountManager.getPoolSize()).toBe(1);
-    AccountManager.clearPool();
-    expect(AccountManager.getPoolSize()).toBe(0);
-    expect(AccountManager.hasLabel("alice")).toBe(false);
+    mgr.createAccount("alice");
+    expect(mgr.getPoolSize()).toBe(1);
+    mgr.clearPool();
+    expect(mgr.getPoolSize()).toBe(0);
+    expect(mgr.hasLabel("alice")).toBe(false);
   });
 });
 
 describe("AccountManager — load from env / key / config", () => {
+  let mgr: AccountManager;
   let origEnv: string | undefined;
 
   beforeEach(() => {
-    AccountManager.clearPool();
+    mgr = new AccountManager();
     origEnv = process.env.PRIVATE_KEY;
     delete process.env.PRIVATE_KEY;
   });
 
   afterEach(() => {
-    AccountManager.clearPool();
     if (origEnv === undefined) delete process.env.PRIVATE_KEY;
     else process.env.PRIVATE_KEY = origEnv;
   });
 
   it("loadAccountFromEnv reads from PRIVATE_KEY by default", () => {
     process.env.PRIVATE_KEY = TEST_KEY_A;
-    const acc = AccountManager.loadAccountFromEnv();
+    const acc = mgr.loadAccountFromEnv();
     expect(acc.accountAddress.toString()).toMatch(/^0x[a-f0-9]+$/i);
   });
 
   it("loadAccountFromEnv reads from a custom env var name", () => {
     process.env.MY_CUSTOM_KEY = TEST_KEY_A;
     try {
-      const acc = AccountManager.loadAccountFromEnv("MY_CUSTOM_KEY");
+      const acc = mgr.loadAccountFromEnv("MY_CUSTOM_KEY");
       expect(acc.accountAddress.toString()).toMatch(/^0x[a-f0-9]+$/i);
     } finally {
       delete process.env.MY_CUSTOM_KEY;
@@ -214,22 +210,22 @@ describe("AccountManager — load from env / key / config", () => {
   });
 
   it("loadAccountFromEnv throws when the env var is unset", () => {
-    expect(() => AccountManager.loadAccountFromEnv("DEFINITELY_NOT_SET")).toThrow(
+    expect(() => mgr.loadAccountFromEnv("DEFINITELY_NOT_SET")).toThrow(
       /not found/
     );
   });
 
   it("loadAccountFromPrivateKey adds the account to the pool", () => {
-    expect(AccountManager.getPoolSize()).toBe(0);
-    AccountManager.loadAccountFromPrivateKey(TEST_KEY_A);
-    expect(AccountManager.getPoolSize()).toBe(1);
+    expect(mgr.getPoolSize()).toBe(0);
+    mgr.loadAccountFromPrivateKey(TEST_KEY_A);
+    expect(mgr.getPoolSize()).toBe(1);
   });
 
   it("loadAccountsFromConfig loads every valid key", () => {
     const config = {
       allAccounts: [TEST_KEY_A, TEST_KEY_B],
     } as unknown as MovehatConfig;
-    const accounts = AccountManager.loadAccountsFromConfig(config);
+    const accounts = mgr.loadAccountsFromConfig(config);
     expect(accounts).toHaveLength(2);
   });
 
@@ -238,7 +234,7 @@ describe("AccountManager — load from env / key / config", () => {
     const config = {
       allAccounts: [TEST_KEY_A, "not-a-real-key"],
     } as unknown as MovehatConfig;
-    const accounts = AccountManager.loadAccountsFromConfig(config);
+    const accounts = mgr.loadAccountsFromConfig(config);
     expect(accounts).toHaveLength(1);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringMatching(/Failed to load account from config/)
@@ -249,57 +245,59 @@ describe("AccountManager — load from env / key / config", () => {
 
 describe("AccountManager.loadAccountPool / exportPrivateKeys", () => {
   let tmpDir: string;
+  let mgr: AccountManager;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "movehat-acc-load-"));
-    AccountManager.clearPool();
+    mgr = new AccountManager();
   });
 
   afterEach(() => {
-    AccountManager.clearPool();
     if (existsSync(tmpDir)) {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
   it("loadAccountPool returns false when the file does not exist", () => {
-    expect(AccountManager.loadAccountPool(tmpDir)).toBe(false);
+    expect(mgr.loadAccountPool(tmpDir)).toBe(false);
   });
 
   it("loadAccountPool restores accounts and labels from disk", () => {
-    // Plant a pool via save → clear → load round-trip.
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
     const poolDir = join(tmpDir, "accounts");
-    AccountManager.saveAccountPool(poolDir);
-    AccountManager.clearPool();
-    expect(AccountManager.getPoolSize()).toBe(0);
+    mgr.saveAccountPool(poolDir);
 
-    const ok = AccountManager.loadAccountPool(poolDir);
+    // Load into a fresh manager instance to prove the round-trip works
+    // across boundaries, not just on the same in-memory pool.
+    const restored = new AccountManager();
+    const ok = restored.loadAccountPool(poolDir);
     expect(ok).toBe(true);
-    expect(AccountManager.getPoolSize()).toBe(2);
-    expect(AccountManager.hasLabel("alice")).toBe(true);
-    expect(AccountManager.hasLabel("bob")).toBe(true);
+    expect(restored.getPoolSize()).toBe(2);
+    expect(restored.hasLabel("alice")).toBe(true);
+    expect(restored.hasLabel("bob")).toBe(true);
   });
 
   it("loadAccountPool is a no-op when poolLoaded is already true", () => {
-    AccountManager.createAccount("alice");
+    mgr.createAccount("alice");
     const poolDir = join(tmpDir, "accounts");
-    AccountManager.saveAccountPool(poolDir);
-    expect(AccountManager.loadAccountPool(poolDir)).toBe(true);
+    mgr.saveAccountPool(poolDir);
+
+    const restored = new AccountManager();
+    expect(restored.loadAccountPool(poolDir)).toBe(true);
     // Second call short-circuits via the poolLoaded flag.
-    expect(AccountManager.loadAccountPool(poolDir)).toBe(true);
+    expect(restored.loadAccountPool(poolDir)).toBe(true);
   });
 
   it("loadAccountPool returns false and warns on corrupt JSON", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const poolDir = join(tmpDir, "accounts");
-    // mkdir then write a deliberately malformed test-pool.json.
-    AccountManager.createAccount("alice");
-    AccountManager.saveAccountPool(poolDir);
+    mgr.createAccount("alice");
+    mgr.saveAccountPool(poolDir);
     writeFileSync(join(poolDir, "test-pool.json"), "{ not valid json");
-    AccountManager.clearPool();
-    expect(AccountManager.loadAccountPool(poolDir)).toBe(false);
+
+    const restored = new AccountManager();
+    expect(restored.loadAccountPool(poolDir)).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringMatching(/Failed to load account pool/)
     );
@@ -307,9 +305,9 @@ describe("AccountManager.loadAccountPool / exportPrivateKeys", () => {
   });
 
   it("exportPrivateKeys returns every labeled account's key when called with no args", () => {
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
-    const exported = AccountManager.exportPrivateKeys();
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
+    const exported = mgr.exportPrivateKeys();
     expect(Object.keys(exported).sort()).toEqual(["alice", "bob"]);
     for (const key of Object.values(exported)) {
       expect(typeof key).toBe("string");
@@ -318,15 +316,15 @@ describe("AccountManager.loadAccountPool / exportPrivateKeys", () => {
   });
 
   it("exportPrivateKeys filters by labels when an array is passed", () => {
-    AccountManager.createAccount("alice");
-    AccountManager.createAccount("bob");
-    AccountManager.createAccount("charlie");
-    const exported = AccountManager.exportPrivateKeys(["alice", "charlie"]);
+    mgr.createAccount("alice");
+    mgr.createAccount("bob");
+    mgr.createAccount("charlie");
+    const exported = mgr.exportPrivateKeys(["alice", "charlie"]);
     expect(Object.keys(exported).sort()).toEqual(["alice", "charlie"]);
   });
 
   it("exportPrivateKeys with an unknown label returns an empty map", () => {
-    const exported = AccountManager.exportPrivateKeys(["missing"]);
+    const exported = mgr.exportPrivateKeys(["missing"]);
     expect(exported).toEqual({});
   });
 });
