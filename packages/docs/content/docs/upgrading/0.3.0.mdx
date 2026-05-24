@@ -147,6 +147,10 @@ If your tests previously relied on label sharing across `Harness` instances (e.g
 - Share the same `Harness` instance across the tests that need the same accounts, or
 - Save the pool from the first manager (`mgr.saveAccountPool(path)`) and load it into the second (`other.loadAccountPool(path)`).
 
+### `harness.accounts` is a snapshot, not a live view
+
+`harness.accounts` captures the labeled accounts at Harness construction time. Accounts created later via `harness.runtime.accountManager.createAccount("late_label")` are **not** retroactively added to `harness.accounts`. If you create accounts after construction, access them through `harness.runtime.accountManager.getAccountByLabel("late_label")` (or destructure them into a separate local map). This is intentional — the snapshot pattern makes the common-case destructuring (`const { alice, bob } = harness.accounts`) safe by guaranteeing the shape never mutates underneath the caller.
+
 ## `process.chdir` and `poolPath`
 
 The static facade captured `process.cwd()` eagerly at module import time (audit finding F8(b)), so `process.chdir()` between import and `saveAccountPool()` had no effect. The instance API resolves `poolPath` lazily on each call, so `process.chdir()` between construction and save is respected:
