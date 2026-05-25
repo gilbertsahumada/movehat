@@ -329,48 +329,6 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
 
-### M9 — AccountManager instance-per-Harness + 0.3.0 BREAKING (~2 weeks, issue [#270](https://github.com/gilbertsahumada/movehat/issues/270))
-**Goal**: Close audit finding F8 ([#213](https://github.com/gilbertsahumada/movehat/issues/213)) — replace the process-wide static `AccountManager` with a per-instance manager owned by each `Harness`. Ships across two minor releases (0.2.7 additive + deprecation, 0.3.0 BREAKING removal) to honor the MAINTENANCE.md §6 one-minor-release deprecation window.
-
-**Definition of Done**:
-- [x] `packages/movehat/src/core/AccountManager.ts` no longer holds account pool / label map / private-key map on class-static fields (M9.1)
-- [x] `harness/Harness.ts` docstring updated — the "two Harness instances in the same process share account labels" caveat is gone (M9.2)
-- [x] New constructor signature `new AccountManager({ poolPath?: string })` per harness instance; existing static methods deprecated with runtime warning in the 0.2.7 patch (M9.1 + M9.3)
-- [x] All internal callers migrated to instance methods (M9.2 — Harness, runtime, helpers, testFixtures)
-- [x] `defaultPoolPath` no longer evaluated at module import — derived per-instance from `process.cwd()` (or a passed override) so `process.chdir()` between instances works (M9.1 lazy getter)
-- [x] Regression test: two `new AccountManager()` instances with different cwds get independent account pools (M9.1 `AccountManager.instance-isolation.test.ts`)
-- [x] `harness.accounts: Readonly<Record<string, Account>>` snapshot exposed; `harness.runtime.accountManager` reachable (M9.2)
-- [x] Template (`movehat init`) + canonical example + 5 docs MDX files migrated to `harness.accounts.<label>` (M9.3)
-- [x] CHANGELOG `[0.2.7]` entries for the additive + deprecation work; CHANGELOG `[Unreleased] ### Breaking` entry for the removal (M9.4)
-- [x] AccountManager static facade removed (M9.4) — `AccountManager.<method>()` now throws `TypeError`
-- [x] `_resetDeprecationWarnings` + `__defaultManager` + `__warnDeprecated` deleted (M9.4)
-- [x] `AccountManager.deprecation.test.ts` deleted; F8 pinning block in `global-state.test.ts` deleted; per-instance isolation tests preserved in `AccountManager.instance-isolation.test.ts` (M9.4)
-- [x] Migration guide at `/docs/upgrading/0.3.0` with before/after for common + advanced cases + FAQ (M9.4)
-- [ ] `develop → main` batch PR opened ≥2026-06-22 (after deprecation window elapses) — M9.4 pending push
-- [ ] `release/0.3.0` PR — version bump 0.2.7 → 0.3.0, CHANGELOG `[Unreleased]` → `[0.3.0] - YYYY-MM-DD` — M9.4 pending push
-- [ ] 0.3.0 published to npm with SLSA v1 provenance — M9.4 pending push
-
-**Sub-PRs**:
-
-| Sub | Description | Issue | Status |
-|---|---|---|---|
-| M9.1 | Instance API + singleton facade (additive, 0.2.7) | [#277](https://github.com/gilbertsahumada/movehat/issues/277) | ✅ shipped in PR #278 |
-| M9.2 | Internal callers migrated + `harness.accounts` snapshot + `runtime.accountManager` | [#279](https://github.com/gilbertsahumada/movehat/issues/279) | ✅ shipped in PR #280 |
-| M9.2-polish | `Readonly<Record>` tightening + switchNetwork preservation test | [#282](https://github.com/gilbertsahumada/movehat/issues/282) | ✅ shipped in PR #282 |
-| M9.3 | Deprecation warnings + template/example/docs migration | [#281](https://github.com/gilbertsahumada/movehat/issues/281), [#283](https://github.com/gilbertsahumada/movehat/issues/283) | ✅ shipped in PR #284 |
-| M9.3-fix | CR triage — `console.warn` → `logger.warning` + CHANGELOG type fix | [#287](https://github.com/gilbertsahumada/movehat/issues/287) | ✅ shipped in PR #287 |
-| M9.4 | Remove static facade + migration guide + 0.3.0 BREAKING release | TBD (file before push) | 🟡 implemented locally, pending push ≥2026-06-22 |
-
-**Release flow** — M9 spans two npm releases:
-
-- **0.2.7** (shipped 2026-05-22 via PR #288): M9.1 + M9.2 + M9.2-polish + M9.3 + M9.3-fix. Additive instance API + deprecation warnings on the static facade. No behavior change for existing callers.
-- **0.3.0** (target 2026-06-22+): M9.4. Static facade removed; downstream callers must migrate per `/docs/upgrading/0.3.0`.
-
-**Follow-up issues filed during M9**:
-- None yet. M9.4 implementation may surface edge cases for `/docs/upgrading/0.3.0` — those land as 0.3.x doc patches.
-
-**Out of scope**: issue [#55](https://github.com/gilbertsahumada/movehat/issues/55) (broader singletons sweep — `cachedRuntime`, `currentForkServer`); issue [#212](https://github.com/gilbertsahumada/movehat/issues/212) (`movehat compile` Move.toml mutation product decision); issue [#192](https://github.com/gilbertsahumada/movehat/issues/192) (writable fork). All deferred to post-0.3.0 milestones.
-
 ---
 
 ## Critical issues bound to milestones
@@ -395,10 +353,10 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 ## Execution order
 
 ```
-M0 → M1 → M2 → M3 → M4 → M5 → M6 → M8 → M9
+M0 → M1 → M2 → M3 → M4 → M5 → M6 → M8
 ```
 
-M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize. M7 runs continuously across all milestones. M8 is the KPI 2 delivery and depends on M5/M6 (docs site + release pipeline) being live. M9 closes audit finding F8 across the 0.2.7/0.3.0 release boundary.
+M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize. M7 runs continuously across all milestones. M8 is the KPI 2 delivery and depends on M5/M6 (docs site + release pipeline) being live.
 
 ## Risks
 

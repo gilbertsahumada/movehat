@@ -56,6 +56,7 @@ describe("initRuntime", () => {
     tmpCwd = mkdtempSync(join(tmpdir(), "movehat-runtime-test-"));
     process.chdir(tmpCwd);
     _resetConfigCache();
+    AccountManager.clearPool();
     writeConfig(tmpCwd, CONFIG_TWO_NETWORKS_TWO_ACCOUNTS);
   });
 
@@ -63,6 +64,7 @@ describe("initRuntime", () => {
     process.chdir(origCwd);
     rmSync(tmpCwd, { recursive: true, force: true });
     _resetConfigCache();
+    AccountManager.clearPool();
   });
 
   it("returns a runtime bound to defaultNetwork when no network is passed", async () => {
