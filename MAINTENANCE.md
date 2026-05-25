@@ -48,6 +48,8 @@ Public-API symbols (anything re-exported from `packages/movehat/src/index.ts`) f
 
 Precedent: the `mh()` legacy runtime helper was `@deprecated` from M2 onward (during the pre-`0.1.0` `0.0.0-dev` phase) and removed in M6 with the `0.0.0-dev → 0.1.0` bump. The deprecation window plus the version-bump signal gave downstream users a clear migration path. See [ROADMAP.md](./ROADMAP.md) §M2 and §M6 for the implementation arc.
 
+Pre-1.0 exception: deprecation may be indefinite when the cost of removal outweighs the benefit. The `AccountManager` static facade (deprecated in 0.2.7) has no planned removal date — the warning guides users toward the instance API but existing code continues to work.
+
 For internal symbols (anything not re-exported from `index.ts`), no deprecation window applies — breaking internal changes can ship in patch releases.
 
 ## Movement CLI compatibility
