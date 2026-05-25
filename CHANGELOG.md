@@ -18,10 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.7] - 2026-05-22
 
-Post-0.2.6 polish batch — 6 audit-pass / cleanup items closed without
-public API change. All additive or docs-only; shipped to `main` in
-PR #274 on 2026-05-21. Backfilled 2026-05-22 when the per-PR CHANGELOG
-convention was adopted (see CLAUDE.md §11).
+M9 milestone progress (issue #270) — per-Harness `AccountManager`
+isolation foundation with backward-compatible deprecation warnings on
+the static facade. New projects on 0.2.7 get the forward-compatible
+`harness.accounts.<label>` pattern; existing projects keep working
+unchanged but see a one-time `logger.warning` per static method called.
+Closes audit finding F8(a) for instance-API users.
+
+Also lands the per-PR CHANGELOG convention (CLAUDE.md §11) and
+backfills the post-0.2.6 polish entries (PR #274 closures).
 
 ### Added
 
