@@ -329,6 +329,29 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 
 **Out of scope**: issue #235 mocha root-hooks, issue #223 console.* sweep, factory rename, `createLive`-in-test runtime guard, anvil-lite exploration, mainnet deploy as evidence.
 
+### M9 — AccountManager instance-per-Harness (issue [#270](https://github.com/gilbertsahumada/movehat/issues/270))
+**Goal**: Close audit finding F8 ([#213](https://github.com/gilbertsahumada/movehat/issues/213)) — add a per-instance `AccountManager` alongside the existing static facade. The static facade stays deprecated-but-functional indefinitely (no BREAKING removal planned).
+
+**Definition of Done**:
+- [x] Instance API `new AccountManager(options?)` with isolated pool (M9.1)
+- [x] All internal callers migrated to instance API (M9.2)
+- [x] `harness.accounts: Readonly<Record<string, Account>>` snapshot + `runtime.accountManager` (M9.2)
+- [x] Static facade emits once-per-method deprecation `logger.warning` (M9.3)
+- [x] Template + example + 5 docs MDX pages migrated to `harness.accounts.<label>` (M9.3)
+
+**Sub-PRs**:
+
+| Sub | Description | Issue | Status |
+|---|---|---|---|
+| M9.1 | Instance API + singleton facade (additive, 0.2.7) | [#277](https://github.com/gilbertsahumada/movehat/issues/277) | ✅ shipped in PR #278 |
+| M9.2 | Internal callers migrated + `harness.accounts` + `runtime.accountManager` | [#279](https://github.com/gilbertsahumada/movehat/issues/279) | ✅ shipped in PR #280 |
+| M9.2-polish | `Readonly<Record>` tightening + switchNetwork preservation test | [#282](https://github.com/gilbertsahumada/movehat/issues/282) | ✅ shipped in PR #282 |
+| M9.3 | Deprecation warnings + template/example/docs migration | [#281](https://github.com/gilbertsahumada/movehat/issues/281), [#283](https://github.com/gilbertsahumada/movehat/issues/283) | ✅ shipped in PR #284 |
+| M9.3-fix | CR triage — `console.warn` → `logger.warning` + CHANGELOG type fix | [#287](https://github.com/gilbertsahumada/movehat/issues/287) | ✅ shipped in PR #287 |
+| M9.4 | Remove static facade + 0.3.0 BREAKING | [#289](https://github.com/gilbertsahumada/movehat/issues/289) | ❌ cancelled — reverted in PR #291; static facade stays deprecated indefinitely |
+
+**Out of scope**: issue [#55](https://github.com/gilbertsahumada/movehat/issues/55) (broader singletons sweep); issue [#212](https://github.com/gilbertsahumada/movehat/issues/212) (`movehat compile` Move.toml mutation); issue [#192](https://github.com/gilbertsahumada/movehat/issues/192) (writable fork).
+
 ---
 
 ## Critical issues bound to milestones
@@ -353,10 +376,10 @@ Follow-up issues filed during M4 (all upstream Movement CLI / SDK, deferred to M
 ## Execution order
 
 ```
-M0 → M1 → M2 → M3 → M4 → M5 → M6 → M8
+M0 → M1 → M2 → M3 → M4 → M5 → M6 → M8 → M9
 ```
 
-M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize. M7 runs continuously across all milestones. M8 is the KPI 2 delivery and depends on M5/M6 (docs site + release pipeline) being live.
+M3 and M4 may parallelize once M2 lands. M5 and M6 may parallelize. M7 runs continuously across all milestones. M8 is the KPI 2 delivery and depends on M5/M6 (docs site + release pipeline) being live. M9 mitigates audit finding F8 with per-instance isolation; the static facade stays deprecated indefinitely.
 
 ## Risks
 

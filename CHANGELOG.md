@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- M9.4 (PR #290 — AccountManager static-facade removal) reverted.
+  The static facade remains deprecated-but-functional indefinitely.
+  Users see a once-per-method `logger.warning` pointing to
+  `harness.accounts.<label>` / `harness.runtime.accountManager.*`
+  but existing code continues to work without migration. No 0.3.0
+  BREAKING release is planned. Closes #289.
+
 ## [0.2.7] - 2026-05-22
 
 M9 milestone progress (issue #270) — per-Harness `AccountManager`
@@ -14,9 +23,7 @@ isolation foundation with backward-compatible deprecation warnings on
 the static facade. New projects on 0.2.7 get the forward-compatible
 `harness.accounts.<label>` pattern; existing projects keep working
 unchanged but see a one-time `logger.warning` per static method called.
-Closes audit finding F8(a) for instance-API users. Static API removal
-ships in 0.3.0 (M9.4) after a ≥1 month deprecation window per
-MAINTENANCE.md §6.
+Closes audit finding F8(a) for instance-API users.
 
 Also lands the per-PR CHANGELOG convention (CLAUDE.md §11) and
 backfills the post-0.2.6 polish entries (PR #274 closures).
