@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- Complete §9 console UX migration: 14 raw `console.log/error` calls
+  in `commands/test-move.ts`, `helpers/move-tests.ts`,
+  `commands/fork/serve.ts`, and `helpers/version-check.ts` migrated
+  to `logger.*` methods. All remaining `console.*` calls in `src/`
+  are documented §9 exceptions (CLI table output, JSON passthrough,
+  subprocess verbosity gate, banner rendering). Closes #223.
+
 ### Added
 
 - Shared local-node support via mocha root hooks. New `localNode`
