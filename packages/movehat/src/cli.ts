@@ -74,7 +74,7 @@ program
 
 program
     .command('compile')
-    .description('Compile Move smart contracts using Movement CLI')
+    .description('Compile Move smart contracts (auto-detects named addresses and updates Move.toml)')
     .action(compileCommand);
 
 program

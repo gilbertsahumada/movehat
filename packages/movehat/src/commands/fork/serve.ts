@@ -2,6 +2,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { loadUserConfig } from '../../core/config.js';
 import { ForkServer } from '../../fork/server.js';
+import { logger } from '../../ui/index.js';
 
 interface ForkServeOptions {
   fork?: string;
@@ -36,9 +37,11 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
 
     // Verify fork exists
     if (!existsSync(join(forkPath, 'metadata.json'))) {
-      console.error(`\nError: Fork not found at ${forkPath}`);
-      console.error(`\nCreate a fork first with:`);
-      console.error(`  movehat fork create --network <network> --name <name>`);
+      logger.newline();
+      logger.error(`Fork not found at ${forkPath}`);
+      logger.newline();
+      logger.error("Create a fork first with:");
+      logger.error("  movehat fork create --network <network> --name <name>");
       process.exit(1);
     }
 
@@ -51,7 +54,8 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
 
     // Handle graceful shutdown (use 'once' to prevent duplicate shutdowns)
     const shutdown = async () => {
-      console.log('\n\nShutting down...');
+      logger.newline();
+      logger.step("Shutting down...");
       await server.stop();
       process.exit(0);
     };
@@ -74,7 +78,8 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error(`\nError starting fork server:`, msg);
+    logger.newline();
+    logger.error(`Error starting fork server: ${msg}`);
     process.exit(1);
   }
 }
