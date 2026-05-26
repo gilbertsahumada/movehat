@@ -99,13 +99,14 @@ export async function setupLocalTesting(
   logger.newline();
 
   if (mode === 'local-node') {
-    const { runtime, localNode } = await setupWithLocalNode(
+    const { runtime, localNode, ownsNode } = await setupWithLocalNode(
       options, accountLabels, autoFund, defaultBalance
     );
     return {
       runtime,
       localNode,
       teardown: async () => {
+        if (!ownsNode) return;
         logger.newline();
         logger.step("Stopping local testing environment...");
         await localNode.stop();
@@ -140,24 +141,40 @@ async function setupWithLocalNode(
   accountLabels: readonly string[],
   autoFund: boolean,
   defaultBalance: number
-): Promise<{ runtime: MovehatRuntime; localNode: LocalNodeManager }> {
-  const nodeTestDir = options.nodeTestDir || join(process.cwd(), ".movehat", "local-node");
-  const nodeForceRestart = options.nodeForceRestart !== false;
-  const nodeFaucetPort = options.nodeFaucetPort || 8081;
-  const nodeApiPort = options.nodeApiPort || 8080;
-  const nodeReadyPort = options.nodeReadyPort || 8070;
-  const nodeSilent = options.nodeSilent ?? false;
+): Promise<{ runtime: MovehatRuntime; localNode: LocalNodeManager; ownsNode: boolean }> {
+  let localNode: LocalNodeManager;
+  let ownsNode: boolean;
+  let nodeInfo: import("../node/LocalNodeManager.js").LocalNodeInfo;
 
-  const localNode = new LocalNodeManager({
-    testDir: nodeTestDir,
-    forceRestart: nodeForceRestart,
-    faucetPort: nodeFaucetPort,
-    apiPort: nodeApiPort,
-    readyPort: nodeReadyPort,
-    silent: nodeSilent,
-  });
+  if (options.localNode) {
+    localNode = options.localNode;
+    ownsNode = false;
+    if (!localNode.isRunning()) {
+      throw new Error(
+        "localNode was provided but isRunning() is false. " +
+        "Start the node before passing it to setupLocalTesting."
+      );
+    }
+    nodeInfo = localNode.getNodeInfo();
+  } else {
+    const nodeTestDir = options.nodeTestDir || join(process.cwd(), ".movehat", "local-node");
+    const nodeForceRestart = options.nodeForceRestart !== false;
+    const nodeFaucetPort = options.nodeFaucetPort || 8081;
+    const nodeApiPort = options.nodeApiPort || 8080;
+    const nodeReadyPort = options.nodeReadyPort || 8070;
+    const nodeSilent = options.nodeSilent ?? false;
 
-  const nodeInfo = await localNode.start();
+    localNode = new LocalNodeManager({
+      testDir: nodeTestDir,
+      forceRestart: nodeForceRestart,
+      faucetPort: nodeFaucetPort,
+      apiPort: nodeApiPort,
+      readyPort: nodeReadyPort,
+      silent: nodeSilent,
+    });
+    ownsNode = true;
+    nodeInfo = await localNode.start();
+  }
 
   // Once the node is up, every later step (account creation, funding,
   // runtime init, autoDeploy) is fallible. If any of them throws we
@@ -246,11 +263,11 @@ async function setupWithLocalNode(
     logger.plain(`   Balance per account: ${defaultBalance / 100_000_000} MOVE`);
     logger.newline();
 
-    return { runtime, localNode };
+    return { runtime, localNode, ownsNode };
   } catch (error) {
-    // Best-effort cleanup. Swallow the stop() error so the original
-    // setup failure surfaces unchanged.
-    await localNode.stop().catch(() => {});
+    if (ownsNode) {
+      await localNode.stop().catch(() => {});
+    }
     throw error;
   }
 }

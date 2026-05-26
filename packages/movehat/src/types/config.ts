@@ -46,6 +46,9 @@ export type LocalTestingMode = 'local-node' | 'fork';
 export interface LocalTestOptions {
     mode?: LocalTestingMode;            // Testing mode: 'local-node' (full blockchain) or 'fork' (read-only snapshot) (default: 'local-node')
 
+    // Shared node (when mode='local-node')
+    localNode?: import("../node/LocalNodeManager.js").LocalNodeManager; // Pre-started node to reuse; skips spawn when provided
+
     // Local Node options (when mode='local-node')
     nodeTestDir?: string;               // Directory for node data (default: .movehat/local-node)
     nodeForceRestart?: boolean;         // Clean node state and start fresh (default: true)

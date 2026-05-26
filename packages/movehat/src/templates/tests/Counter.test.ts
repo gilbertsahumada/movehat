@@ -2,6 +2,7 @@
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
 import { Harness } from "movehat";
+import { getSharedNode } from "./setup.js";
 
 describe("Counter Contract", () => {
   let harness;
@@ -9,16 +10,12 @@ describe("Counter Contract", () => {
   let deployer, alice, bob;
 
   before(async function () {
-    this.timeout(60000); // Allow time for local node startup + deployment
+    this.timeout(60000);
 
-    // Hardhat-style Harness — the primary public API.
-    // createLocal spins up a Movement local node, funds the labeled
-    // accounts from the local faucet, and (via autoDeploy) builds +
-    // publishes the named modules so they're ready to use.
-    //
-    // The setupTestFixture helper still works if you prefer the older
-    // pattern; see `import { setupTestFixture } from "movehat/helpers"`.
+    // Reuses the shared Movement node started by root hooks (tests/setup.ts).
+    // Each spec still gets its own accounts + deployments for isolation.
     harness = await Harness.createLocal({
+      localNode: getSharedNode(),
       accountLabels: ["deployer", "alice", "bob"],
       autoDeploy: ["counter"],
     });

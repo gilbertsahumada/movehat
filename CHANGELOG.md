@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shared local-node support via mocha root hooks. New `localNode`
+  option on `LocalTestOptions` lets `Harness.createLocal()` and
+  `setupTestFixture()` reuse a pre-started `LocalNodeManager`
+  instead of spawning a new one per test file. `movehat init` now
+  scaffolds a `tests/setup.ts` root hooks file that starts one
+  Movement node for the entire test suite and stops it at the end.
+  `Harness.cleanup()` is ownership-aware: when the node was injected
+  via `localNode`, cleanup poisons the harness but does not stop the
+  shared node. Reduces test-suite wall-clock time by ~50% for
+  multi-file projects (e.g. 3 specs: ~65s -> ~30s). Closes #235.
+
 ### Changed
 
 - M9.4 (PR #290 — AccountManager static-facade removal) reverted.

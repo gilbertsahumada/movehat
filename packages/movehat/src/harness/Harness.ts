@@ -25,6 +25,7 @@ interface HarnessInit {
   mode: HarnessMode;
   runtime: MovehatRuntime;
   localNode?: LocalNodeManager;
+  ownsLocalNode?: boolean;
   forkServer?: ForkServer;
   forkManager?: ForkManager;
 }
@@ -82,11 +83,13 @@ export class Harness {
   public readonly forkManager?: ForkManager;
 
   private _poisoned = false;
+  private readonly ownsLocalNode: boolean;
 
   private constructor(init: HarnessInit) {
     this.mode = init.mode;
     this.runtime = init.runtime;
     this.accounts = init.runtime.accountManager.getLabeledAccounts();
+    this.ownsLocalNode = init.ownsLocalNode ?? true;
     if (init.localNode) this.localNode = init.localNode;
     if (init.forkServer) this.forkServer = init.forkServer;
     if (init.forkManager) this.forkManager = init.forkManager;
@@ -109,6 +112,7 @@ export class Harness {
     const init: HarnessInit = {
       mode: "local",
       runtime: ctx.runtime,
+      ownsLocalNode: !options.localNode,
     };
     if (ctx.localNode) init.localNode = ctx.localNode;
     const instance = new Harness(init);
@@ -188,7 +192,7 @@ export class Harness {
   async cleanup(): Promise<void> {
     if (this._poisoned) return;
     this._poisoned = true;
-    if (this.localNode) {
+    if (this.localNode && this.ownsLocalNode) {
       await this.localNode.stop().catch(() => {});
     }
     if (this.forkServer) {
