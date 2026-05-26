@@ -5,6 +5,7 @@ import type { MovehatRuntime } from "../types/runtime.js";
 import { ForkManager } from "../fork/manager.js";
 import { ForkServer } from "../fork/server.js";
 import { LocalNodeManager } from "../node/LocalNodeManager.js";
+import type { LocalNodeInfo } from "../node/LocalNodeManager.js";
 import { AccountManager } from "../core/AccountManager.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
@@ -144,7 +145,7 @@ async function setupWithLocalNode(
 ): Promise<{ runtime: MovehatRuntime; localNode: LocalNodeManager; ownsNode: boolean }> {
   let localNode: LocalNodeManager;
   let ownsNode: boolean;
-  let nodeInfo: import("../node/LocalNodeManager.js").LocalNodeInfo;
+  let nodeInfo: LocalNodeInfo;
 
   if (options.localNode) {
     localNode = options.localNode;

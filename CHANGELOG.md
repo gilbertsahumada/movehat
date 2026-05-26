@@ -17,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Movement node for the entire test suite and stops it at the end.
   `Harness.cleanup()` is ownership-aware: when the node was injected
   via `localNode`, cleanup poisons the harness but does not stop the
-  shared node. Reduces test-suite wall-clock time by ~50% for
-  multi-file projects (e.g. 3 specs: ~65s -> ~30s). Closes #235.
+  shared node. Reduces test-suite wall-clock time by ~23% for 3
+  specs (~65s -> ~50s), scaling to ~50%+ at 10+ specs. Closes #235.
 
 ### Changed
 
