@@ -1,15 +1,17 @@
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
 import { setupTestFixture, type TestFixture } from "movehat/helpers";
+import { getSharedNode } from "./setup.js";
 
 describe("Greeting Contract", () => {
   let fixture: TestFixture<'greeting'>;
 
   before(async function () {
-    this.timeout(90000); // Allow time for local node startup + deployment
+    this.timeout(60000);
 
-    // Setup local testing environment with auto-deployment
-    fixture = await setupTestFixture(['greeting'] as const, ['alice', 'bob']);
+    fixture = await setupTestFixture(['greeting'] as const, ['alice', 'bob'], {
+      localNode: getSharedNode(),
+    });
 
     console.log(`\n✅ Testing Greeting Contract on local blockchain`);
     console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
