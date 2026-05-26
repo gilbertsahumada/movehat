@@ -29,7 +29,15 @@ module counter::counter {
 }
 ```
 
-Movehat detects `counter` as a named address. No manual configuration needed — just like Hardhat.
+Movehat detects `counter` as a named address. No manual configuration needed -- just like Hardhat.
+
+## Move.toml Auto-Update
+
+Movehat automatically updates your `Move.toml` when it detects named addresses that are missing from the `[addresses]` or `[dev-addresses]` sections. This ensures the Movement CLI can resolve every named address at compile time.
+
+For example, if your Move source declares `module counter::counter` but `Move.toml` has no `[addresses]` entry for `counter`, Movehat adds it with a placeholder dev address (`0xcafe`) before invoking the compiler. The mutation is idempotent -- running `movehat compile` multiple times produces the same result.
+
+This is intentional Hardhat-style UX: the framework manages build configuration so you can focus on writing Move code.
 
 ## Prerequisites
 

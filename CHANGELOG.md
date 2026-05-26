@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Docs
+
+- Document that `movehat compile` auto-updates `Move.toml` with
+  detected named addresses. New "Move.toml Auto-Update" section in
+  `/docs/cli/compile`. CLI `--help` description updated to mention
+  the behavior. Closes #212.
+
 ### Added
 
 - Shared local-node support via mocha root hooks. New `localNode`
