@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { resolve } from "path";
 import { loadUserConfig } from "../core/config.js";
 import { runCli } from "../utils/runCli.js";
+import { logger } from "../ui/index.js";
 
 interface RunMoveTestsOptions {
   filter?: string | undefined;
@@ -20,8 +21,9 @@ export async function runMoveTests(options: RunMoveTestsOptions = {}): Promise<v
 
   if (!existsSync(moveDir)) {
     if (options.skipIfMissing) {
-      console.log("⊘ No Move directory found (./move not found)");
-      console.log("   Skipping Move tests...\n");
+      logger.info("No Move directory found (./move not found)");
+      logger.plain("   Skipping Move tests...");
+      logger.newline();
       return;
     } else {
       throw new Error(
@@ -58,13 +60,14 @@ export async function runMoveTests(options: RunMoveTestsOptions = {}): Promise<v
   } catch (error) {
     // Spawn-time failure (ENOENT, etc.). The original code logged a
     // Movement-CLI-install hint here; keep that.
-    console.error(`Failed to run Move tests: ${(error as Error).message}`);
-    console.error("   Make sure Movement CLI is installed");
+    logger.error(`Failed to run Move tests: ${(error as Error).message}`);
+    logger.error("   Make sure Movement CLI is installed");
     throw error;
   }
 
   if (result.exitCode === 0) {
-    console.log("\n✓ Move tests passed");
+    logger.newline();
+    logger.success("Move tests passed");
     return;
   }
 

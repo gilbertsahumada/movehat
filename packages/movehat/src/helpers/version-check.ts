@@ -3,7 +3,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { isNewerVersion } from "./semver-utils.js";
 import { fetchLatestVersion } from "./npm-registry.js";
-import { box, colors, formatCommand } from "../ui/index.js";
+import { box, colors, formatCommand, logger } from "../ui/index.js";
 
 interface VersionCache {
   lastChecked: number;
@@ -89,7 +89,9 @@ export function checkForUpdates(currentVersion: string, packageName: string): vo
         { borderColor: 'warning', padding: 1 }
       );
 
-      console.error('\n' + updateMessage + '\n');
+      logger.newline();
+      logger.warning(updateMessage);
+      logger.newline();
     }
 
     // Update cache in background if needed (doesn't block)
