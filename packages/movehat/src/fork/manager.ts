@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { MovementApiClient } from './api.js';
 import { ForkStorage } from './storage.js';
-import type { ForkMetadata, AccountState } from '../types/fork.js';
+import type { ForkMetadata, AccountState, CoinStore } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
+import { assertCoinStore } from './validation.js';
 
 /**
  * Derive a deterministic 32-byte hex placeholder for the `authentication_key`
@@ -138,7 +139,7 @@ export class ForkManager {
     return accountState;
   }
 
-  async getResource(address: string, resourceType: string): Promise<any> {
+  async getResource(address: string, resourceType: string): Promise<unknown> {
     const normalizedAddress = normalizeAddress(address);
 
     let resource = this.storage.getResource(normalizedAddress, resourceType);
@@ -168,7 +169,7 @@ export class ForkManager {
     return resource;
   }
 
-  async getAllResources(address: string): Promise<Record<string, any>> {
+  async getAllResources(address: string): Promise<Record<string, unknown>> {
     const normalizedAddress = normalizeAddress(address);
 
     let resources = this.storage.getAllResources(normalizedAddress);
@@ -227,16 +228,11 @@ export class ForkManager {
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
-    // Try to get existing coin store. The coin store is a CoinStore<T>
-    // resource whose `data` is Movement-side untyped JSON; we shape it
-    // locally as a structural object with `coin.value: string`.
-    // any: full CoinStore schema lives at the Movement REST boundary —
-    // proper validation deferred to the boundary-validation follow-up of #57.
-    let coinStore: any;
+    let coinStore: CoinStore;
     try {
-      coinStore = await this.getResource(normalizedAddress, resourceType);
+      const raw = await this.getResource(normalizedAddress, resourceType);
+      coinStore = assertCoinStore(raw);
     } catch (error) {
-      // Only catch "not found" errors, rethrow others (network, API, etc.)
       const msg = error instanceof Error ? error.message : String(error);
       if (!msg.includes('not found')) {
         throw error;
@@ -266,7 +262,7 @@ export class ForkManager {
       };
     }
 
-    const currentBalance = BigInt(coinStore.coin.value ?? '0');
+    const currentBalance = BigInt(coinStore.coin.value);
     const newBalance = currentBalance + BigInt(amount);
     coinStore.coin.value = newBalance.toString();
 

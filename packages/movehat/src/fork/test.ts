@@ -136,7 +136,7 @@ export async function viewForkResource(
   account: string,
   resourceType: string,
   options: { adapter?: ChildProcessAdapter } = {}
-): Promise<any> {
+): Promise<unknown> {
   try {
     // runCli uses spawn-with-args (no shell) to prevent command injection.
     const { stdout, stderr, exitCode } = await runCli(

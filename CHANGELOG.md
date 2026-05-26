@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Runtime validation at every fork API and storage boundary. All
+  Movement REST API responses (`getLedgerInfo`, `getAccount`,
+  `getAccountResource`, `getAccountResources`) and on-disk JSON reads
+  (`loadMetadata`, `getAccount`, `listAccounts`) are now validated
+  against their expected shapes before use. Malformed upstream
+  responses throw descriptive errors instead of silently propagating
+  corrupt data. New `CoinStore` interface formalizes the coin-store
+  resource shape; the last `any` in `src/fork/` is eliminated. New
+  `src/fork/validation.ts` with 8 assertion functions. Closes #111.
+
 ### Added
 
 - Shared local-node support via mocha root hooks. New `localNode`

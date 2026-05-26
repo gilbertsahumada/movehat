@@ -3,6 +3,12 @@ import http from 'http';
 import { URL } from 'url';
 import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js';
 import { normalizeAddressShort } from '../utils/address.js';
+import {
+  assertLedgerInfo,
+  assertAccountData,
+  assertAccountResource,
+  assertAccountResourceArray,
+} from './validation.js';
 
 export interface MovementApiClientOptions {
   /** Abort the request after this many ms (default: 30_000). */
@@ -263,7 +269,8 @@ export class MovementApiClient {
    * Get ledger information
    */
   async getLedgerInfo(): Promise<LedgerInfo> {
-    return this.get<LedgerInfo>(this.apiPath('/'));
+    const raw = await this.get<unknown>(this.apiPath('/'));
+    return assertLedgerInfo(raw);
   }
 
   /**
@@ -272,19 +279,21 @@ export class MovementApiClient {
   async getAccount(address: string): Promise<AccountData> {
     const normalizedAddress = normalizeAddressShort(address);
 
-    return this.get<AccountData>(this.apiPath(`/accounts/${normalizedAddress}`));
+    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}`));
+    return assertAccountData(raw);
   }
 
   /**
    * Get a specific account resource
    */
-  async getAccountResource(address: string, resourceType: string): Promise<any> {
+  async getAccountResource(address: string, resourceType: string): Promise<AccountResource> {
     const normalizedAddress = normalizeAddressShort(address);
 
     // URL encode the resource type
     const encodedType = encodeURIComponent(resourceType);
 
-    return this.get<any>(this.apiPath(`/accounts/${normalizedAddress}/resource/${encodedType}`));
+    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resource/${encodedType}`));
+    return assertAccountResource(raw);
   }
 
   /**
@@ -293,7 +302,8 @@ export class MovementApiClient {
   async getAccountResources(address: string): Promise<AccountResource[]> {
     const normalizedAddress = normalizeAddressShort(address);
 
-    return this.get<AccountResource[]>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
+    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
+    return assertAccountResourceArray(raw);
   }
 
   /**
