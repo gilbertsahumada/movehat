@@ -1,4 +1,5 @@
 import { runMoveTests } from "../helpers/move-tests.js";
+import { logger } from "../ui/index.js";
 
 interface TestMoveOptions {
   filter?: string;
@@ -7,7 +8,8 @@ interface TestMoveOptions {
 
 export default async function testMoveCommand(options: TestMoveOptions = {}) {
   try {
-    console.log("Running Move unit tests...\n");
+    logger.step("Running Move unit tests...");
+    logger.newline();
 
     await runMoveTests({
       filter: options.filter,
@@ -17,10 +19,11 @@ export default async function testMoveCommand(options: TestMoveOptions = {}) {
 
     process.exit(0);
   } catch (err) {
-    console.error("\n✗ Move tests failed");
+    logger.newline();
+    logger.error("Move tests failed");
     const msg = err instanceof Error ? err.message : String(err);
     if (msg) {
-      console.error(`   ${msg}`);
+      logger.error(`   ${msg}`);
     }
     process.exit(1);
   }
