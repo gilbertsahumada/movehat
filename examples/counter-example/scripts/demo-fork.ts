@@ -51,14 +51,14 @@ async function main() {
   console.log(`   Resource: Counter\n`);
 
   try {
-    const counterState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE);
-    
+    const counterState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE) as Record<string, unknown>;
+
     console.log("✅ Counter state retrieved!");
     console.log(`   Value: ${counterState.value}\n`);
     console.log("   Raw resource data:");
     console.log(`   ${JSON.stringify(counterState, null, 2)}\n`);
-  } catch (error: any) {
-    console.log(`❌ Could not read Counter: ${error.message}\n`);
+  } catch (error: unknown) {
+    console.log(`❌ Could not read Counter: ${(error as Error).message}\n`);
   }
 
   // Step 3: Try to read a non-existent counter (for a random account)
@@ -71,7 +71,7 @@ async function main() {
   try {
     await fork.getResource(randomAccount, COUNTER_RESOURCE);
     console.log("   ✅ Counter exists (unexpected!)\n");
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.log("   ❌ Counter not found (expected - account hasn't initialized one)\n");
   }
 
@@ -81,16 +81,16 @@ async function main() {
   console.log("   This changes the local fork WITHOUT affecting testnet!\n");
 
   // Read current state
-  const currentState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE);
+  const currentState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE) as Record<string, unknown>;
   const originalValue = currentState.value;
-  
+
   // Modify locally
   currentState.value = "999";
   await fork.setResource(COUNTER_ADDRESS, COUNTER_RESOURCE, currentState);
-  
+
   // Read back
-  const modifiedState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE);
-  
+  const modifiedState = await fork.getResource(COUNTER_ADDRESS, COUNTER_RESOURCE) as Record<string, unknown>;
+
   console.log(`   Original value: ${originalValue}`);
   console.log(`   Modified value: ${modifiedState.value}`);
   console.log("\n   💡 The real testnet contract still has value = " + originalValue);
