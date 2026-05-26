@@ -1,18 +1,17 @@
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { setupTestFixture, type TestFixture } from "movehat/helpers";
+import { getSharedNode } from "./setup.js";
 
 describe("Message Contract", () => {
   let fixture: TestFixture<'message'>;
 
   before(async function () {
-    this.timeout(60000); // Local node startup + auto-deploy
+    this.timeout(60000);
 
-    // Auto-deploy the `message` module (declared in
-    // move/sources/hello_blockchain.move as `module hello_blockchain::message`)
-    // against a fresh local node. Same pattern as Counter.test.ts and
-    // greeting.test.ts — no testnet, no PRIVATE_KEY required.
-    fixture = await setupTestFixture(['message'] as const, []);
+    fixture = await setupTestFixture(['message'] as const, [], {
+      localNode: getSharedNode(),
+    });
   });
 
   describe("get_message", () => {

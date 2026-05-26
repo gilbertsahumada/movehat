@@ -49,10 +49,12 @@ export default async function forkFundCommand(options: ForkFundOptions) {
     // Verify
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
     const coinStore = await forkManager.getResource(options.account, resourceType);
+    const { assertCoinStore } = await import('../../fork/validation.js');
+    const validated = assertCoinStore(coinStore);
 
     logger.newline();
     logger.success("Account funded successfully!");
-    logger.plain(`   New balance: ${coinStore.coin.value}`);
+    logger.plain(`   New balance: ${validated.coin.value}`);
     logger.newline();
 
   } catch (error) {

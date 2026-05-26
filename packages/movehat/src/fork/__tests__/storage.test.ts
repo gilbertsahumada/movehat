@@ -152,9 +152,9 @@ describe('ForkStorage', () => {
     it('should list all accounts', () => {
       vol.fromJSON({
         [`${forkPath}/accounts.json`]: JSON.stringify({
-          '0x1': { sequenceNumber: '0' },
-          '0x2': { sequenceNumber: '5' },
-          '0x3': { sequenceNumber: '10' },
+          '0x1': { sequenceNumber: '0', authenticationKey: '0xaa' },
+          '0x2': { sequenceNumber: '5', authenticationKey: '0xbb' },
+          '0x3': { sequenceNumber: '10', authenticationKey: '0xcc' },
         }),
       });
 
@@ -170,7 +170,7 @@ describe('ForkStorage', () => {
     it('should clear all accounts', () => {
       vol.fromJSON({
         [`${forkPath}/accounts.json`]: JSON.stringify({
-          '0x1': { sequenceNumber: '0' },
+          '0x1': { sequenceNumber: '0', authenticationKey: '0xaa' },
         }),
       });
 

@@ -2,6 +2,7 @@
   "node-option": ["import=tsx"],
   "extensions": ["ts"],
   "spec": ["tests/**/*.test.ts"],
+  "require": ["tests/setup.ts"],
   "timeout": 60000,
   "color": true,
   "reporter": "spec"

@@ -87,8 +87,11 @@ function setupGetCapture(): {
       const body = JSON.stringify({
         chain_id: 250,
         ledger_version: "1",
+        oldest_ledger_version: "0",
         ledger_timestamp: "0",
+        node_role: "full_node",
         epoch: "0",
+        oldest_block_height: "0",
         block_height: "0",
       });
       callback(makeFakeResponse(body));

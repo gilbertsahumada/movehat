@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Runtime validation at every fork API and storage boundary. All
+  Movement REST API responses (`getLedgerInfo`, `getAccount`,
+  `getAccountResource`, `getAccountResources`) and on-disk JSON reads
+  (`loadMetadata`, `getAccount`, `listAccounts`) are now validated
+  against their expected shapes before use. Malformed upstream
+  responses throw descriptive errors instead of silently propagating
+  corrupt data. New `CoinStore` interface formalizes the coin-store
+  resource shape; the last `any` in `src/fork/` is eliminated. New
+  `src/fork/validation.ts` with 8 assertion functions. Closes #111.
+
+### Docs
+
+- Document that `movehat compile` auto-updates `Move.toml` with
+  detected named addresses. New "Move.toml Auto-Update" section in
+  `/docs/cli/compile`. CLI `--help` description updated to mention
+  the behavior. Closes #212.
+
+### Internal
+
+- Complete §9 console UX migration: 14 raw `console.log/error` calls
+  in `commands/test-move.ts`, `helpers/move-tests.ts`,
+  `commands/fork/serve.ts`, and `helpers/version-check.ts` migrated
+  to `logger.*` methods. All remaining `console.*` calls in `src/`
+  are documented §9 exceptions (CLI table output, JSON passthrough,
+  subprocess verbosity gate, banner rendering). Closes #223.
+
+### Added
+
+- Shared local-node support via mocha root hooks. New `localNode`
+  option on `LocalTestOptions` lets `Harness.createLocal()` and
+  `setupTestFixture()` reuse a pre-started `LocalNodeManager`
+  instead of spawning a new one per test file. `movehat init` now
+  scaffolds a `tests/setup.ts` root hooks file that starts one
+  Movement node for the entire test suite and stops it at the end.
+  `Harness.cleanup()` is ownership-aware: when the node was injected
+  via `localNode`, cleanup poisons the harness but does not stop the
+  shared node. Reduces test-suite wall-clock time by ~23% for 3
+  specs (~65s -> ~50s), scaling to ~50%+ at 10+ specs. Closes #235.
+
 ### Changed
 
 - M9.4 (PR #290 — AccountManager static-facade removal) reverted.

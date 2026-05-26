@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirS
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
+import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -128,7 +129,7 @@ export class ForkStorage {
       throw new Error(`Fork metadata not found at ${metadataPath}`);
     }
 
-    return readJsonFile<ForkMetadata>(metadataPath, 'fork metadata');
+    return assertForkMetadata(readJsonFile<unknown>(metadataPath, 'fork metadata'));
   }
 
   /**
@@ -141,7 +142,7 @@ export class ForkStorage {
       return null;
     }
 
-    const accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
+    const accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
     return accounts[address] || null;
   }
 
@@ -153,7 +154,7 @@ export class ForkStorage {
 
     let accounts: Record<string, AccountState> = {};
     if (existsSync(accountsPath)) {
-      accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
+      accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
     }
 
     accounts[address] = state;
@@ -236,7 +237,7 @@ export class ForkStorage {
       return [];
     }
 
-    const accounts = readJsonFile<Record<string, AccountState>>(accountsPath, 'fork accounts');
+    const accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
     return Object.keys(accounts);
   }
 
