@@ -1,6 +1,7 @@
-import { spawn, type ChildProcess } from "child_process";
+import { execSync, spawn, type ChildProcess } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
+import { createRequire } from "module";
 import type { Account } from "@aptos-labs/ts-sdk";
 import type { LocalNodeInfo } from "./LocalNodeManager.js";
 import { logger } from "../ui/index.js";
@@ -9,15 +10,24 @@ export class MvliteManager {
   private process: ChildProcess | null = null;
   private port: number;
   private killed = false;
+  private readonly binaryPath: string;
 
-  constructor(port = 8090) {
+  constructor(binaryPath: string, port = 8090) {
+    this.binaryPath = binaryPath;
     this.port = port;
   }
 
   async start(): Promise<LocalNodeInfo> {
-    const binary = findMvliteBinary();
+    const binary = this.binaryPath;
     if (!binary) {
       throw new Error("mvlite binary not found");
+    }
+
+    if (await this.isPortInUse(this.port)) {
+      this.port = this.port + 1;
+      if (await this.isPortInUse(this.port)) {
+        throw new Error(`Ports ${this.port - 1} and ${this.port} are in use`);
+      }
     }
 
     logger.step("Starting mvlite...");
@@ -95,6 +105,15 @@ export class MvliteManager {
     this.process = null;
   }
 
+  private async isPortInUse(port: number): Promise<boolean> {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/v1`);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   isRunning(): boolean {
     return this.process !== null && !this.killed;
   }
@@ -127,7 +146,8 @@ export function findMvliteBinary(): string | null {
   const pkg = platforms[key];
   if (pkg) {
     try {
-      const pkgPath = require.resolve(`${pkg}/package.json`);
+      const req = createRequire(import.meta.url);
+      const pkgPath = req.resolve(`${pkg}/package.json`);
       const binPath = join(pkgPath, "..", "bin", "mvlite");
       if (existsSync(binPath)) return binPath;
     } catch {
@@ -136,9 +156,8 @@ export function findMvliteBinary(): string | null {
   }
 
   try {
-    const { execSync } = require("child_process");
-    const path = execSync("which mvlite", { encoding: "utf-8" }).trim();
-    if (path && existsSync(path)) return path;
+    const found = execSync("which mvlite", { encoding: "utf-8" }).trim();
+    if (found && existsSync(found)) return found;
   } catch {
     // not in PATH
   }

@@ -7,6 +7,7 @@ import { ForkServer } from "../fork/server.js";
 import { LocalNodeManager } from "../node/LocalNodeManager.js";
 import type { LocalNodeInfo } from "../node/LocalNodeManager.js";
 import { MvliteManager, findMvliteBinary } from "../node/MvliteManager.js";
+import type { NodeProvider } from "../node/NodeProvider.js";
 import { AccountManager } from "../core/AccountManager.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
@@ -44,7 +45,7 @@ function resolveForkRpcUrl(
 export interface LocalTestingContext {
   runtime: MovehatRuntime;
   /** @internal */
-  localNode?: LocalNodeManager;
+  localNode?: NodeProvider;
   /** @internal */
   forkServer?: ForkServer;
   /** @internal */
@@ -143,8 +144,8 @@ async function setupWithLocalNode(
   accountLabels: readonly string[],
   autoFund: boolean,
   defaultBalance: number
-): Promise<{ runtime: MovehatRuntime; localNode: LocalNodeManager; ownsNode: boolean }> {
-  let localNode: LocalNodeManager;
+): Promise<{ runtime: MovehatRuntime; localNode: NodeProvider; ownsNode: boolean }> {
+  let localNode: NodeProvider;
   let ownsNode: boolean;
   let nodeInfo: LocalNodeInfo;
 
@@ -159,9 +160,8 @@ async function setupWithLocalNode(
     }
     nodeInfo = localNode.getNodeInfo();
   } else if (options.useMvlite !== false && findMvliteBinary()) {
-    const mvlite = new MvliteManager();
-    nodeInfo = await mvlite.start();
-    localNode = mvlite as unknown as LocalNodeManager;
+    localNode = new MvliteManager(findMvliteBinary()!);
+    nodeInfo = await localNode.start();
     ownsNode = true;
   } else {
     const nodeTestDir = options.nodeTestDir || join(process.cwd(), ".movehat", "local-node");

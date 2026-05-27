@@ -1,6 +1,6 @@
 import type { Account } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
-import type { LocalNodeManager } from "../node/LocalNodeManager.js";
+import type { NodeProvider } from "../node/NodeProvider.js";
 import type { ForkServer } from "../fork/server.js";
 import type { ForkManager } from "../fork/manager.js";
 import type { LocalTestOptions } from "../types/config.js";
@@ -24,7 +24,7 @@ export type HarnessMode = "local" | "fork" | "live";
 interface HarnessInit {
   mode: HarnessMode;
   runtime: MovehatRuntime;
-  localNode?: LocalNodeManager;
+  localNode?: NodeProvider;
   ownsLocalNode?: boolean;
   forkServer?: ForkServer;
   forkManager?: ForkManager;
@@ -76,7 +76,7 @@ export class Harness {
   public readonly accounts: Readonly<Record<string, Account>>;
 
   /** @internal */
-  public readonly localNode?: LocalNodeManager;
+  public readonly localNode?: NodeProvider;
   /** @internal */
   public readonly forkServer?: ForkServer;
   /** @internal */
