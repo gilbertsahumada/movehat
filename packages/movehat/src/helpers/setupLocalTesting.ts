@@ -6,6 +6,7 @@ import { ForkManager } from "../fork/manager.js";
 import { ForkServer } from "../fork/server.js";
 import { LocalNodeManager } from "../node/LocalNodeManager.js";
 import type { LocalNodeInfo } from "../node/LocalNodeManager.js";
+import { MvliteManager, findMvliteBinary } from "../node/MvliteManager.js";
 import { AccountManager } from "../core/AccountManager.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
@@ -157,6 +158,11 @@ async function setupWithLocalNode(
       );
     }
     nodeInfo = localNode.getNodeInfo();
+  } else if (options.useMvlite !== false && findMvliteBinary()) {
+    const mvlite = new MvliteManager();
+    nodeInfo = await mvlite.start();
+    localNode = mvlite as unknown as LocalNodeManager;
+    ownsNode = true;
   } else {
     const nodeTestDir = options.nodeTestDir || join(process.cwd(), ".movehat", "local-node");
     const nodeForceRestart = options.nodeForceRestart !== false;
