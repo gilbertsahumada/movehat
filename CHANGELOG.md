@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the full Movement node if mvlite is not installed. Opt out with
   `useMvlite: false` in `LocalTestOptions`. Closes #192.
 
+- `mvlite` declared as an `optionalDependency`. `npm install movehat`
+  now also downloads the matching `mvlite-<platform>` binary
+  (via mvlite's own optional dependencies on its platform packages),
+  so the auto-spawn path above activates without a separate manual
+  install step. Supported platforms: macOS arm64/x64, Linux x64/arm64.
+  Unsupported platforms (e.g. Windows) install movehat cleanly and
+  fall back to the Movement node. Closes #300.
+
 ### Security
 
 - Runtime validation at every fork API and storage boundary. All
