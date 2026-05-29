@@ -6,7 +6,7 @@ import type { Account } from "@aptos-labs/ts-sdk";
 import type { LocalNodeInfo } from "./LocalNodeManager.js";
 import { logger } from "../ui/index.js";
 
-export class MvliteManager {
+export class MoveliteManager {
   private process: ChildProcess | null = null;
   private port: number;
   private killed = false;
@@ -20,7 +20,7 @@ export class MvliteManager {
   async start(): Promise<LocalNodeInfo> {
     const binary = this.binaryPath;
     if (!binary) {
-      throw new Error("mvlite binary not found");
+      throw new Error("movelite binary not found");
     }
 
     if (await this.isPortInUse(this.port)) {
@@ -30,19 +30,23 @@ export class MvliteManager {
       }
     }
 
-    logger.step("Starting mvlite...");
+    logger.step("Starting movelite...");
 
-    this.process = spawn(binary, ["start", "--port", String(this.port)], {
-      stdio: "pipe",
-      detached: false,
-    });
+    this.process = spawn(
+      binary,
+      ["start", "--port", String(this.port), "--no-auth"],
+      {
+        stdio: "pipe",
+        detached: false,
+      },
+    );
 
     this.process.on("exit", () => {
       this.process = null;
     });
 
     await this.waitForReady();
-    logger.success(`mvlite ready on port ${this.port}`);
+    logger.success(`movelite ready on port ${this.port}`);
 
     return this.getNodeInfo();
   }
@@ -62,7 +66,7 @@ export class MvliteManager {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    throw new Error(`mvlite did not become ready within ${timeout}ms`);
+    throw new Error(`movelite did not become ready within ${timeout}ms`);
   }
 
   async fundAccount(address: string, amount: number): Promise<void> {
@@ -128,18 +132,18 @@ export class MvliteManager {
   }
 }
 
-export function findMvliteBinary(): string | null {
-  if (process.env.MVLITE_PATH) {
-    return existsSync(process.env.MVLITE_PATH)
-      ? process.env.MVLITE_PATH
+export function findMoveliteBinary(): string | null {
+  if (process.env.MOVELITE_PATH) {
+    return existsSync(process.env.MOVELITE_PATH)
+      ? process.env.MOVELITE_PATH
       : null;
   }
 
   const platforms: Record<string, string> = {
-    "darwin-arm64": "mvlite-darwin-arm64",
-    "darwin-x64": "mvlite-darwin-x64",
-    "linux-x64": "mvlite-linux-x64",
-    "linux-arm64": "mvlite-linux-arm64",
+    "darwin-arm64": "movelite-darwin-arm64",
+    "darwin-x64": "movelite-darwin-x64",
+    "linux-x64": "movelite-linux-x64",
+    "linux-arm64": "movelite-linux-arm64",
   };
 
   const key = `${process.platform}-${process.arch}`;
@@ -148,7 +152,7 @@ export function findMvliteBinary(): string | null {
     try {
       const req = createRequire(import.meta.url);
       const pkgPath = req.resolve(`${pkg}/package.json`);
-      const binPath = join(pkgPath, "..", "bin", "mvlite");
+      const binPath = join(pkgPath, "..", "bin", "movelite");
       if (existsSync(binPath)) return binPath;
     } catch {
       // package not installed
@@ -156,7 +160,7 @@ export function findMvliteBinary(): string | null {
   }
 
   try {
-    const found = execSync("which mvlite", { encoding: "utf-8" }).trim();
+    const found = execSync("which movelite", { encoding: "utf-8" }).trim();
     if (found && existsSync(found)) return found;
   } catch {
     // not in PATH

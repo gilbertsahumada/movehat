@@ -48,7 +48,7 @@ export interface LocalTestOptions {
 
     // Shared node (when mode='local-node')
     localNode?: import("../node/LocalNodeManager.js").LocalNodeManager; // Pre-started node to reuse; skips spawn when provided
-    useMvlite?: boolean;                // Try mvlite before Movement node (default: true)
+    useMovelite?: boolean;              // Try movelite before Movement node (default: true)
 
     // Local Node options (when mode='local-node')
     nodeTestDir?: string;               // Directory for node data (default: .movehat/local-node)
