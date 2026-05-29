@@ -150,8 +150,14 @@ export function findMoveliteBinary(): string | null {
   const pkg = platforms[key];
   if (pkg) {
     try {
+      // Resolve through the `movelite` shim (movehat's direct dependency),
+      // then resolve the platform package from movelite's own context. The
+      // platform package is movelite's dependency, not movehat's, so a direct
+      // resolve from here fails under pnpm/yarn strict layouts.
       const req = createRequire(import.meta.url);
-      const pkgPath = req.resolve(`${pkg}/package.json`);
+      const movelitePkg = req.resolve("movelite/package.json");
+      const moveliteReq = createRequire(movelitePkg);
+      const pkgPath = moveliteReq.resolve(`${pkg}/package.json`);
       const binPath = join(pkgPath, "..", "bin", "movelite");
       if (existsSync(binPath)) return binPath;
     } catch {
