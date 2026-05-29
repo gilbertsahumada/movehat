@@ -9,12 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- mvlite auto-spawn integration. `Harness.createLocal()` and
+- movelite auto-spawn integration. `Harness.createLocal()` and
   `setupTestFixture()` automatically detect and use
-  [mvlite](https://github.com/gilbertsahumada/mvlite) if the binary
+  [movelite](https://github.com/gilbertsahumada/movelite) if the binary
   is available, reducing test boot time from ~15s to <1s. Falls back
-  to the full Movement node if mvlite is not installed. Opt out with
-  `useMvlite: false` in `LocalTestOptions`. Closes #192.
+  to the full Movement node if movelite is not installed. Opt out with
+  `useMovelite: false` in `LocalTestOptions`. Closes #192.
+
+- `movelite` declared as an `optionalDependency`. `npm install movehat`
+  now also downloads the matching `movelite-<platform>` binary
+  (via movelite's own optional dependencies on its platform packages),
+  so the auto-spawn path above activates without a separate manual
+  install step. Supported platforms: macOS arm64/x64, Linux x64/arm64.
+  Unsupported platforms (e.g. Windows) install movehat cleanly and
+  fall back to the Movement node. Closes #300.
 
 ### Security
 

@@ -6,7 +6,7 @@ import { ForkManager } from "../fork/manager.js";
 import { ForkServer } from "../fork/server.js";
 import { LocalNodeManager } from "../node/LocalNodeManager.js";
 import type { LocalNodeInfo } from "../node/LocalNodeManager.js";
-import { MvliteManager, findMvliteBinary } from "../node/MvliteManager.js";
+import { MoveliteManager, findMoveliteBinary } from "../node/MoveliteManager.js";
 import type { NodeProvider } from "../node/NodeProvider.js";
 import { AccountManager } from "../core/AccountManager.js";
 import { logger } from "../ui/index.js";
@@ -159,8 +159,8 @@ async function setupWithLocalNode(
       );
     }
     nodeInfo = localNode.getNodeInfo();
-  } else if (options.useMvlite !== false && findMvliteBinary()) {
-    localNode = new MvliteManager(findMvliteBinary()!);
+  } else if (options.useMovelite !== false && findMoveliteBinary()) {
+    localNode = new MoveliteManager(findMoveliteBinary()!);
     nodeInfo = await localNode.start();
     ownsNode = true;
   } else {
