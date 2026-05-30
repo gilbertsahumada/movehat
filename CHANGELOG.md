@@ -7,14 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-05-30
+
 ### Added
 
-- mvlite auto-spawn integration. `Harness.createLocal()` and
+- movelite auto-spawn integration. `Harness.createLocal()` and
   `setupTestFixture()` automatically detect and use
-  [mvlite](https://github.com/gilbertsahumada/mvlite) if the binary
+  [movelite](https://github.com/gilbertsahumada/movelite) if the binary
   is available, reducing test boot time from ~15s to <1s. Falls back
-  to the full Movement node if mvlite is not installed. Opt out with
-  `useMvlite: false` in `LocalTestOptions`. Closes #192.
+  to the full Movement node if movelite is not installed. Opt out with
+  `useMovelite: false` in `LocalTestOptions`. Closes #192.
+
+- `movelite` declared as an `optionalDependency`. `npm install movehat`
+  now also downloads the matching `movelite-<platform>` binary
+  (via movelite's own optional dependencies on its platform packages),
+  so the auto-spawn path above activates without a separate manual
+  install step. Supported platforms: macOS arm64/x64, Linux x64/arm64.
+  Unsupported platforms (e.g. Windows) install movehat cleanly and
+  fall back to the Movement node. Closes #300.
+
+- Shared local-node support via mocha root hooks. New `localNode`
+  option on `LocalTestOptions` lets `Harness.createLocal()` and
+  `setupTestFixture()` reuse a pre-started `LocalNodeManager`
+  instead of spawning a new one per test file. `movehat init` now
+  scaffolds a `tests/setup.ts` root hooks file that starts one
+  Movement node for the entire test suite and stops it at the end.
+  `Harness.cleanup()` is ownership-aware: when the node was injected
+  via `localNode`, cleanup poisons the harness but does not stop the
+  shared node. Reduces test-suite wall-clock time by ~23% for 3
+  specs (~65s -> ~50s), scaling to ~50%+ at 10+ specs. Closes #235.
+
+### Changed
+
+- M9.4 (PR #290 — AccountManager static-facade removal) reverted.
+  The static facade remains deprecated-but-functional indefinitely.
+  Users see a once-per-method `logger.warning` pointing to
+  `harness.accounts.<label>` / `harness.runtime.accountManager.*`
+  but existing code continues to work without migration. No 0.3.0
+  BREAKING release is planned. Closes #289.
 
 ### Security
 
@@ -43,28 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to `logger.*` methods. All remaining `console.*` calls in `src/`
   are documented §9 exceptions (CLI table output, JSON passthrough,
   subprocess verbosity gate, banner rendering). Closes #223.
-
-### Added
-
-- Shared local-node support via mocha root hooks. New `localNode`
-  option on `LocalTestOptions` lets `Harness.createLocal()` and
-  `setupTestFixture()` reuse a pre-started `LocalNodeManager`
-  instead of spawning a new one per test file. `movehat init` now
-  scaffolds a `tests/setup.ts` root hooks file that starts one
-  Movement node for the entire test suite and stops it at the end.
-  `Harness.cleanup()` is ownership-aware: when the node was injected
-  via `localNode`, cleanup poisons the harness but does not stop the
-  shared node. Reduces test-suite wall-clock time by ~23% for 3
-  specs (~65s -> ~50s), scaling to ~50%+ at 10+ specs. Closes #235.
-
-### Changed
-
-- M9.4 (PR #290 — AccountManager static-facade removal) reverted.
-  The static facade remains deprecated-but-functional indefinitely.
-  Users see a once-per-method `logger.warning` pointing to
-  `harness.accounts.<label>` / `harness.runtime.accountManager.*`
-  but existing code continues to work without migration. No 0.3.0
-  BREAKING release is planned. Closes #289.
 
 ## [0.2.7] - 2026-05-22
 
