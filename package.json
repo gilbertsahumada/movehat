@@ -16,6 +16,7 @@
     "test:integration": "pnpm --filter movehat test:integration",
     "test:smoke": "bash scripts/smoke-test.sh",
     "test:example": "pnpm --filter counter-example test",
+    "assert-backend": "bash scripts/assert-backend.sh",
     "typecheck:example": "pnpm --filter counter-example exec tsc --noEmit",
     "check:example": "pnpm build:movehat && pnpm typecheck:example",
     "test:runtime": "pnpm --filter counter-example run deploy",

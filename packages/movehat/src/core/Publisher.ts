@@ -1,4 +1,6 @@
-import { Account, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
+import { Account, Aptos, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
 import {
@@ -33,6 +35,13 @@ export interface PublishInput {
   config: MovehatConfig;
   account: Account;
   packageDir?: string | undefined;
+  /**
+   * Publish via the TypeScript SDK instead of the Movement CLI. Set when the
+   * backend is movelite, whose REST responses the Movement CLI cannot parse.
+   * Requires `aptos`.
+   */
+  sdkPublish?: boolean | undefined;
+  aptos?: Aptos | undefined;
 }
 
 /**
@@ -122,6 +131,11 @@ export class Publisher {
             ]
           : [];
 
+      // The SDK publish path reads package-metadata.bcs from the build
+      // output; `--save-metadata` makes the build emit it. The CLI path
+      // doesn't need it (`move publish` rebuilds metadata internally).
+      const saveMetadataArgs = input.sdkPublish ? ["--save-metadata"] : [];
+
       // Build first with named addresses
       const buildResult = await withSpinner(
         "Building package",
@@ -129,7 +143,14 @@ export class Publisher {
           runCli(
             {
               command: "movement",
-              args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
+              args: [
+                "move",
+                "build",
+                "--package-dir",
+                safeDir,
+                ...namedAddrArgs,
+                ...saveMetadataArgs,
+              ],
               timeoutMs: 120000, // 2 minutes for git dependency downloads
             },
             { adapter: this.deps.adapter }
@@ -139,110 +160,14 @@ export class Publisher {
         logger.info(buildResult.stdout.trim(), 2);
       }
 
-      // Publish using direct parameters (avoid config file issues)
-
-      // Format the private key into AIP-80 shape so the Movement CLI
-      // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
-      // is idempotent for already-prefixed inputs.
-      const formattedPrivateKey = PrivateKey.formatPrivateKey(
-        config.privateKey,
-        PrivateKeyVariants.Ed25519,
-      );
-
-      // Move.toml is NOT mutated. All address overrides flow through
-      // the `--named-addresses` flag above, which Movement CLI applies
-      // during build + publish. Rewriting Move.toml on disk would risk
-      // leaving the user's file mutated if the process died before the
-      // restore step.
-
-      let publishOut = "";
-      let publishErr = "";
-
-      // Pass the private key to Movement CLI via a 0o600 temp file
-      // (`--private-key-file <path>`) and the on-chain address via
-      // `--sender-account <addr>`. This avoids the CLI's profile-yaml
-      // lookup chain entirely — no CWD / HOME / .aptos / .movement
-      // dance, no CLI-variant dependency.
-      const keyFilePath = writeTempKeyFile(formattedPrivateKey);
-
-      // Register a sync cleanup hook BEFORE invoking the CLI. If the
-      // user Ctrl+C's (or the process is SIGTERM'd) between the file
-      // write and our finally, the SIGINT handler iterates every
-      // registered callback and unlinks this deploy's key file
-      // synchronously so the private key never persists on disk after
-      // an abnormal exit. The signal-handler path uses the
-      // best-effort variant because the event loop is dead and we
-      // cannot logger.warning.
-      ensureSignalHandler();
-      const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
-      cleanupCallbacks.add(syncCleanup);
-
-      try {
-        // Execute publish command. Private key reaches the CLI via the
-        // temp key file path (--private-key-file) — never on the
-        // command line — so it can't leak through `ps aux`. runCli's
-        // stdout/stderr redaction still applies as defense in depth
-        // for any `ed25519-priv-…` substring that surfaces in CLI
-        // output (Movement CLI sometimes echoes the key on error).
-        const publishResult = await withSpinner(
-          "Publishing to blockchain",
-          () =>
-            runCli(
-              {
-                command: "movement",
-                args: [
-                  "move",
-                  "publish",
-                  "--package-dir",
-                  safeDir,
-                  "--url",
-                  config.rpc,
-                  "--private-key-file",
-                  keyFilePath,
-                  "--sender-account",
-                  deployerAddress,
-                  "--assume-yes",
-                  ...namedAddrArgs,
-                ],
-                timeoutMs: 120000, // 2 minutes for blockchain transactions
-              },
-              { adapter: this.deps.adapter }
-            ),
-        );
-        publishOut = publishResult.stdout;
-        publishErr = publishResult.stderr;
-        // Both stdout and stderr from the publish subprocess are gated
-        // behind isVerbose() — Movement CLI emits progress to both
-        // streams ("Compiling, may take a little while..."), so a
-        // visible stderr line is not by itself a failure signal. The
-        // surrounding withSpinner converts the runCli throw on real
-        // failure into the visible spinner.fail() output instead.
-        if (isVerbose() && publishOut) logger.info(publishOut.trim(), 2);
-        if (isVerbose() && publishErr) logger.info(publishErr.trim(), 2);
-      } finally {
-        // Unlink the temp key file via the observable cleanup helper.
-        // ENOENT and other already-gone outcomes are benign (null).
-        // A non-null Error means the unlink failed AND the file still
-        // exists on disk — the private key would persist silently
-        // otherwise, so we emit a warning with the manual-cleanup
-        // hint. The SIGINT signal handler's sync callback below also
-        // tries to remove the same file; if SIGINT fires before this
-        // finally runs the file is gone and the next finally call
-        // sees ENOENT (benign).
-        const cleanupErr = removeKeyFile(keyFilePath);
-        if (cleanupErr) {
-          logger.warning(
-            `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
-              `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
-          );
-        }
-        cleanupCallbacks.delete(syncCleanup);
-      }
-
-      // Extract transaction hash from output via the shared helper
-      // (`utils/parseCliOutput.ts`). Same regex pair as before; lifted
-      // for reuse by harness/codeObject.ts and harness/script.ts.
-      const txHash = parseTxHash(publishOut);
+      // Publish the freshly-built package. movelite cannot consume the
+      // Movement CLI's `move publish` REST flow (its responses omit the
+      // ledger headers and fields the CLI requires), so when the backend
+      // is movelite we publish via the TypeScript SDK instead. Every other
+      // backend keeps the CLI path.
+      const txHash = input.sdkPublish
+        ? await this.publishViaSdk(input, safeDir)
+        : await this.publishViaCli(config, safeDir, deployerAddress, namedAddrArgs);
 
       logger.success("Module published successfully!");
 
@@ -306,5 +231,182 @@ export class Publisher {
       }
       throw error;
     }
+  }
+
+  /**
+   * Publish via the Movement CLI (`movement move publish`). The default path
+   * for real Movement nodes, forks, and testnet. Returns the parsed tx hash.
+   */
+  private async publishViaCli(
+    config: MovehatConfig,
+    safeDir: string,
+    deployerAddress: string,
+    namedAddrArgs: string[]
+  ): Promise<string | undefined> {
+    // Format the private key into AIP-80 shape so the Movement CLI
+    // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
+    // is idempotent for already-prefixed inputs.
+    const formattedPrivateKey = PrivateKey.formatPrivateKey(
+      config.privateKey,
+      PrivateKeyVariants.Ed25519,
+    );
+
+    // Move.toml is NOT mutated. All address overrides flow through
+    // the `--named-addresses` flag above, which Movement CLI applies
+    // during build + publish. Rewriting Move.toml on disk would risk
+    // leaving the user's file mutated if the process died before the
+    // restore step.
+
+    let publishOut = "";
+    let publishErr = "";
+
+    // Pass the private key to Movement CLI via a 0o600 temp file
+    // (`--private-key-file <path>`) and the on-chain address via
+    // `--sender-account <addr>`. This avoids the CLI's profile-yaml
+    // lookup chain entirely — no CWD / HOME / .aptos / .movement
+    // dance, no CLI-variant dependency.
+    const keyFilePath = writeTempKeyFile(formattedPrivateKey);
+
+    // Register a sync cleanup hook BEFORE invoking the CLI. If the
+    // user Ctrl+C's (or the process is SIGTERM'd) between the file
+    // write and our finally, the SIGINT handler iterates every
+    // registered callback and unlinks this deploy's key file
+    // synchronously so the private key never persists on disk after
+    // an abnormal exit. The signal-handler path uses the
+    // best-effort variant because the event loop is dead and we
+    // cannot logger.warning.
+    ensureSignalHandler();
+    const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
+    cleanupCallbacks.add(syncCleanup);
+
+    try {
+      // Execute publish command. Private key reaches the CLI via the
+      // temp key file path (--private-key-file) — never on the
+      // command line — so it can't leak through `ps aux`. runCli's
+      // stdout/stderr redaction still applies as defense in depth
+      // for any `ed25519-priv-…` substring that surfaces in CLI
+      // output (Movement CLI sometimes echoes the key on error).
+      const publishResult = await withSpinner(
+        "Publishing to blockchain",
+        () =>
+          runCli(
+            {
+              command: "movement",
+              args: [
+                "move",
+                "publish",
+                "--package-dir",
+                safeDir,
+                "--url",
+                config.rpc,
+                "--private-key-file",
+                keyFilePath,
+                "--sender-account",
+                deployerAddress,
+                "--assume-yes",
+                ...namedAddrArgs,
+              ],
+              timeoutMs: 120000, // 2 minutes for blockchain transactions
+            },
+            { adapter: this.deps.adapter }
+          ),
+      );
+      publishOut = publishResult.stdout;
+      publishErr = publishResult.stderr;
+      // Both stdout and stderr from the publish subprocess are gated
+      // behind isVerbose() — Movement CLI emits progress to both
+      // streams ("Compiling, may take a little while..."), so a
+      // visible stderr line is not by itself a failure signal. The
+      // surrounding withSpinner converts the runCli throw on real
+      // failure into the visible spinner.fail() output instead.
+      if (isVerbose() && publishOut) logger.info(publishOut.trim(), 2);
+      if (isVerbose() && publishErr) logger.info(publishErr.trim(), 2);
+    } finally {
+      // Unlink the temp key file via the observable cleanup helper.
+      // ENOENT and other already-gone outcomes are benign (null).
+      // A non-null Error means the unlink failed AND the file still
+      // exists on disk — the private key would persist silently
+      // otherwise, so we emit a warning with the manual-cleanup
+      // hint. The SIGINT signal handler's sync callback below also
+      // tries to remove the same file; if SIGINT fires before this
+      // finally runs the file is gone and the next finally call
+      // sees ENOENT (benign).
+      const cleanupErr = removeKeyFile(keyFilePath);
+      if (cleanupErr) {
+        logger.warning(
+          `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+            `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+        );
+      }
+      cleanupCallbacks.delete(syncCleanup);
+    }
+
+    // Extract transaction hash from output via the shared helper
+    // (`utils/parseCliOutput.ts`). Same regex pair as before; lifted
+    // for reuse by harness/codeObject.ts and harness/script.ts.
+    return parseTxHash(publishOut);
+  }
+
+  /**
+   * Publish the already-built package via the TypeScript SDK. Used when the
+   * backend is movelite. Reads the compiled artifacts the CLI build produced
+   * under `<dir>/build/<pkg>/`, submits a `0x1::code::publish_package_txn`,
+   * and waits for it. Returns the on-chain tx hash.
+   */
+  private async publishViaSdk(
+    input: PublishInput,
+    safeDir: string
+  ): Promise<string> {
+    const aptos = input.aptos;
+    if (!aptos) {
+      throw new Error("sdkPublish requires an Aptos client");
+    }
+
+    const buildRoot = join(safeDir, "build");
+    // The root package's compiled output is the single directory under
+    // build/ that carries a package-metadata.bcs; dependency builds live
+    // in nested bytecode_modules/dependencies/ and have no metadata here.
+    const pkgDirs = existsSync(buildRoot)
+      ? readdirSync(buildRoot, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => join(buildRoot, e.name))
+          .filter((d) => existsSync(join(d, "package-metadata.bcs")))
+      : [];
+    if (pkgDirs.length !== 1) {
+      throw new Error(
+        `Expected exactly one compiled package under ${buildRoot}, found ${pkgDirs.length}.`
+      );
+    }
+    const pkgDir = pkgDirs[0]!;
+
+    const metadataBytes = new Uint8Array(
+      readFileSync(join(pkgDir, "package-metadata.bcs"))
+    );
+    const modulesDir = join(pkgDir, "bytecode_modules");
+    const moduleBytecode = readdirSync(modulesDir)
+      .filter((f) => f.endsWith(".mv"))
+      .sort()
+      .map((f) => new Uint8Array(readFileSync(join(modulesDir, f))));
+    if (moduleBytecode.length === 0) {
+      throw new Error(`No compiled modules (*.mv) found in ${modulesDir}`);
+    }
+
+    return withSpinner("Publishing to blockchain", async () => {
+      const tx = await aptos.publishPackageTransaction({
+        account: input.account.accountAddress,
+        metadataBytes,
+        moduleBytecode,
+      });
+      const senderAuth = aptos.transaction.sign({
+        signer: input.account,
+        transaction: tx,
+      });
+      const committed = await aptos.transaction.submit.simple({
+        transaction: tx,
+        senderAuthenticator: senderAuth,
+      });
+      await aptos.waitForTransaction({ transactionHash: committed.hash });
+      return committed.hash;
+    });
   }
 }

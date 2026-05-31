@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- movelite auto-deploy now works. The 0.2.8 fast-boot path spawned movelite
+  but could not deploy onto it: `autoDeploy` published through the Movement
+  CLI (`move publish`), whose REST client cannot consume movelite's responses
+  ("Failed to build State from headers due to missing values in response").
+  Every `setupTestFixture` against movelite therefore threw `Module "<x>" was
+  not deployed`. `Publisher` now publishes via the `@aptos-labs/ts-sdk`
+  (`publishPackageTransaction`) when the backend is movelite, and keeps the
+  Movement CLI path for real nodes, forks, and testnet. Verified end-to-end:
+  deploy + `increment` + `view` returns the expected value through movelite.
+  Closes #305.
+
+### Tests
+
+- Backend-assertion gate (`scripts/assert-backend.sh`, `pnpm assert-backend`).
+  Drives the auto-spawn path via a dedicated probe and fails if the wrong
+  local-test backend started, guarding against a silent regression to the
+  slow Movement node while every other gate stays green. The identity check
+  (which backend's start line appeared) is the primary guard; a fixture-ready
+  time ceiling corroborates it. Closes #302.
+
 ## [0.2.8] - 2026-05-30
 
 ### Added

@@ -106,6 +106,7 @@ export async function initRuntime(
     options?: {
       packageDir?: string;
       adapter?: ChildProcessAdapter;
+      sdkPublish?: boolean;
     }
   ): Promise<DeploymentInfo> => {
     // Thin orchestrator; the actual logic lives in core/Publisher.ts.
@@ -114,6 +115,8 @@ export async function initRuntime(
       config,
       account,
       packageDir: options?.packageDir,
+      sdkPublish: options?.sdkPublish,
+      aptos,
     });
   };
 
