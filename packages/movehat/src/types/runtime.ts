@@ -47,6 +47,12 @@ export interface MovehatRuntime {
        * leave this undefined so the default spawn-based adapter is used.
        */
       adapter?: ChildProcessAdapter;
+      /**
+       * Publish the compiled package via the TypeScript SDK instead of the
+       * Movement CLI. Internal: setupLocalTesting sets this when the backend
+       * is movelite, whose REST responses the Movement CLI cannot consume.
+       */
+      sdkPublish?: boolean;
     }
   ) => Promise<DeploymentInfo>;
   getDeployment: (moduleName: string) => DeploymentInfo | null;

@@ -36,6 +36,13 @@ npm install -g movehat
 pnpm install -g movehat
 ```
 
+On supported platforms (macOS arm64/x64, Linux x64/arm64), this also pulls a
+`movelite` binary as an optional dependency, used for fast local-test boot.
+Nothing to install or configure: movehat uses it automatically when present
+and falls back to the full Movement node otherwise, including on platforms
+where the binary is not available. See
+[Fast local boot with movelite](/docs/guides/testing#fast-local-boot-with-movelite-optional).
+
 ## System Requirements
 
 **Required:**
