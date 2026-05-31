@@ -17,6 +17,7 @@ import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
 import { initRuntime } from "../runtime.js";
 import { Publisher } from "../core/Publisher.js";
 import type { ChildProcessAdapter, RunInput, RunResult } from "../utils/childProcessAdapter.js";
+import type { Aptos } from "@aptos-labs/ts-sdk";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -571,5 +572,185 @@ greeting = "0xcafe"
 
     // No deployment file was written.
     expect(existsSync(join(tmpCwd, "deployments", "testnet", "mymodule.json"))).toBe(false);
+  });
+});
+
+/**
+ * The SDK publish path (`Publisher.publishViaSdk`) is taken when the backend
+ * is movelite, whose REST responses the Movement CLI cannot consume. It reads
+ * the compiled artifacts the CLI build produced and publishes them through the
+ * TypeScript SDK instead of `movement move publish`. These tests mock the SDK
+ * client and the build output so the branch is covered without a live chain.
+ */
+describe("Publisher — SDK publish path (movelite backend)", () => {
+  const PKG = "dummy";
+  let tmpCwd: string;
+  let tmpHome: string;
+  let origCwd: string;
+  let origHome: string | undefined;
+
+  beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), "movehat-sdk-home-"));
+    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-sdk-cwd-"));
+
+    writeFileSync(
+      join(tmpCwd, "movehat.config.js"),
+      `export default {
+  defaultNetwork: "testnet",
+  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } }
+};
+`
+    );
+
+    const moveDir = join(tmpCwd, "move");
+    mkdirSync(join(moveDir, "sources"), { recursive: true });
+    writeFileSync(
+      join(moveDir, "Move.toml"),
+      `[package]\nname = "${PKG}"\nversion = "0.0.1"\n\n[addresses]\n`
+    );
+    writeFileSync(join(moveDir, "sources", "dummy.move"), "// intentionally empty\n");
+
+    origHome = process.env.HOME;
+    process.env.HOME = tmpHome;
+    origCwd = process.cwd();
+    process.chdir(tmpCwd);
+  });
+
+  afterEach(() => {
+    try {
+      process.chdir(origCwd);
+    } finally {
+      if (origHome === undefined) delete process.env.HOME;
+      else process.env.HOME = origHome;
+      if (existsSync(tmpHome)) rmSync(tmpHome, { recursive: true, force: true });
+      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
+    }
+  });
+
+  // Pre-stage the compiled artifacts the CLI build would have produced, so
+  // publishViaSdk can read them (the mocked build adapter writes nothing).
+  function stageBuildArtifacts(
+    modules: Record<string, Uint8Array>,
+    metadata: Uint8Array
+  ): void {
+    const pkgDir = join(tmpCwd, "move", "build", PKG);
+    mkdirSync(join(pkgDir, "bytecode_modules"), { recursive: true });
+    writeFileSync(join(pkgDir, "package-metadata.bcs"), metadata);
+    for (const [name, bytes] of Object.entries(modules)) {
+      writeFileSync(join(pkgDir, "bytecode_modules", `${name}.mv`), bytes);
+    }
+  }
+
+  // `move build` succeeds; `move publish` must NEVER be reached on this path.
+  function makeBuildOnlyAdapter(): { adapter: ChildProcessAdapter; calls: RunInput[] } {
+    const calls: RunInput[] = [];
+    const adapter: ChildProcessAdapter = {
+      async run(input) {
+        calls.push(input);
+        if (input.args[1] === "build") return { exitCode: 0, stdout: "build ok", stderr: "" };
+        throw new Error(`SDK path must not invoke the CLI for: ${input.args.join(" ")}`);
+      },
+      spawn() {
+        throw new Error("spawn not used");
+      },
+    };
+    return { adapter, calls };
+  }
+
+  function makeMockAptos(hash: string) {
+    const submitSimple = vi.fn(async () => ({ hash }));
+    const sign = vi.fn(() => ({ __auth: true }));
+    const waitForTransaction = vi.fn(async () => ({ success: true, hash }));
+    const publishPackageTransaction = vi.fn(async (args: unknown) => ({ __tx: true, args }));
+    const aptos = {
+      publishPackageTransaction,
+      transaction: { sign, submit: { simple: submitSimple } },
+      waitForTransaction,
+    } as unknown as Aptos;
+    return { aptos, publishPackageTransaction, sign, submitSimple, waitForTransaction };
+  }
+
+  it("publishes the built package via the SDK and never invokes the CLI publish", async () => {
+    const metadata = new Uint8Array([1, 2, 3, 4]);
+    // Staged out of sorted order to prove publishViaSdk sorts by filename.
+    stageBuildArtifacts(
+      { greeting: new Uint8Array([30, 40, 50]), counter: new Uint8Array([10, 20]) },
+      metadata
+    );
+
+    const HASH = "0x" + "e".repeat(64);
+    const { aptos, publishPackageTransaction, sign, submitSimple, waitForTransaction } =
+      makeMockAptos(HASH);
+    const { adapter, calls } = makeBuildOnlyAdapter();
+
+    const { config, account } = await initRuntime();
+
+    const deployment = await new Publisher({ adapter }).deploy({
+      moduleName: "counter",
+      config,
+      account,
+      packageDir: join(tmpCwd, "move"),
+      sdkPublish: true,
+      aptos,
+    });
+
+    // Only `move build` reached the CLI, and it requested metadata.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args.slice(0, 2)).toEqual(["move", "build"]);
+    expect(calls[0]?.args).toContain("--save-metadata");
+
+    // The SDK received the staged metadata + module bytecode in sorted order.
+    expect(publishPackageTransaction).toHaveBeenCalledTimes(1);
+    const sdkArgs = publishPackageTransaction.mock.calls[0]![0] as {
+      metadataBytes: Uint8Array;
+      moduleBytecode: Uint8Array[];
+    };
+    expect(Array.from(sdkArgs.metadataBytes)).toEqual([1, 2, 3, 4]);
+    expect(sdkArgs.moduleBytecode.map((b) => Array.from(b))).toEqual([
+      [10, 20], // counter.mv
+      [30, 40, 50], // greeting.mv
+    ]);
+
+    // Sign + submit + wait all ran; the returned hash is recorded + persisted.
+    expect(sign).toHaveBeenCalledTimes(1);
+    expect(submitSimple).toHaveBeenCalledTimes(1);
+    expect(waitForTransaction).toHaveBeenCalledWith({ transactionHash: HASH });
+    expect(deployment.txHash).toBe(HASH);
+    expect(deployment.moduleName).toBe("counter");
+    expect(existsSync(join(tmpCwd, "deployments", "testnet", "counter.json"))).toBe(true);
+  });
+
+  it("throws when sdkPublish is set without an Aptos client", async () => {
+    const { adapter } = makeBuildOnlyAdapter();
+    const { config, account } = await initRuntime();
+
+    await expect(
+      new Publisher({ adapter }).deploy({
+        moduleName: "counter",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        // aptos intentionally omitted
+      })
+    ).rejects.toThrow(/sdkPublish requires an Aptos client/);
+  });
+
+  it("throws a clear error when no compiled package is found", async () => {
+    // No stageBuildArtifacts(): the build/ dir is absent.
+    const { aptos } = makeMockAptos("0x" + "f".repeat(64));
+    const { adapter } = makeBuildOnlyAdapter();
+    const { config, account } = await initRuntime();
+
+    await expect(
+      new Publisher({ adapter }).deploy({
+        moduleName: "counter",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos,
+      })
+    ).rejects.toThrow(/Expected exactly one compiled package/);
   });
 });

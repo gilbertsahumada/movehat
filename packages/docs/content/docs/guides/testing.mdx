@@ -135,6 +135,39 @@ movehat test:ts
 movehat test --watch
 ```
 
+### Fast local boot with movelite (optional)
+
+Integration tests need a local chain to deploy onto. By default movehat
+starts a full local Movement node, which takes around 15 seconds to come up.
+To make the inner test loop quicker, movehat can instead use
+[movelite](https://github.com/gilbertsahumada/movelite) — a lightweight local
+Move runtime that boots in well under a second.
+
+This is automatic and requires no configuration:
+
+- On supported platforms, `npm install movehat` also pulls a matching
+  `movelite` binary as an optional dependency. `Harness.createLocal()` and
+  `setupTestFixture()` detect it and use it for the local chain.
+- If no movelite binary is present, movehat transparently falls back to the
+  full Movement node — your tests behave the same either way.
+- Supported platforms today: macOS arm64/x64 and Linux x64/arm64. On other
+  platforms (for example Windows) movehat installs cleanly and uses the
+  Movement node.
+
+> The speed-up is in chain **boot**: movelite starts the local chain in under
+> a second instead of ~15s. Compilation and deployment of your modules still
+> take their usual time.
+
+To opt out and always use the full Movement node, pass `useMovelite: false`:
+
+```typescript
+harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice"],
+  autoDeploy: ["counter"],
+  useMovelite: false,
+});
+```
+
 ## Running All Tests
 
 Run both Move and TypeScript tests together:

@@ -137,6 +137,17 @@ export async function setupLocalTesting(
 }
 
 /**
+ * Resolve whether to prefer movelite. Explicit `useMovelite` wins; otherwise
+ * the `MOVEHAT_USE_MOVELITE` env var acts as an override (`0` disables, `1`
+ * enables); default is enabled. Lets tooling force a backend without editing
+ * test code.
+ */
+function resolveUseMovelite(useMovelite: boolean | undefined): boolean {
+  if (useMovelite !== undefined) return useMovelite;
+  return process.env.MOVEHAT_USE_MOVELITE !== "0";
+}
+
+/**
  * Setup using local Movement node (full blockchain)
  */
 async function setupWithLocalNode(
@@ -159,7 +170,7 @@ async function setupWithLocalNode(
       );
     }
     nodeInfo = localNode.getNodeInfo();
-  } else if (options.useMovelite !== false && findMoveliteBinary()) {
+  } else if (resolveUseMovelite(options.useMovelite) && findMoveliteBinary()) {
     localNode = new MoveliteManager(findMoveliteBinary()!);
     nodeInfo = await localNode.start();
     ownsNode = true;
@@ -238,11 +249,15 @@ async function setupWithLocalNode(
       const previousRedeploy = process.env.MH_CLI_REDEPLOY;
       process.env.MH_CLI_REDEPLOY = 'true';
 
+      // movelite's REST responses can't drive the Movement CLI publish flow,
+      // so deploy through the TypeScript SDK when it is the spawned backend.
+      const sdkPublish = localNode instanceof MoveliteManager;
+
       try {
         for (const moduleName of options.autoDeploy) {
           try {
             logger.plain(`   Deploying ${moduleName}...`);
-            await runtime.deployContract(moduleName);
+            await runtime.deployContract(moduleName, { sdkPublish });
             logger.success(`${moduleName} deployed`, 2);
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
