@@ -1,0 +1,121 @@
+---
+title: movelite (fast local boot)
+description: How movehat uses movelite to boot the local test chain in under a second, with transparent fallback to the full Movement node
+icon: Zap
+---
+
+When you run TypeScript integration tests, movehat needs a local chain to deploy
+your modules onto. By default it starts a full local Movement node, which takes
+around 15 seconds to come up. For the inner test loop — edit, run, repeat — that
+startup cost dominates.
+
+[movelite](https://github.com/gilbertsahumada/movelite) is a lightweight local
+Move runtime that boots in **well under a second**. When a movelite binary is
+available, `Harness.createLocal()` and `setupTestFixture()` use it automatically
+instead of the full node.
+
+> The speed-up is in chain **boot**, not the whole fixture. movelite starts the
+> local chain in under a second instead of ~15s. Compiling and deploying your
+> modules still take their usual time.
+
+## Nothing to install
+
+On supported platforms, `npm install movehat` also pulls a matching `movelite`
+binary as an [optional dependency](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#optionaldependencies).
+There is nothing to install, configure, or import:
+
+- If a movelite binary is present, movehat detects it and uses it for the local
+  chain.
+- If it is not present, movehat transparently falls back to the full Movement
+  node. Your tests behave the same either way — same API, same results.
+
+Because the binary is an *optional* dependency, an unsupported platform still
+installs movehat cleanly; it simply runs on the Movement node.
+
+### Supported platforms
+
+| Platform | movelite binary |
+|----------|-----------------|
+| macOS Apple Silicon (`darwin-arm64`) | yes |
+| Linux x64 (`linux-x64`) | yes |
+| Linux arm64 (`linux-arm64`) | yes |
+| macOS Intel (`darwin-x64`) | falls back to the Movement node |
+| Other (e.g. Windows) | falls back to the Movement node |
+
+On platforms without a published binary, movehat installs cleanly and runs on
+the full Movement node — same API, just a slower local boot.
+
+## How it fits the testing flow
+
+You do not call movelite directly. It is the backend behind the local-chain
+factories you already use:
+
+```typescript
+import { setupTestFixture } from "movehat/helpers";
+
+// Auto-spawns movelite when available, otherwise the Movement node.
+const fixture = await setupTestFixture(["counter"] as const, ["deployer"]);
+
+await fixture.contracts.counter.call(fixture.accounts.deployer, "increment", []);
+const value = await fixture.contracts.counter.view<string>("get", [
+  fixture.accounts.deployer.accountAddress.toString(),
+]);
+```
+
+```typescript
+import { Harness } from "movehat";
+
+// Same auto-detection through the Harness API.
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice"],
+  autoDeploy: ["counter"],
+});
+```
+
+Deployment, account funding, calls, and view functions all work identically
+whether the backend is movelite or the Movement node.
+
+## Opting out
+
+To always use the full Movement node, pass `useMovelite: false`:
+
+```typescript
+const harness = await Harness.createLocal({
+  accountLabels: ["deployer", "alice"],
+  autoDeploy: ["counter"],
+  useMovelite: false,
+});
+```
+
+The same option is available on `setupTestFixture` through its options argument.
+
+### Forcing a backend from the shell
+
+The `MOVEHAT_USE_MOVELITE` environment variable overrides detection without
+editing test code — useful in CI or scripts:
+
+```bash
+MOVEHAT_USE_MOVELITE=0 npm test   # force the Movement node
+MOVEHAT_USE_MOVELITE=1 npm test   # require movelite (still no-op if absent)
+```
+
+An explicit `useMovelite` option in code takes precedence over the environment
+variable.
+
+## Which backend started?
+
+movehat logs the backend as it boots, so you can confirm which one ran:
+
+- movelite prints `Starting movelite...`
+- the full node prints `Starting local Movement node`
+
+If you expected movelite but see the Movement-node line, the binary was not
+found for your platform — movehat fell back. That is expected on unsupported
+platforms and harmless; your tests still pass, just slower.
+
+## When to reach for the Movement node
+
+movelite is built for the fast local-test loop. Prefer the full Movement node
+(`useMovelite: false`) when you need behaviour that depends on the complete node
+— for example reproducing a node-specific edge case before shipping. For the
+day-to-day write-test-run cycle, movelite is the faster default.
