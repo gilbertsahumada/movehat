@@ -12,6 +12,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Opt the pinned JS actions into the Node 24 runtime ahead of GitHub's
+# 2026-06-16 forced switch (the actions still run on Node 20 otherwise and
+# emit deprecation warnings). This is GitHub's recommended opt-in; it does not
+# change the action versions, so there is no breaking-change risk.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # Build and type check
   build:
@@ -151,7 +158,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build, unit-tests]
-    timeout-minutes: 5
+    timeout-minutes: 12
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -255,6 +262,17 @@ jobs:
             echo "::error::Integration suite contains vi.mock or vi.spyOn — zero-mock invariant violated."
             exit 1
           fi
+
+      - name: movelite backend gate (#302)
+        # First time the example's deploy loop runs on Linux CI: the full
+        # Movement node can't start here (MintFunder bug — see MOVEHAT_SKIP_LOCAL_NODE
+        # above), but movelite can. pnpm install pulled movelite-linux-x64
+        # (movehat's optionalDependency); this asserts it spawns and deploys
+        # via the SDK path. The Movement CLI installed above provides the
+        # `movement move build` compile step.
+        run: MOVEHAT_EXPECT_BACKEND=movelite pnpm assert-backend
+        env:
+          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
   # Code quality checks
   quality:
