@@ -3,6 +3,7 @@ build/
 dist/
 node_modules/
 .env
+grant/
 
 coverage/
 
@@ -29,6 +30,7 @@ Move.lock
 
 # Claude Code session state
 .claude/
+.agents/
 
 # Local reference 
 /catapulta/
@@ -54,16 +56,13 @@ pnpm-debug.log*
 # Markdown files - ignore all except specific ones
 *.md
 !README.md
-!CLAUDE.md
 !CONTRIBUTING.md
 !FORK_GUIDE.md
-!ROADMAP.md
 !TESTING.md
 !LICENSE.md
 !SECURITY.md
 !CHANGELOG.md
 !BENCHMARKS.md
-!MAINTENANCE.md
 !MOVEMENT_CLI_COMPAT.md
 !NOTICE.md
 !CODE_OF_CONDUCT.md
