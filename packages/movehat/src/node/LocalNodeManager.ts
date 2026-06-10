@@ -145,7 +145,7 @@ export class LocalNodeManager {
         stdio: this.options.silent ? "ignore" : "pipe",
       });
 
-      // Subprocess output handling (see §9 Console UX in CLAUDE.md):
+      // Subprocess output handling (verbosity-gated console UX):
       //   - stdout chatter is hidden by default; gated by isVerbose()
       //   - lines matching CRITICAL_NODE_OUTPUT always surface as warnings
       //     so the user is never silenced through a real failure
