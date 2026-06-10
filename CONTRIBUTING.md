@@ -137,7 +137,7 @@ Set on the push command for the run only:
 
 ### Bypassing hooks
 
-**Never use `--no-verify`** to skip hook execution without a documented reason. If a hook fails, the right response is to fix the underlying issue, not bypass the check. This matches the policy in `CLAUDE.md` §8 (self-review gate) and ensures CI never sees broken state that local hooks would have caught.
+**Never use `--no-verify`** to skip hook execution without a documented reason. If a hook fails, the right response is to fix the underlying issue, not bypass the check. This matches the project's self-review policy and ensures CI never sees broken state that local hooks would have caught.
 
 For one-off legitimate bypasses (e.g., recovering from a corrupted state mid-rebase), document the reason in the commit message and post a follow-up PR to address whatever the hook would have caught.
 

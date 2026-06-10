@@ -19,4 +19,4 @@ labels: [enhancement]
 
 ## Additional context
 
-<!-- Links, prior art, mockups, related issues, references in ROADMAP.md. -->
+<!-- Links, prior art, mockups, related issues. -->
