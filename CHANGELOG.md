@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- Bump the bundled `movelite` optional dependency from `^0.1.0` to `^0.2.0`.
+  The 0.2.0 binary adds the `POST /v1/transactions/trace` endpoint that the
+  upcoming Foundry-style trace renderer will consume; bumping the dependency
+  makes that endpoint reachable through the published package. No user-visible
+  behavior change in this PR — local boot, fallback, and the existing API
+  behave identically; the trace renderer lands separately.
+
 ## [0.2.9] - 2026-06-01
 
 ### Fixed
