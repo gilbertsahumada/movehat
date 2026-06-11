@@ -111,8 +111,10 @@ await harness.cleanup();
 |----------------------------|----------------------|--------------------|--------------------|
 | **Language**               | Move + TypeScript    | Solidity + TS/JS   | Solidity           |
 | **Local blockchain**       | Built-in             | Built-in           | Built-in (anvil)   |
+| **Fast local boot**        | movelite (sub-second)| Built-in           | Built-in (anvil)   |
 | **Fork system**            | Built-in JSON        | External           | Built-in           |
 | **Auto-detected addresses**| Yes                  | N/A                | Manual             |
+| **Execution traces**       | `-vvvv` (movelite)   | Plugin             | `-vvvv` built-in   |
 
 ## What's next?
 
