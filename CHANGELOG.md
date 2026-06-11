@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Foundry-style execution traces for `contract.call(...)` on the movelite
+  backend. At verbosity level 2 (`-vv`) Movehat prints a decoded list of the
+  events a call emitted; at level 3 (`-vvv`) it renders the call tree of your
+  own modules (framework `0x1::*` frames and natives filtered out, with their
+  events bubbled up to your nearest frame); at level 4 (`-vvvv`) the full tree —
+  framework frames, native calls, storage operations, and return values. Aborts
+  show the full tree plus the abort code and stack. Per-frame gas is shown in
+  internal VM units, distinct from the transaction's octa `gas_used` in the
+  footer. Traces are movelite-only (the Movement node does not expose the trace
+  endpoint) and opt-in by verbosity, so the default test loop is unaffected. A
+  render failure degrades to a warning and never fails a committed transaction.
+  New guide at `guides/traces.mdx`. Closes #318.
+
 ### Changed
 
 - The global `-v` / `--verbose` flag is now **counted**: repeat it to raise the
