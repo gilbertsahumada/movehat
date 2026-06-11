@@ -1,0 +1,88 @@
+---
+title: Transaction traces
+description: Foundry-style execution traces for contract.call(...) on the movelite backend, shown at raised verbosity
+icon: ListTree
+---
+
+When you raise verbosity with `-vv`, `-vvv`, or `-vvvv`, Movehat renders a
+Foundry-style execution trace for every `contract.call(...)` — an indented call
+tree with per-frame `module::function`, decoded arguments, gas, return values,
+events, and (on failure) the abort stack.
+
+> Traces are a **[movelite](/docs/guides/movelite)-only** capability. They come
+> from an instrumented VM endpoint that the lightweight local runtime exposes;
+> the full Movement node's REST API does not expose internal call frames. On the
+> Movement node the same flags still raise subprocess verbosity, but no call
+> tree is rendered.
+
+## Enabling traces
+
+Traces escalate with the counted `-v` flag (see [Global flags](/docs/cli/global-flags)):
+
+```bash
+movehat test --ts -vv      # decoded events per call
+movehat test --ts -vvv     # the call tree of your own modules
+movehat test --ts -vvvv    # the full tree: framework frames, natives, storage, returns
+```
+
+| Level | Flag | What it renders |
+|---|---|---|
+| 2 | `-vv` | A flat, decoded list of the events each call emitted. |
+| 3 | `-vvv` | The call tree of **your** modules. Framework (`0x1::*`) frames and native calls are filtered out; events they emit bubble up to your nearest frame. |
+| 4 | `-vvvv` | The complete tree — framework frames, native calls, storage operations, and return values. |
+
+Traces fire only at level 2 and above, so the default test loop stays fast — the
+trace endpoint is opt-in per call and the normal path pays no tracing cost.
+
+## What a trace looks like
+
+A `counter::increment()` call at `-vvvv`:
+
+```text
+Trace
+0xe10b..fe37::counter::increment() [327179]
+  load_resource 0xe10b..fe37::counter::Counter @0xe10b..fe37
+  move_to 0xe10b..fe37::counter::Counter
+  borrow_global_mut 0xe10b..fe37::counter::Counter
+  0x1::signer::address_of({ 0, 0xe10b..fe37 }) [6799]
+    ← 0xe10b..fe37
+    0x1::signer::borrow_address({ 0, 0xe10b..fe37 }) [735]
+      ← 0xe10b..fe37
+
+✔ Executed successfully · gas_used: 440 octas · traced in 13ms
+```
+
+Each line is an entry function or one of the calls it makes, indented by depth.
+Your own modules render in bold cyan; framework frames, native calls, and gas
+figures are dimmed; events are yellow; storage operations are magenta; return
+values (`←`) are green. At `-vvv` the framework helpers above would be hidden,
+leaving just your `increment()` frame and any events it produced.
+
+### A note on gas
+
+The bracketed number after each frame — `[327179]` — is that frame's self gas in
+**internal VM units**. The `gas_used` in the footer — `440 octas` — is the
+transaction's gas in **octas**, the external unit you actually pay. The two
+scales are not comparable; never add a frame's internal gas to the octa total.
+
+## Aborts
+
+When a call aborts, the trace shows the full tree (so the failing frame is
+visible even at `-vvv`), followed by the abort code and the stack from the
+innermost frame outward:
+
+```text
+✖ Aborted: code 1 in 0xe10b..fe37::counter
+  at 0xe10b..fe37::counter::increment @14
+
+✖ Aborted · gas_used: 7 octas · traced in 9ms
+```
+
+The returned result still reports `success: false` and the `vm_status` — the
+trace is additional detail, it does not change what `contract.call(...)` returns.
+
+## Scope
+
+Only `contract.call(...)` (state-changing transactions) is traced. `view(...)`
+is a read-only query and is never traced. Traces require the movelite backend;
+on the Movement node, `createLive`, or a fork, calls run normally with no tree.

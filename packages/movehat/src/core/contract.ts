@@ -6,6 +6,7 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { logger } from "../ui/index.js";
 import { traceTransaction } from "./trace/client.js";
+import { renderTrace } from "./trace/renderer.js";
 
 export interface TransactionResult {
   hash: string;
@@ -55,15 +56,24 @@ export class MoveContract {
 
     // Trace path: on movelite at raised verbosity, route through the
     // instrumented `/transactions/trace?commit=true` endpoint, which executes
-    // AND commits in one pass (so we must NOT also submit). PR1c renders the
-    // returned call tree here; for now it maps straight to the result.
-    if (this.traceRpcUrl && logger.getVerbosityLevel() >= 2) {
+    // AND commits in one pass (so we must NOT also submit), then render the
+    // returned call tree.
+    const traceLevel = logger.getVerbosityLevel();
+    if (this.traceRpcUrl && traceLevel >= 2) {
       const { response, elapsedMs } = await traceTransaction({
         rpcUrl: this.traceRpcUrl,
         transaction,
         senderAuthenticator: signature,
       });
-      void elapsedMs; // consumed by the renderer in PR1c
+
+      // A render failure must never fail a transaction that already committed.
+      try {
+        renderTrace(response, { level: traceLevel, elapsedMs });
+      } catch (renderError) {
+        const msg =
+          renderError instanceof Error ? renderError.message : String(renderError);
+        logger.warning(`Failed to render trace: ${msg}`);
+      }
 
       logger.success(
         `Transaction ${response.txn_hash} committed with status: ${response.vm_status}`
