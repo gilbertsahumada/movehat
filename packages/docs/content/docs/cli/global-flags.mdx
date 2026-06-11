@@ -8,17 +8,27 @@ These flags are available on every `movehat` command. Pass them before or after 
 
 ## `-v`, `--verbose`
 
-Surface subprocess output that Movehat hides by default.
+`-v` is **counted** — repeat it to raise the verbosity level. Each level is additive on top of the previous one.
 
 ```bash
-movehat test --ts          # quiet (default)
-movehat test --ts -v       # surface all subprocess output
-MOVEHAT_VERBOSE=1 movehat test --ts   # equivalent — useful in scripts
+movehat test --ts          # L0 quiet (default)
+movehat test --ts -v       # L1 + subprocess output
+movehat test --ts -vv      # L2 + decoded events per transaction
+movehat test --ts -vvv     # L3 + the call tree of your own modules
+movehat test --ts -vvvv    # L4 + framework frames, natives, storage, return values
 ```
 
-By default Movehat hides routine chatter from the `movement node run-localnet` and `aptos move build / publish` subprocesses to keep the console readable. With `-v` enabled, every line from those processes is printed with a muted gray `›` prefix so you can see exactly what they're doing.
+| Level | Flag | Adds |
+|---|---|---|
+| 0 | _(none)_ | System logs only — the default quiet console. |
+| 1 | `-v` | Subprocess output from `movement node run-localnet` and `aptos move build / publish`, printed with a muted gray `›` prefix. |
+| 2 | `-vv` | A decoded list of the events each `contract.call(...)` emitted. |
+| 3 | `-vvv` | A Foundry-style execution trace showing the call tree of **your** modules (framework `0x1::*` frames filtered out). |
+| 4 | `-vvvv` | The full trace: framework frames, native calls, storage operations, and return values. |
 
-When to reach for `-v`:
+Levels 2–4 render execution traces, which are a **[movelite](/docs/guides/movelite)-only** capability — they require the trace endpoint the lightweight local runtime exposes. On the full Movement node the same flags still raise subprocess verbosity (level 1), but no call tree is rendered. See [Transaction traces](/docs/guides/traces) for the full output format.
+
+When to reach for level 1 (`-v`):
 
 - The local node fails to start and the spinner times out — `-v` reveals what `movement` is saying.
 - `aptos move build` is slow on a fresh clone — `-v` shows the git-dependency download progress.
@@ -51,8 +61,11 @@ Useful when your Move source changed but the local node's deployment cache still
 
 | Variable | Equivalent flag | Purpose |
 |---|---|---|
-| `MOVEHAT_VERBOSE=1` | `-v` / `--verbose` | Surface subprocess output |
+| `MOVEHAT_VERBOSE=1` | `-v` / `--verbose` | Surface subprocess output (level 1) |
+| `MOVEHAT_VERBOSITY=<0-4>` | `-v` … `-vvvv` | Set the exact verbosity level, including the trace levels (2–4) |
 | `MOVEHAT_NETWORK=<name>` | `--network <name>` | Default network for this shell |
 | `NO_COLOR=1` | — | Disable all ANSI colors and spinners |
+
+`MOVEHAT_VERBOSE=1` remains the level-1 shorthand. `MOVEHAT_VERBOSITY` sets the precise level and takes precedence — useful in scripts or CI that want trace output without passing repeated flags.
 
 `NO_COLOR=1` and non-TTY output (pipes, CI) auto-degrade gracefully — spinners disable, no carriage-return rewrites, output stays line-based and grep-friendly.

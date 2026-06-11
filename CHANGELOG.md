@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The global `-v` / `--verbose` flag is now **counted**: repeat it to raise the
+  verbosity level (`-v` … `-vvvv` → levels 1–4). Level 1 is unchanged — it
+  surfaces subprocess output exactly as before, and `MOVEHAT_VERBOSE=1` remains
+  its shorthand. The higher levels are reserved for the forthcoming movelite
+  transaction-trace renderer (decoded events at 2, the call tree at 3–4). A new
+  `MOVEHAT_VERBOSITY=<0-4>` env var sets the level directly and propagates across
+  the spawned test/script subprocess boundary. `isVerbose()` and its callers are
+  unaffected. Closes #316.
+
 ### Fixed
 
 - Restore tracking of `MAINTENANCE.md`, which was inadvertently untracked
