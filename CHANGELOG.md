@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- Trace transaction types + HTTP client + `MoveContract` wiring (no renderer
+  yet). `core/trace/{types,client}.ts` model movelite's `/v1/transactions/trace`
+  contract and POST the BCS-signed transaction with `commit=true`. On movelite
+  at verbosity level >= 2, `contract.call(...)` now routes through that endpoint
+  (a single instrumented execution that also commits) instead of the normal
+  submit, preserving the `{hash, success, vm_status}` return shape; on the
+  Movement node and below level 2 the existing submit path is unchanged. The
+  call tree is rendered in a following change. Closes #317.
+
 - Bump the bundled `movelite` optional dependency from `^0.1.0` to `^0.2.0`.
   The 0.2.0 binary adds the `POST /v1/transactions/trace` endpoint that the
   upcoming Foundry-style trace renderer will consume; bumping the dependency

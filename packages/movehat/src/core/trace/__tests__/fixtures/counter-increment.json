@@ -1,0 +1,147 @@
+{
+  "txn_hash": "0xa5c7180f93dae13c9c91cdb104a8cbea3747201253f4fb99c0973e213834fe1f",
+  "success": true,
+  "gas_used": 4,
+  "vm_status": "Executed successfully",
+  "abort": null,
+  "root": {
+    "kind": "function",
+    "module": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter",
+    "function": "increment",
+    "type_args": [],
+    "args": [
+      {
+        "type": "u64",
+        "value": "5"
+      }
+    ],
+    "return": [
+      {
+        "type": "()",
+        "value": null
+      }
+    ],
+    "gas": 949862,
+    "events": [
+      {
+        "type": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter::Incremented",
+        "data": {
+          "value": "13"
+        }
+      }
+    ],
+    "storage": [
+      {
+        "op": "load_resource",
+        "type": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter::Counter",
+        "address": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16"
+      },
+      {
+        "op": "borrow_global_mut",
+        "type": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter::Counter",
+        "address": null
+      }
+    ],
+    "children": [
+      {
+        "kind": "function",
+        "module": "0x1::signer",
+        "function": "address_of",
+        "type_args": [],
+        "args": [
+          {
+            "type": "struct",
+            "value": {
+              "0": "0",
+              "1": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16"
+            }
+          }
+        ],
+        "return": [
+          {
+            "type": "address",
+            "value": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16"
+          }
+        ],
+        "gas": 6799,
+        "events": [],
+        "storage": [],
+        "children": [
+          {
+            "kind": "native",
+            "module": "0x1::signer",
+            "function": "borrow_address",
+            "type_args": [],
+            "args": [
+              {
+                "type": "struct",
+                "value": {
+                  "0": "0",
+                  "1": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16"
+                }
+              }
+            ],
+            "return": [
+              {
+                "type": "address",
+                "value": "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16"
+              }
+            ],
+            "gas": 735,
+            "events": [],
+            "storage": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "kind": "function",
+        "module": "0x1::event",
+        "function": "emit",
+        "type_args": [
+          "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter::Incremented"
+        ],
+        "args": [
+          {
+            "type": "struct",
+            "value": {
+              "0": "13"
+            }
+          }
+        ],
+        "return": [
+          {
+            "type": "()",
+            "value": null
+          }
+        ],
+        "gas": 5871,
+        "events": [],
+        "storage": [],
+        "children": [
+          {
+            "kind": "native",
+            "module": "0x1::event",
+            "function": "write_module_event_to_store",
+            "type_args": [
+              "0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16::counter::Incremented"
+            ],
+            "args": [
+              {
+                "type": "struct",
+                "value": {
+                  "0": "13"
+                }
+              }
+            ],
+            "return": [],
+            "gas": 24886,
+            "events": [],
+            "storage": [],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}
