@@ -35,6 +35,14 @@ export interface InitRuntimeOptions {
    * key it extracts ends up on the same manager the runtime exposes.
    */
   accountManager?: AccountManager;
+  /**
+   * movelite RPC base URL (already ending in `/v1`) enabling Foundry-style
+   * execution traces on `contract.call(...)` at verbosity level >= 2. Set only
+   * when the active backend is movelite (its `/transactions/trace` endpoint
+   * does not exist on a real Movement node). When omitted, contracts use the
+   * normal submit path and never trace.
+   */
+  traceRpcUrl?: string;
 }
 
 /**
@@ -98,7 +106,7 @@ export async function initRuntime(
 
   // Helper functions
   const getContractHelper = (address: string, moduleName: string): MoveContract => {
-    return getContract(aptos, address, moduleName);
+    return getContract(aptos, address, moduleName, options.traceRpcUrl);
   };
 
   const deployContract = async (

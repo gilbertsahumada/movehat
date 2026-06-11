@@ -226,9 +226,15 @@ async function setupWithLocalNode(
       throw new Error("Failed to get deployer private key");
     }
 
+    // movelite exposes the /transactions/trace endpoint that powers
+    // Foundry-style execution traces; a real Movement node does not. Compute
+    // this once and reuse it for both the trace wiring and SDK publish below.
+    const isMovelite = localNode instanceof MoveliteManager;
+
     const runtime = await initRuntime({
       network: "local",
       accountManager,
+      ...(isMovelite ? { traceRpcUrl: `${nodeInfo.rpcUrl}/v1` } : {}),
       configOverride: {
         networks: {
           local: {
@@ -251,7 +257,7 @@ async function setupWithLocalNode(
 
       // movelite's REST responses can't drive the Movement CLI publish flow,
       // so deploy through the TypeScript SDK when it is the spawned backend.
-      const sdkPublish = localNode instanceof MoveliteManager;
+      const sdkPublish = isMovelite;
 
       try {
         for (const moduleName of options.autoDeploy) {

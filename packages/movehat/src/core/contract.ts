@@ -5,6 +5,7 @@ import {
   type MoveFunctionId,
 } from "@aptos-labs/ts-sdk";
 import { logger } from "../ui/index.js";
+import { traceTransaction } from "./trace/client.js";
 
 export interface TransactionResult {
   hash: string;
@@ -16,7 +17,11 @@ export class MoveContract {
   constructor(
     private aptos: Aptos,
     private moduleAddress: string,
-    private moduleName: string
+    private moduleName: string,
+    // movelite RPC base (ending in `/v1`). Presence enables Foundry-style
+    // execution traces at verbosity level >= 2. Undefined on the Movement node
+    // (no trace endpoint) — calls use the normal submit path.
+    private traceRpcUrl?: string
   ) {}
 
   async call(
@@ -47,6 +52,30 @@ export class MoveContract {
       signer,
       transaction,
     });
+
+    // Trace path: on movelite at raised verbosity, route through the
+    // instrumented `/transactions/trace?commit=true` endpoint, which executes
+    // AND commits in one pass (so we must NOT also submit). PR1c renders the
+    // returned call tree here; for now it maps straight to the result.
+    if (this.traceRpcUrl && logger.getVerbosityLevel() >= 2) {
+      const { response, elapsedMs } = await traceTransaction({
+        rpcUrl: this.traceRpcUrl,
+        transaction,
+        senderAuthenticator: signature,
+      });
+      void elapsedMs; // consumed by the renderer in PR1c
+
+      logger.success(
+        `Transaction ${response.txn_hash} committed with status: ${response.vm_status}`
+      );
+      logger.newline();
+
+      return {
+        hash: response.txn_hash,
+        success: response.success,
+        vm_status: response.vm_status,
+      };
+    }
 
     const committedTxn = await this.aptos.transaction.submit.simple({
       transaction,
@@ -97,7 +126,8 @@ export class MoveContract {
 export function getContract(
     aptos: Aptos,
     moduleAddress: string,
-    moduleName: string
+    moduleName: string,
+    traceRpcUrl?: string
 ): MoveContract {
-    return new MoveContract(aptos, moduleAddress, moduleName);
+    return new MoveContract(aptos, moduleAddress, moduleName, traceRpcUrl);
 }
