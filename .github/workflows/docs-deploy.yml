@@ -11,6 +11,11 @@ on:
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
+# Opt the pinned JS actions into the Node 24 runtime ahead of GitHub's
+# 2026-06-16 forced switch. GitHub's recommended opt-in; no version change.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # Allow only one concurrent deployment, skipping older queued runs.
 concurrency:
   group: 'docs-deploy'

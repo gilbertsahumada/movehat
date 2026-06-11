@@ -8,6 +8,7 @@
     "---Guides---",
     "guides/compilation",
     "guides/testing",
+    "guides/movelite",
     "guides/networks-and-modes",
     "guides/multi-contract",
     "guides/tutorial-fork-testing",

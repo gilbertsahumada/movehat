@@ -2,7 +2,7 @@
 
 How Movehat is released, triaged, versioned, and deprecated. This document is the contract between maintainers and downstream users — anything you build on top of `movehat@latest` should fit within the guarantees and timelines below.
 
-For security-specific policies, see [SECURITY.md](./SECURITY.md). For contributor guidelines, see [CLAUDE.md](./CLAUDE.md).
+For security-specific policies, see [SECURITY.md](./SECURITY.md). For contributor guidelines, see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Release cadence
 
@@ -12,7 +12,7 @@ Movehat follows three release rhythms:
 - **Minor releases** (`0.2.x → 0.3.0`) — ship when the public surface gains new exports, when behavior changes in a backwards-compatible way, or when pre-1.0 breaking changes accumulate. Typical cadence: every 4–8 weeks. Each minor release has a `CHANGELOG.md` entry listing what changed and any deprecation announcements.
 - **Major releases** (`0.x → 1.0.0`) — single planned event when the API stabilizes. Pre-1.0 breaking changes ship in minor bumps; once 1.0 lands, breaking changes ship in majors only.
 
-**Per-milestone batch merges**: feature work lands on the `develop` branch via sub-PRs. Each sub-PR that closes an issue updates `CHANGELOG.md` `[Unreleased]` in the same PR (see [`CLAUDE.md` §11](./CLAUDE.md)). When a milestone closes, a single `develop → main` batch PR ships everything together, followed by a release PR that bumps the version and renames `[Unreleased]` → `[X.Y.Z] - DATE` (mechanical, no prose writing). This pattern is documented in [`CLAUDE.md` §7](./CLAUDE.md) (batch flow) + §11 (CHANGELOG ownership). The `publish.yml` workflow gates the npm push on a matching `CHANGELOG.md` section.
+**Per-milestone batch merges**: feature work lands on the `develop` branch via sub-PRs. Each sub-PR that closes an issue updates `CHANGELOG.md` `[Unreleased]` in the same PR. When a milestone closes, a single `develop → main` batch PR ships everything together, followed by a release PR that bumps the version and renames `[Unreleased]` → `[X.Y.Z] - DATE` (mechanical, no prose writing). The `publish.yml` workflow gates the npm push on a matching `CHANGELOG.md` section.
 
 ## Issue triage SLA
 
@@ -46,7 +46,7 @@ Public-API symbols (anything re-exported from `packages/movehat/src/index.ts`) f
 1. **Mark deprecated** — the symbol gets a `@deprecated` JSDoc tag in the next minor release; the changelog entry calls it out explicitly with a migration path. The symbol stays functional for the entire next minor cycle.
 2. **Remove** — the deprecated symbol is removed in the minor release **after** the one that marked it.
 
-Precedent: the `mh()` legacy runtime helper was `@deprecated` from M2 onward (during the pre-`0.1.0` `0.0.0-dev` phase) and removed in M6 with the `0.0.0-dev → 0.1.0` bump. The deprecation window plus the version-bump signal gave downstream users a clear migration path. See [ROADMAP.md](./ROADMAP.md) §M2 and §M6 for the implementation arc.
+Precedent: the `mh()` legacy runtime helper was `@deprecated` from M2 onward (during the pre-`0.1.0` `0.0.0-dev` phase) and removed in M6 with the `0.0.0-dev → 0.1.0` bump. The deprecation window plus the version-bump signal gave downstream users a clear migration path.
 
 Pre-1.0 exception: deprecation may be indefinite when the cost of removal outweighs the benefit. The `AccountManager` static facade (deprecated in 0.2.7) has no planned removal date — the warning guides users toward the instance API but existing code continues to work.
 
@@ -64,7 +64,7 @@ Movehat shells out to the Movement CLI for compile, deploy, upgrade, and local-n
 
 If you want to contribute:
 
-1. Read [CLAUDE.md](./CLAUDE.md) — the working agreement (behavioral guidelines, surgical-changes rule, install-experience gate, self-review requirement).
+1. Read [CONTRIBUTING.md](./CONTRIBUTING.md) — the working agreement (development setup, the dual-tier install-experience gate, the PR workflow, and the self-review requirement).
 2. Skim the [Contributing guide](./packages/docs/content/docs/contributing/index.mdx) — workspace setup, dev loop, project architecture.
 3. Read the [PR template](./.github/PULL_REQUEST_TEMPLATE.md) before opening a PR — every section is part of the merge checklist.
 4. Run the install-experience gates locally (`pnpm check:example` + `pnpm test:smoke`) before requesting review; CI runs these too but pre-flight catches regressions before reviewers see them.
@@ -73,4 +73,4 @@ We don't have a formal review-assignment process today — small PRs (`docs`, `c
 
 ## Out of scope
 
-This document covers maintenance policy, not technical architecture. For architecture, see [`ROADMAP.md`](./ROADMAP.md). For security disclosure, see [SECURITY.md](./SECURITY.md). For code-of-conduct guidance, no separate document exists today — issue threads and PR conversations are expected to follow standard open-source community norms (be respectful, assume good faith, focus on the work).
+This document covers maintenance policy, not technical architecture. For security disclosure, see [SECURITY.md](./SECURITY.md). For code-of-conduct guidance, no separate document exists today — issue threads and PR conversations are expected to follow standard open-source community norms (be respectful, assume good faith, focus on the work).
