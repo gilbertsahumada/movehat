@@ -68,6 +68,20 @@ movehat test --ts
 
 With verbose enabled, subprocess output prints with a muted gray `›` prefix so it visually separates from Movehat's own lines.
 
+### Verbosity levels
+
+`-v` is counted — repeating it raises the level, and each level is additive:
+
+| Level | Flag | Adds |
+|---|---|---|
+| 0 | _(none)_ | System logs only (the default). |
+| 1 | `-v` | Subprocess output (gray `›` prefix). |
+| 2 | `-vv` | A decoded list of the events each `contract.call(...)` emitted. |
+| 3 | `-vvv` | A Foundry-style call tree of your own modules. |
+| 4 | `-vvvv` | The full trace — framework frames, natives, storage, return values. |
+
+Levels 2–4 render execution traces and only do so on the [movelite](/docs/guides/movelite) backend; see [Transaction traces](/docs/guides/traces). `MOVEHAT_VERBOSITY=<0-4>` sets the level directly without repeating flags.
+
 ## Critical signals always surface
 
 Movehat never silences a real failure. Lines matching these patterns reach your terminal regardless of verbosity:

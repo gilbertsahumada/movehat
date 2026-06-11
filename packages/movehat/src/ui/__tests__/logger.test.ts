@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { configureLogger, isVerbose, divider, phase } from "../logger.js";
+import {
+  configureLogger,
+  isVerbose,
+  getVerbosityLevel,
+  divider,
+  phase,
+} from "../logger.js";
 
 describe("logger — verbosity", () => {
   let originalEnv: string | undefined;
@@ -46,6 +52,62 @@ describe("logger — verbosity", () => {
     expect(isVerbose()).toBe(false);
     process.env.MOVEHAT_VERBOSE = "0";
     expect(isVerbose()).toBe(false);
+  });
+});
+
+describe("logger — getVerbosityLevel", () => {
+  let origLevel: string | undefined;
+  let origVerbose: string | undefined;
+
+  beforeEach(() => {
+    origLevel = process.env.MOVEHAT_VERBOSITY;
+    origVerbose = process.env.MOVEHAT_VERBOSE;
+    delete process.env.MOVEHAT_VERBOSITY;
+    delete process.env.MOVEHAT_VERBOSE;
+  });
+
+  afterEach(() => {
+    if (origLevel === undefined) delete process.env.MOVEHAT_VERBOSITY;
+    else process.env.MOVEHAT_VERBOSITY = origLevel;
+    if (origVerbose === undefined) delete process.env.MOVEHAT_VERBOSE;
+    else process.env.MOVEHAT_VERBOSE = origVerbose;
+  });
+
+  it("defaults to 0 when neither env var is set", () => {
+    expect(getVerbosityLevel()).toBe(0);
+  });
+
+  it("reads the numeric level from MOVEHAT_VERBOSITY", () => {
+    for (const n of [0, 1, 2, 3, 4]) {
+      process.env.MOVEHAT_VERBOSITY = String(n);
+      expect(getVerbosityLevel()).toBe(n);
+    }
+  });
+
+  it("clamps out-of-range values into 0..4", () => {
+    process.env.MOVEHAT_VERBOSITY = "9";
+    expect(getVerbosityLevel()).toBe(4);
+    process.env.MOVEHAT_VERBOSITY = "-3";
+    expect(getVerbosityLevel()).toBe(0);
+  });
+
+  it("ignores a non-numeric MOVEHAT_VERBOSITY and falls through", () => {
+    process.env.MOVEHAT_VERBOSITY = "loud";
+    expect(getVerbosityLevel()).toBe(0);
+    process.env.MOVEHAT_VERBOSITY = "loud";
+    process.env.MOVEHAT_VERBOSE = "1";
+    expect(getVerbosityLevel()).toBe(1);
+  });
+
+  it("falls back to level 1 for the legacy MOVEHAT_VERBOSE=1 when MOVEHAT_VERBOSITY is unset", () => {
+    process.env.MOVEHAT_VERBOSE = "1";
+    expect(getVerbosityLevel()).toBe(1);
+  });
+
+  it("MOVEHAT_VERBOSITY takes precedence over the legacy MOVEHAT_VERBOSE", () => {
+    process.env.MOVEHAT_VERBOSE = "1";
+    process.env.MOVEHAT_VERBOSITY = "3";
+    expect(getVerbosityLevel()).toBe(3);
   });
 });
 
