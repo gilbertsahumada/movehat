@@ -67,6 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behavior change in this PR — local boot, fallback, and the existing API
   behave identically; the trace renderer lands separately.
 
+- Refresh the bundled `movelite` to `0.2.1` (spec `^0.2.0` → `^0.2.1`, lockfile
+  pins the 0.2.1 shim and all four platform binaries). 0.2.1 validates the
+  request `Content-Type`, restricts the `Accept` header, and returns structured
+  JSON error bodies; Movehat already sends the canonical BCS content type with
+  no `Accept` header and now parses those JSON errors, so the success path,
+  trace contract, and renderer are unchanged. Verified end-to-end: `increment`
+  at `-vvvv` renders the call tree and commits against the 0.2.1 binary. The
+  refresh also opportunistically deduped a stray `@types/node` in the lockfile.
+
 ## [0.2.9] - 2026-06-01
 
 ### Fixed
