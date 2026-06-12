@@ -49,14 +49,21 @@ const leafValue = (value: unknown): string => {
   return s;
 };
 
-const formatArgValue = (arg: TracedArg): string => {
-  if (arg.value === null) return "()";
-  if (arg.type === "struct" && typeof arg.value === "object") {
-    return `{ ${Object.values(arg.value as Record<string, unknown>)
-      .map(leafValue)
+/** Format a decoded value. Struct (and vector) values arrive as objects with
+ *  by-index keys; their fields can themselves be structs, so recurse rather
+ *  than `String()`-ing a nested object into `[object Object]`. */
+const formatValue = (value: unknown): string => {
+  if (value !== null && typeof value === "object") {
+    return `{ ${Object.values(value as Record<string, unknown>)
+      .map(formatValue)
       .join(", ")} }`;
   }
-  return leafValue(arg.value);
+  return leafValue(value);
+};
+
+const formatArgValue = (arg: TracedArg): string => {
+  if (arg.value === null) return "()";
+  return formatValue(arg.value);
 };
 
 const formatArgs = (args: TracedArg[]): string =>
