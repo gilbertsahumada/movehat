@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Trace renderer: nested struct values in call arguments and return values now
+  render recursively (`{ 0, { 2, 0x… } }`) instead of collapsing to
+  `[object Object]`. The value formatter previously descended only one level, so
+  a struct field that was itself a struct printed as `[object Object]` — visible
+  in the level-4 full tree (framework frames such as `0x1::event::emit_event`)
+  and for any user call taking a nested-struct argument. Verified against a live
+  movelite `-vvvv` trace.
+
 - Restore tracking of `MAINTENANCE.md`, which was inadvertently untracked
   together with the genuinely-internal process docs during the docs cleanup.
   The README (including the npm-published package README) and the docs site

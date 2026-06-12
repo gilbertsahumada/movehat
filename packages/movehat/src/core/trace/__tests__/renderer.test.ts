@@ -137,3 +137,34 @@ describe("formatTraceLines — abort", () => {
     expect(out).toContain("0x1::vector::borrow");
   });
 });
+
+describe("formatTraceLines — nested struct values", () => {
+  // A struct arg whose field is itself a struct: movelite decodes these as
+  // nested objects. The formatter must recurse, not render "[object Object]".
+  const nested: TraceResponse = {
+    txn_hash: "0xa",
+    success: true,
+    gas_used: 10,
+    vm_status: "Executed successfully",
+    abort: null,
+    root: node({
+      module: "0xabc::user",
+      function: "wrap",
+      args: [
+        {
+          type: "struct",
+          value: { "0": 7, "1": { "0": "0xabc", "1": 42 } },
+        },
+      ],
+      return: [{ type: "struct", value: { "0": { "0": 1 } } }],
+    }),
+  };
+
+  it("recurses into nested struct args and returns (no [object Object])", () => {
+    const out = text(formatTraceLines(nested, 4, 1));
+    expect(out).not.toContain("[object Object]");
+    // Inner struct rendered with its own braces.
+    expect(out).toContain("{ 7, { 0xabc, 42 } }");
+    expect(out).toContain("{ { 1 } }");
+  });
+});
