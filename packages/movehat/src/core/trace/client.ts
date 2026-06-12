@@ -10,6 +10,34 @@ import type { TraceResponse } from "./types.js";
 const BCS_SIGNED_TXN_CONTENT_TYPE = "application/x.aptos.signed_transaction+bcs";
 
 /**
+ * Pull a readable detail out of a movelite error body. movelite (>= 0.2.1)
+ * returns structured JSON errors (`{ message, error_code, vm_error_code }`);
+ * older versions return plain text. Returns the `message` plus any codes when
+ * the body is JSON, otherwise the raw text unchanged.
+ */
+function extractErrorDetail(body: string): string {
+  if (!body) return "";
+  try {
+    const parsed = JSON.parse(body) as {
+      message?: unknown;
+      error_code?: unknown;
+      vm_error_code?: unknown;
+    };
+    if (parsed && typeof parsed.message === "string") {
+      const codes = [parsed.error_code, parsed.vm_error_code].filter(
+        (c) => c !== undefined && c !== null
+      );
+      return codes.length > 0
+        ? `${parsed.message} (${codes.join(", ")})`
+        : parsed.message;
+    }
+  } catch {
+    // Not JSON (e.g. older movelite plain-text errors) — fall through.
+  }
+  return body;
+}
+
+/**
  * Execute a signed transaction through movelite's instrumented VM and return
  * the Foundry-style call tree. `commit=true` runs the trace AND commits in a
  * single pass, so this is the sole execution — the caller must NOT also submit.
@@ -41,9 +69,10 @@ export async function traceTransaction(args: {
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    const detail = extractErrorDetail(body);
     throw new Error(
       `movelite trace request failed (${res.status} ${res.statusText})` +
-        (body ? `: ${body}` : "")
+        (detail ? `: ${detail}` : "")
     );
   }
 

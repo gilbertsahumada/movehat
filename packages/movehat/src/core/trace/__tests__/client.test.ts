@@ -71,6 +71,41 @@ describe("traceTransaction", () => {
       })
     ).rejects.toThrow(/400.*bad transaction/s);
   });
+
+  it("surfaces the `message` from a movelite JSON error body", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: "transaction aborted",
+          error_code: "vm_error",
+          vm_error_code: 4004,
+        }),
+        { status: 400, statusText: "Bad Request" }
+      )
+    );
+
+    await expect(
+      traceTransaction({
+        rpcUrl: "http://127.0.0.1:8090/v1",
+        transaction: fakeTxn,
+        senderAuthenticator: fakeAuth,
+      })
+    ).rejects.toThrow(/transaction aborted \(vm_error, 4004\)/);
+  });
+
+  it("falls back to raw text when the error body is not JSON", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("plain text failure", { status: 500, statusText: "Error" })
+    );
+
+    await expect(
+      traceTransaction({
+        rpcUrl: "http://127.0.0.1:8090/v1",
+        transaction: fakeTxn,
+        senderAuthenticator: fakeAuth,
+      })
+    ).rejects.toThrow(/500.*plain text failure/s);
+  });
 });
 
 describe("trace JSON contract (counter-increment fixture)", () => {

@@ -20,7 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   footer. Traces are movelite-only (the Movement node does not expose the trace
   endpoint) and opt-in by verbosity, so the default test loop is unaffected. A
   render failure degrades to a warning and never fails a committed transaction.
-  New guide at `guides/traces.mdx`. Closes #318.
+  A failed trace request surfaces movelite's structured JSON error `message`
+  (with `error_code` / `vm_error_code` when present), falling back to raw text
+  for older movelite builds. New guide at `guides/traces.mdx`. Closes #318,
+  Closes #324.
 
 ### Changed
 
