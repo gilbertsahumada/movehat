@@ -22,7 +22,7 @@
 - **Three execution modes** — full local blockchain, read-only fork of a remote network, or live testnet/mainnet binding.
 - **Auto-deploy in tests + auto-detect named addresses** — contracts compile and deploy automatically; no manual address wiring.
 - **Fast local boot with movelite** — on supported platforms an auto-installed [movelite](https://github.com/gilbertsahumada/movelite) binary boots the local test chain in under a second instead of ~15s, with transparent fallback to the full Movement node.
-- **Foundry-style execution traces** — raise verbosity (`-vv` … `-vvvv`) to render an indented call tree for each `contract.call(...)` with decoded arguments, gas, events, and the abort stack (movelite backend).
+- **Foundry-style execution traces** — raise verbosity (`-vv` … `-vvvv`) to render an indented call tree for each `contract.call(...)` with decoded arguments, gas, events, and the abort stack (full tree on the movelite backend; the Movement node renders a degraded flat trace — events, state changes, and gas).
 - **Native fork system** — local JSON-backed snapshots of Movement L1 state, no BCS compatibility issues.
 - **TypeScript-first** — single `PRIVATE_KEY` across all networks (Hardhat-style); deployments tracked per-network in `deployments/`.
 - **SLSA-provenance releases** — every npm release ships with [Trusted Publishers](https://docs.npmjs.com/trusted-publishers) provenance. Verify with `npm view movehat@<version>`.
