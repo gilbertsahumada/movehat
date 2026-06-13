@@ -48,6 +48,29 @@ export const isVerbose = (): boolean =>
   config.verbosity === 'verbose' || process.env.MOVEHAT_VERBOSE === '1';
 
 /**
+ * Numeric verbosity level (0..4) for level-gated output such as the
+ * transaction-trace renderer. Driven by the counted `-v` CLI flag via the
+ * `MOVEHAT_VERBOSITY` env var, so it survives the spawned test/script
+ * subprocess boundary the same way {@link isVerbose} reads `MOVEHAT_VERBOSE`.
+ * Falls back to the legacy boolean `MOVEHAT_VERBOSE=1` (level 1) for callers
+ * that set only that.
+ *
+ * - 0 default — system logs only
+ * - 1 `-v`    — + subprocess stdout (see {@link isVerbose})
+ * - 2 `-vv`   — + decoded events per call
+ * - 3 `-vvv`  — + user-module call tree
+ * - 4 `-vvvv` — + framework frames, natives, storage, return values
+ */
+export const getVerbosityLevel = (): number => {
+  const raw = process.env.MOVEHAT_VERBOSITY;
+  if (raw !== undefined) {
+    const n = parseInt(raw, 10);
+    if (!Number.isNaN(n)) return Math.max(0, Math.min(4, n));
+  }
+  return process.env.MOVEHAT_VERBOSE === '1' ? 1 : 0;
+};
+
+/**
  * Configure logger globally
  *
  * @param newConfig - Partial configuration to merge with current config
@@ -295,6 +318,7 @@ export const item = (text: string, indent: number = 0): void => {
 export const logger = {
   configure: configureLogger,
   isVerbose,
+  getVerbosityLevel,
   info,
   success,
   error,

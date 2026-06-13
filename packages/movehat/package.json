@@ -1,6 +1,6 @@
 {
   "name": "movehat",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "type": "module",
   "description": "Hardhat-like development framework for Movement L1 smart contracts",
   "bin": {
@@ -71,7 +71,7 @@
     "tsx": "^4.7.0"
   },
   "optionalDependencies": {
-    "movelite": "^0.2.0"
+    "movelite": "^0.2.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

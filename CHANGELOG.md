@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-12
+
+### Added
+
+- Foundry-style execution traces for `contract.call(...)` on the movelite
+  backend. At verbosity level 2 (`-vv`) Movehat prints a decoded list of the
+  events a call emitted; at level 3 (`-vvv`) it renders the call tree of your
+  own modules (framework `0x1::*` frames and natives filtered out, with their
+  events bubbled up to your nearest frame); at level 4 (`-vvvv`) the full tree —
+  framework frames, native calls, storage operations, and return values. Aborts
+  show the full tree plus the abort code and stack. Per-frame gas is shown in
+  internal VM units, distinct from the transaction's octa `gas_used` in the
+  footer. Traces are movelite-only (the Movement node does not expose the trace
+  endpoint) and opt-in by verbosity, so the default test loop is unaffected. A
+  render failure degrades to a warning and never fails a committed transaction.
+  A failed trace request surfaces movelite's structured JSON error `message`
+  (with `error_code` / `vm_error_code` when present), falling back to raw text
+  for older movelite builds. New guide at `guides/traces.mdx`. Closes #318,
+  Closes #324.
+
+### Changed
+
+- The global `-v` / `--verbose` flag is now **counted**: repeat it to raise the
+  verbosity level (`-v` … `-vvvv` → levels 1–4). Level 1 is unchanged — it
+  surfaces subprocess output exactly as before, and `MOVEHAT_VERBOSE=1` remains
+  its shorthand. The higher levels are reserved for the forthcoming movelite
+  transaction-trace renderer (decoded events at 2, the call tree at 3–4). A new
+  `MOVEHAT_VERBOSITY=<0-4>` env var sets the level directly and propagates across
+  the spawned test/script subprocess boundary. `isVerbose()` and its callers are
+  unaffected. Closes #316.
+
 ### Fixed
+
+- Trace renderer: nested struct values in call arguments and return values now
+  render recursively (`{ 0, { 2, 0x… } }`) instead of collapsing to
+  `[object Object]`. The value formatter previously descended only one level, so
+  a struct field that was itself a struct printed as `[object Object]` — visible
+  in the level-4 full tree (framework frames such as `0x1::event::emit_event`)
+  and for any user call taking a nested-struct argument. Verified against a live
+  movelite `-vvvv` trace.
 
 - Restore tracking of `MAINTENANCE.md`, which was inadvertently untracked
   together with the genuinely-internal process docs during the docs cleanup.
@@ -22,12 +61,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- Trace transaction types + HTTP client + `MoveContract` wiring (no renderer
+  yet). `core/trace/{types,client}.ts` model movelite's `/v1/transactions/trace`
+  contract and POST the BCS-signed transaction with `commit=true`. On movelite
+  at verbosity level >= 2, `contract.call(...)` now routes through that endpoint
+  (a single instrumented execution that also commits) instead of the normal
+  submit, preserving the `{hash, success, vm_status}` return shape; on the
+  Movement node and below level 2 the existing submit path is unchanged. The
+  call tree is rendered in a following change. Closes #317.
+
 - Bump the bundled `movelite` optional dependency from `^0.1.0` to `^0.2.0`.
   The 0.2.0 binary adds the `POST /v1/transactions/trace` endpoint that the
   upcoming Foundry-style trace renderer will consume; bumping the dependency
   makes that endpoint reachable through the published package. No user-visible
   behavior change in this PR — local boot, fallback, and the existing API
   behave identically; the trace renderer lands separately.
+
+- Refresh the bundled `movelite` to `0.2.1` (spec `^0.2.0` → `^0.2.1`, lockfile
+  pins the 0.2.1 shim and all four platform binaries). 0.2.1 validates the
+  request `Content-Type`, restricts the `Accept` header, and returns structured
+  JSON error bodies; Movehat already sends the canonical BCS content type with
+  no `Accept` header and now parses those JSON errors, so the success path,
+  trace contract, and renderer are unchanged. Verified end-to-end: `increment`
+  at `-vvvv` renders the call tree and commits against the 0.2.1 binary. The
+  refresh also opportunistically deduped a stray `@types/node` in the lockfile.
 
 ## [0.2.9] - 2026-06-01
 

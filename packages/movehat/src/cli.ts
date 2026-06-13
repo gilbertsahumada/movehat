@@ -50,7 +50,12 @@ program
   .version(version)
   .option('--network <name>', 'Network to use (testnet, mainnet, local, etc.)')
   .option('--redeploy', 'Force redeploy even if already deployed')
-  .option('-v, --verbose', 'Show subprocess output (movement node, aptos move) for debugging')
+  .option(
+    '-v, --verbose',
+    'Increase output verbosity (repeatable: -v subprocess output, -vv..-vvvv transaction traces on movelite)',
+    (_value: string, previous: number) => previous + 1,
+    0
+  )
   .hook('preAction', (thisCommand) => {
     // Store network option in environment for commands to access
     const options = thisCommand.opts();
@@ -60,8 +65,13 @@ program
     if (options.redeploy) {
       process.env.MH_CLI_REDEPLOY = 'true';
     }
-    if (options.verbose) {
+    // `-v` is counted (0..4). Level >= 1 keeps the legacy MOVEHAT_VERBOSE=1
+    // contract (isVerbose + its callers); MOVEHAT_VERBOSITY carries the
+    // numeric level across the spawned test/script subprocess boundary.
+    const level: number = options.verbose ?? 0;
+    if (level >= 1) {
       process.env.MOVEHAT_VERBOSE = '1';
+      process.env.MOVEHAT_VERBOSITY = String(level);
     }
   });
 

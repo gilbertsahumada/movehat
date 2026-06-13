@@ -113,6 +113,15 @@ If you expected movelite but see the Movement-node line, the binary was not
 found for your platform — movehat fell back. That is expected on unsupported
 platforms and harmless; your tests still pass, just slower.
 
+## Transaction traces
+
+Because movelite runs an instrumented VM, it can return a Foundry-style execution
+trace for every `contract.call(...)` — the call tree, decoded arguments, gas,
+events, and abort stack. Raise verbosity with `-vv` … `-vvvv` to see it. This is a
+movelite-only capability; the full Movement node does not expose the trace
+endpoint. See [Transaction traces](/docs/guides/traces) for the output format and
+verbosity levels.
+
 ## When to reach for the Movement node
 
 movelite is built for the fast local-test loop. Prefer the full Movement node
