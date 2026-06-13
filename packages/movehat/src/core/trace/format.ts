@@ -4,9 +4,11 @@ import { colors, rgbToAnsi, shouldUseColor } from "../../ui/colors.js";
 // renderer (renderer.ts) and the node degraded-trace renderer (nodeRenderer.ts).
 // None of these are tied to a specific response shape.
 
-// rgbToAnsi emits raw escapes unconditionally, so guard these two ourselves
-// (unlike colors.*, which already no-op when color is disabled).
-export const orange = (s: string): string =>
+// rgbToAnsi emits raw escapes unconditionally, so guard these ourselves
+// (unlike colors.*, which already no-op when color is disabled). `orange` is
+// module-private (only `leafValue` uses it); `brightBlue` is consumed by the
+// movelite renderer's footer.
+const orange = (s: string): string =>
   shouldUseColor() ? `${rgbToAnsi(255, 165, 0)}${s}\x1b[0m` : s;
 export const brightBlue = (s: string): string =>
   shouldUseColor() ? `${rgbToAnsi(90, 170, 255)}${s}\x1b[0m` : s;
@@ -29,7 +31,7 @@ export const shortenPath = (path: string): string => {
 
 const NUMERIC = /^\d+$/;
 
-export const leafValue = (value: unknown): string => {
+const leafValue = (value: unknown): string => {
   const s = String(value);
   if (NUMERIC.test(s)) return orange(s);
   if (s.startsWith("0x") && s.length > 12) return shortAddr(s);

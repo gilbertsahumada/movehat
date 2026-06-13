@@ -20,7 +20,8 @@ const success: NodeTxView = {
       data: { type: `${longAddr}::counter::Counter`, data: { count: "99" } },
     },
     { type: "delete_resource", address: longAddr, resource: "0x1::old::Thing" },
-    { type: "write_table_item" },
+    { type: "write_table_item", handle: longAddr },
+    { type: "write_module", address: longAddr },
   ],
 };
 
@@ -38,11 +39,13 @@ describe("formatNodeTraceLines — node degraded trace", () => {
   it("level 3: adds the write-set summary, no raw data payload", () => {
     const out = text(formatNodeTraceLines(success, 3));
     expect(out).toContain("State changes");
-    expect(out).toContain("write_resource");
     expect(out).toContain("delete_resource");
-    expect(out).toContain("write_table_item");
     // Long resource type/address is shortened.
     expect(out).toMatch(/write_resource 0xfd1c\.\.2c54::counter::Counter/);
+    // Table items key off the shortened table handle, not a resource type.
+    expect(out).toMatch(/write_table_item table_item @0xfd1c\.\.2c54/);
+    // Module changes render with a generic "module" type.
+    expect(out).toMatch(/write_module module/);
     // Raw resource data is withheld until level 4.
     expect(out).not.toContain('"count":"99"');
   });

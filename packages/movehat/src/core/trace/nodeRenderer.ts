@@ -25,10 +25,13 @@ export interface NodeTxView {
 interface NodeWriteSetChange {
   type: string;
   address?: string;
-  /** `write_resource` / `write_module` payload (a `MoveResource` `{type,data}`). */
-  data?: { type?: string; data?: unknown } | unknown;
+  /** `write_resource` payload (a `MoveResource` `{type,data}`); typed `unknown`
+   *  and narrowed at the use sites since the shape varies by change type. */
+  data?: unknown;
   /** `delete_resource` carries the resource type as a string here. */
   resource?: string;
+  /** Table-item changes carry a `handle` instead of an `address`. */
+  handle?: string;
 }
 
 /** Reshape an SDK write-set change into the shared `storageLine` duck-type. */
@@ -51,7 +54,8 @@ const changeToOp = (
       return { op: c.type, type: "module", address };
     case "write_table_item":
     case "delete_table_item":
-      return { op: c.type, type: "table_item", address: null };
+      // Table items have no resource type; key off the table `handle`.
+      return { op: c.type, type: "table_item", address: c.handle ?? null };
     default:
       return { op: c.type, type: "?", address };
   }

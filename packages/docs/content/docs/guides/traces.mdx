@@ -109,6 +109,11 @@ footer carries the status and the octa `gas_used` (there is no per-frame timing
 off the node). As with the full tree, this is additional detail only — it never
 changes what `contract.call(...)` returns.
 
+The write-set is the transaction's complete state diff, so it includes framework
+resources the runtime touched for gas and fee accounting (coin stores, account
+state) alongside your own. `-vvv` keeps it to a one-line-per-change summary;
+`-vvvv` prints every change's data, which can be verbose on a busy transaction.
+
 ## Scope
 
 Only `contract.call(...)` (state-changing transactions) is traced. `view(...)`
