@@ -101,6 +101,10 @@ export class MoveContract {
     // but the REST response already carries the events, write-set, and gas.
     // At raised verbosity render that flat view (a render failure must never
     // fail a transaction that already committed).
+    //
+    // waitForTransaction returns the CommittedTransactionResponse union; the
+    // `in` guards narrow it to the user-transaction shape that carries events
+    // and changes, so renderNodeTrace receives a typed value without a cast.
     const nodeLevel = logger.getVerbosityLevel();
     if (nodeLevel >= 2 && "events" in response && "changes" in response) {
       try {

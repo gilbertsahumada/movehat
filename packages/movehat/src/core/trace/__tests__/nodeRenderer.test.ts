@@ -22,6 +22,8 @@ const success: NodeTxView = {
     { type: "delete_resource", address: longAddr, resource: "0x1::old::Thing" },
     { type: "write_table_item", handle: longAddr },
     { type: "write_module", address: longAddr },
+    { type: "delete_table_item", handle: longAddr },
+    { type: "delete_module", address: longAddr },
   ],
 };
 
@@ -46,6 +48,10 @@ describe("formatNodeTraceLines — node degraded trace", () => {
     expect(out).toMatch(/write_table_item table_item @0xfd1c\.\.2c54/);
     // Module changes render with a generic "module" type.
     expect(out).toMatch(/write_module module/);
+    // delete_* variants fall through to the same handling as their write_
+    // counterparts: table items still key off the handle, modules stay generic.
+    expect(out).toMatch(/delete_table_item table_item @0xfd1c\.\.2c54/);
+    expect(out).toMatch(/delete_module module/);
     // Raw resource data is withheld until level 4.
     expect(out).not.toContain('"count":"99"');
   });

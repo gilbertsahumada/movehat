@@ -89,7 +89,9 @@ The full Movement node does not expose internal call frames, so the call tree is
 movelite-only. But the node's transaction response already carries the events,
 the write-set (state changes), and the gas — so on the node, a fork, or
 `createLive`, the same verbosity flags render a **flat, degraded trace** of that
-data:
+data.
+
+A `registry::register()` call at `-vvvv`:
 
 ```text
 Events
