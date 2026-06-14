@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Spinner success/fail lines no longer leak ANSI color when stdout is piped.
+  The `Building package` / `Publishing to blockchain` (and other) spinners
+  persisted their final `✔` / `✖` through ora's own TTY detection, which still
+  colored the symbol on a non-TTY stream. The symbol now routes through the
+  `shouldUseColor()`-gated `coloredSymbol`, so piped output is escape-free while
+  a real terminal keeps the colored glyph (§9 console-UX convention).
+
 ## [0.4.0] - 2026-06-14
 
 ### Added
