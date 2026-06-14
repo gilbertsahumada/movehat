@@ -117,10 +117,11 @@ platforms and harmless; your tests still pass, just slower.
 
 Because movelite runs an instrumented VM, it can return a Foundry-style execution
 trace for every `contract.call(...)` — the call tree, decoded arguments, gas,
-events, and abort stack. Raise verbosity with `-vv` … `-vvvv` to see it. This is a
-movelite-only capability; the full Movement node does not expose the trace
-endpoint. See [Transaction traces](/docs/guides/traces) for the output format and
-verbosity levels.
+events, and abort stack. Raise verbosity with `-vv` … `-vvvv` to see it. The full
+**call tree** is movelite-only; the Movement node does not expose the trace
+endpoint, but at the same verbosity it renders a degraded flat trace (events +
+state changes + gas). See [Transaction traces](/docs/guides/traces) for both
+output formats and the verbosity levels.
 
 ## When to reach for the Movement node
 

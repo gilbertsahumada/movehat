@@ -23,10 +23,10 @@ movehat test --ts -vvvv    # L4 + framework frames, natives, storage, return val
 | 0 | _(none)_ | System logs only — the default quiet console. |
 | 1 | `-v` | Subprocess output from `movement node run-localnet` and `aptos move build / publish`, printed with a muted gray `›` prefix. |
 | 2 | `-vv` | A decoded list of the events each `contract.call(...)` emitted. |
-| 3 | `-vvv` | A Foundry-style execution trace showing the call tree of **your** modules (framework `0x1::*` frames filtered out). |
-| 4 | `-vvvv` | The full trace: framework frames, native calls, storage operations, and return values. |
+| 3 | `-vvv` | The call tree of **your** modules (framework `0x1::*` frames filtered out) on movelite; a flat write-set summary on the Movement node. |
+| 4 | `-vvvv` | Full detail: framework frames, natives, storage, and return values on movelite; each state change's full decoded data on the Movement node. |
 
-Levels 2–4 render execution traces, which are a **[movelite](/docs/guides/movelite)-only** capability — they require the trace endpoint the lightweight local runtime exposes. On the full Movement node the same flags still raise subprocess verbosity (level 1), but no call tree is rendered. See [Transaction traces](/docs/guides/traces) for the full output format.
+Levels 2–4 render execution traces. The full **call tree** is a **[movelite](/docs/guides/movelite)-only** capability — it requires the trace endpoint the lightweight local runtime exposes. On the full Movement node (and forks / `createLive`) the same flags render a **degraded flat trace** instead — the transaction's events, state changes, and gas, which the node's response already carries. See [Transaction traces](/docs/guides/traces) for both output formats.
 
 When to reach for level 1 (`-v`):
 

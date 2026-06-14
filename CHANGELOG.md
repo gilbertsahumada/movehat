@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-14
+
+### Added
+
+- Degraded execution traces on the Movement node backend. The full call tree is
+  movelite-only (the node's REST API does not expose internal call frames), but
+  the committed-transaction response already carries the events, the write-set,
+  and the gas — so on the Movement node, a fork, or `createLive`, the same
+  verbosity flags now render a flat trace of that data instead of nothing. `-vv`
+  shows the decoded events; `-vvv` adds the write-set summary (which resources
+  were written/deleted, by `address::Module::Resource`); `-vvvv` adds each
+  change's full decoded data. The footer carries the status and the octa
+  `gas_used`. Render-only and opt-in by verbosity — `contract.call(...)` returns
+  the same `{hash, success, vm_status}`, and a render failure degrades to a
+  warning without failing a committed transaction. The generic trace formatters
+  are now shared between the movelite and node renderers (`core/trace/format.ts`).
+
 ## [0.3.0] - 2026-06-12
 
 ### Added

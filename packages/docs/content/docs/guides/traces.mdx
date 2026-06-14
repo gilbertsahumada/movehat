@@ -9,11 +9,13 @@ Foundry-style execution trace for every `contract.call(...)` — an indented cal
 tree with per-frame `module::function`, decoded arguments, gas, return values,
 events, and (on failure) the abort stack.
 
-> Traces are a **[movelite](/docs/guides/movelite)-only** capability. They come
-> from an instrumented VM endpoint that the lightweight local runtime exposes;
-> the full Movement node's REST API does not expose internal call frames. On the
-> Movement node the same flags still raise subprocess verbosity, but no call
-> tree is rendered.
+> The full **call tree** is a **[movelite](/docs/guides/movelite)-only**
+> capability — it comes from an instrumented VM endpoint that the lightweight
+> local runtime exposes, and the full Movement node's REST API does not expose
+> internal call frames. On the Movement node (and forks / `createLive`) the same
+> flags render a **degraded flat trace** instead: the transaction's events, state
+> changes, and gas, which the node's response already carries. See
+> [On the Movement node](#on-the-movement-node-degraded-trace) below.
 
 ## Enabling traces
 
@@ -81,8 +83,42 @@ innermost frame outward:
 The returned result still reports `success: false` and the `vm_status` — the
 trace is additional detail, it does not change what `contract.call(...)` returns.
 
+## On the Movement node (degraded trace)
+
+The full Movement node does not expose internal call frames, so the call tree is
+movelite-only. But the node's transaction response already carries the events,
+the write-set (state changes), and the gas — so on the node, a fork, or
+`createLive`, the same verbosity flags render a **flat, degraded trace** of that
+data.
+
+A `registry::register()` call at `-vvvv`:
+
+```text
+Events
+  emit 0xec8f..f3a4::registry::RegisterEvent {"name":"alice","owner":"0xec8f..."}
+
+State changes
+  write_resource 0xec8f..f3a4::registry::Identity @0xec8f..f3a4
+    {"name":"alice","register_events":{ ... }}
+
+✔ Executed successfully · gas_used: 461 octas
+```
+
+The levels mirror the movelite tiers: `-vv` shows the decoded events; `-vvv`
+adds the write-set summary (which resources were written or deleted, by
+`address::Module::Resource`); `-vvvv` adds each change's full decoded data. The
+footer carries the status and the octa `gas_used` (there is no per-frame timing
+off the node). As with the full tree, this is additional detail only — it never
+changes what `contract.call(...)` returns.
+
+The write-set is the transaction's complete state diff, so it includes framework
+resources the runtime touched for gas and fee accounting (coin stores, account
+state) alongside your own. `-vvv` keeps it to a one-line-per-change summary;
+`-vvvv` prints every change's data, which can be verbose on a busy transaction.
+
 ## Scope
 
 Only `contract.call(...)` (state-changing transactions) is traced. `view(...)`
-is a read-only query and is never traced. Traces require the movelite backend;
-on the Movement node, `createLive`, or a fork, calls run normally with no tree.
+is a read-only query and is never traced. The full call **tree** requires the
+movelite backend; on the Movement node, `createLive`, or a fork, you get the
+degraded flat trace (events + state changes + gas) described above.

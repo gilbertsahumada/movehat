@@ -77,10 +77,10 @@ With verbose enabled, subprocess output prints with a muted gray `›` prefix so
 | 0 | _(none)_ | System logs only (the default). |
 | 1 | `-v` | Subprocess output (gray `›` prefix). |
 | 2 | `-vv` | A decoded list of the events each `contract.call(...)` emitted. |
-| 3 | `-vvv` | A Foundry-style call tree of your own modules. |
-| 4 | `-vvvv` | The full trace — framework frames, natives, storage, return values. |
+| 3 | `-vvv` | A Foundry-style call tree of your own modules (movelite); a flat write-set summary on the Movement node. |
+| 4 | `-vvvv` | Full detail — frames/natives/storage/returns (movelite); each state change's decoded data on the Movement node. |
 
-Levels 2–4 render execution traces and only do so on the [movelite](/docs/guides/movelite) backend; see [Transaction traces](/docs/guides/traces). `MOVEHAT_VERBOSITY=<0-4>` sets the level directly without repeating flags.
+Levels 2–4 render execution traces. The full call **tree** is [movelite](/docs/guides/movelite)-only; on the Movement node (and forks / `createLive`) the same flags render a degraded flat trace — events + state changes + gas. See [Transaction traces](/docs/guides/traces). `MOVEHAT_VERBOSITY=<0-4>` sets the level directly without repeating flags.
 
 ## Critical signals always surface
 

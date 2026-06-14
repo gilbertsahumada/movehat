@@ -7,6 +7,7 @@ import {
 import { logger } from "../ui/index.js";
 import { traceTransaction } from "./trace/client.js";
 import { renderTrace } from "./trace/renderer.js";
+import { renderNodeTrace } from "./trace/nodeRenderer.js";
 
 export interface TransactionResult {
   hash: string;
@@ -95,6 +96,25 @@ export class MoveContract {
     const response = await this.aptos.waitForTransaction({
       transactionHash: committedTxn.hash,
     });
+
+    // Degraded trace: the Movement node does not expose internal call frames,
+    // but the REST response already carries the events, write-set, and gas.
+    // At raised verbosity render that flat view (a render failure must never
+    // fail a transaction that already committed).
+    //
+    // waitForTransaction returns the CommittedTransactionResponse union; the
+    // `in` guards narrow it to the user-transaction shape that carries events
+    // and changes, so renderNodeTrace receives a typed value without a cast.
+    const nodeLevel = logger.getVerbosityLevel();
+    if (nodeLevel >= 2 && "events" in response && "changes" in response) {
+      try {
+        renderNodeTrace(response, { level: nodeLevel });
+      } catch (renderError) {
+        const msg =
+          renderError instanceof Error ? renderError.message : String(renderError);
+        logger.warning(`Failed to render trace: ${msg}`);
+      }
+    }
 
     logger.success(
       `Transaction ${committedTxn.hash} committed with status: ${response.vm_status}`
