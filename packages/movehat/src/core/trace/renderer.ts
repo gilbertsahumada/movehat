@@ -1,6 +1,15 @@
 import { logger } from "../../ui/index.js";
-import { colors, rgbToAnsi, shouldUseColor } from "../../ui/colors.js";
+import { colors } from "../../ui/colors.js";
 import { symbols } from "../../ui/symbols.js";
+
+import {
+  brightBlue,
+  formatEventLine,
+  formatValue,
+  indent,
+  shortenPath,
+  storageLine,
+} from "./format.js";
 
 import type {
   AbortInfo,
@@ -10,56 +19,12 @@ import type {
   TraceResponse,
 } from "./types.js";
 
-// rgbToAnsi emits raw escapes unconditionally, so guard these two ourselves
-// (unlike colors.*, which already no-op when color is disabled).
-const orange = (s: string): string =>
-  shouldUseColor() ? `${rgbToAnsi(255, 165, 0)}${s}\x1b[0m` : s;
-const brightBlue = (s: string): string =>
-  shouldUseColor() ? `${rgbToAnsi(90, 170, 255)}${s}\x1b[0m` : s;
-
-const indent = (depth: number): string => "  ".repeat(depth);
-
-/** Shorten a 0x-prefixed address for display (`0xf903..9b16`); leave short
- *  framework addresses like `0x1` untouched. */
-const shortAddr = (addr: string): string =>
-  addr.startsWith("0x") && addr.length > 12
-    ? `${addr.slice(0, 6)}..${addr.slice(-4)}`
-    : addr;
-
-/** Shorten the address part of a `address::module[::Name]` path. */
-const shortenPath = (path: string): string => {
-  const [addr, ...rest] = path.split("::");
-  if (addr === undefined || rest.length === 0) return path;
-  return [shortAddr(addr), ...rest].join("::");
-};
-
 const isFramework = (module: string | null): boolean =>
   module !== null && module.startsWith("0x1::");
 
 /** Visible at level 3 (user-module tree): not a framework frame, not a native. */
 const isUserFrame = (node: CallNode): boolean =>
   !isFramework(node.module) && node.kind !== "native";
-
-const NUMERIC = /^\d+$/;
-
-const leafValue = (value: unknown): string => {
-  const s = String(value);
-  if (NUMERIC.test(s)) return orange(s);
-  if (s.startsWith("0x") && s.length > 12) return shortAddr(s);
-  return s;
-};
-
-/** Format a decoded value. Struct (and vector) values arrive as objects with
- *  by-index keys; their fields can themselves be structs, so recurse rather
- *  than `String()`-ing a nested object into `[object Object]`. */
-const formatValue = (value: unknown): string => {
-  if (value !== null && typeof value === "object") {
-    return `{ ${Object.values(value as Record<string, unknown>)
-      .map(formatValue)
-      .join(", ")} }`;
-  }
-  return leafValue(value);
-};
 
 const formatArgValue = (arg: TracedArg): string => {
   if (arg.value === null) return "()";
@@ -85,23 +50,6 @@ const frameLabel = (node: CallNode): string => {
   const gas = colors.dim(` [${node.gas}]`);
   return `${colored}(${formatArgs(node.args)})${gas}`;
 };
-
-const formatData = (data: unknown): string => {
-  if (data === null || data === undefined) return "";
-  try {
-    return colors.dim(JSON.stringify(data));
-  } catch {
-    return colors.dim(String(data));
-  }
-};
-
-const eventLine = (event: TracedEvent): string =>
-  `${colors.warning(`emit ${shortenPath(event.type)}`)} ${formatData(event.data)}`.trimEnd();
-
-const storageLine = (op: { op: string; type: string; address: string | null }): string =>
-  `${colors.primary(`${op.op} ${shortenPath(op.type)}`)}${
-    op.address ? colors.dim(` @${shortAddr(op.address)}`) : ""
-  }`;
 
 /** Non-unit return values only; null when nothing to show. */
 const returnLine = (ret: TracedArg[]): string | null => {
@@ -147,7 +95,7 @@ const renderNode = (
   const childDepth = depth + 1;
 
   if (showFull) {
-    for (const e of node.events) lines.push(indent(childDepth) + eventLine(e));
+    for (const e of node.events) lines.push(indent(childDepth) + formatEventLine(e));
     for (const s of node.storage) lines.push(indent(childDepth) + storageLine(s));
     const ret = returnLine(node.return);
     if (ret) lines.push(indent(childDepth) + ret);
@@ -161,7 +109,7 @@ const renderNode = (
   const visibleChildren: CallNode[] = [];
   gatherHidden(node.children, bubbled, visibleChildren);
   for (const e of [...node.events, ...bubbled]) {
-    lines.push(indent(childDepth) + eventLine(e));
+    lines.push(indent(childDepth) + formatEventLine(e));
   }
   for (const c of visibleChildren) renderNode(c, childDepth, showFull, lines);
 };
@@ -214,7 +162,7 @@ export function formatTraceLines(
       lines.push(colors.dim("(no events emitted)"));
     } else {
       lines.push(colors.bold("Events"));
-      for (const { event } of events) lines.push("  " + eventLine(event));
+      for (const { event } of events) lines.push("  " + formatEventLine(event));
     }
   } else {
     // Aborts always show the full tree so the failing frame is visible.
