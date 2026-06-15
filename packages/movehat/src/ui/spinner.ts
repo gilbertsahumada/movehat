@@ -1,5 +1,27 @@
 import ora, { type Ora, type Options as OraOptions } from 'ora';
 import { shouldUseColor } from './colors.js';
+import { coloredSymbol } from './symbols.js';
+
+/**
+ * Persist a spinner's final line with a color-gated status symbol.
+ *
+ * ora's own `.succeed()` / `.fail()` color their log-symbols through ora's
+ * internal TTY detection, which still emits ANSI on the persisted line when
+ * stdout is piped (non-TTY) even though our `shouldUseColor()` says no color.
+ * Routing the symbol through `coloredSymbol` (gated by `shouldUseColor`) keeps
+ * piped output escape-free while preserving the colored glyph in a real TTY.
+ */
+const persist = (
+  spin: Ora,
+  type: 'success' | 'error',
+  text?: string
+): void => {
+  spin.stopAndPersist(
+    text === undefined
+      ? { symbol: coloredSymbol(type) }
+      : { symbol: coloredSymbol(type), text }
+  );
+};
 
 /**
  * Spinner color options
@@ -94,11 +116,11 @@ export const withSpinner = async <T>(
 
   try {
     const result = await task();
-    spin.succeed(successText || startText.replace(/\.\.\.?$/, ''));
+    persist(spin, 'success', successText || startText.replace(/\.\.\.?$/, ''));
     return result;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    spin.fail(errorText || `Failed: ${errMsg}`);
+    persist(spin, 'error', errorText || `Failed: ${errMsg}`);
     throw error;
   }
 };
@@ -139,11 +161,11 @@ export const withTimedSpinner = async <T>(
   }, 500);
   try {
     const result = await task();
-    spin.succeed(`${label} (${((Date.now() - start) / 1000).toFixed(1)}s)`);
+    persist(spin, 'success', `${label} (${((Date.now() - start) / 1000).toFixed(1)}s)`);
     return result;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    spin.fail(errMsg);
+    persist(spin, 'error', errMsg);
     throw error;
   } finally {
     clearInterval(timer);
@@ -201,10 +223,10 @@ export const createSpinnerChain = (): SpinnerChain => {
       currentSpinner = spinner({ text, indent });
       try {
         const result = await task();
-        currentSpinner.succeed();
+        persist(currentSpinner, 'success');
         return result;
       } catch (error) {
-        currentSpinner.fail();
+        persist(currentSpinner, 'error');
         throw error;
       }
     },
