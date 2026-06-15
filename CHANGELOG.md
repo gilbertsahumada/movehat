@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-15
+
 ### Fixed
 
 - Spinner success/fail lines no longer leak ANSI color when stdout is piped.
