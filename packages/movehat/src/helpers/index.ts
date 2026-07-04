@@ -27,6 +27,7 @@ export type { StoredAccount } from "../core/AccountManager.js";
 export { LocalNodeManager } from "../node/LocalNodeManager.js";
 export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.js";
 export { MoveliteManager, findMoveliteBinary } from "../node/MoveliteManager.js";
+export type { NodeProvider } from "../node/NodeProvider.js";
 export { setupLocalTesting } from "./setupLocalTesting.js";
 export type { LocalTestingContext } from "./setupLocalTesting.js";
 export {

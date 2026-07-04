@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The example suite and the `movehat init` scaffold silently disabled movelite
+  — and with it the Foundry-style execution traces — in `movehat test`. Their
+  shared root-hook node (`tests/setup.ts`) pinned `LocalNodeManager`, and an
+  injected `localNode` takes precedence over movelite auto-selection, so
+  `traceRpcUrl` was never wired and `-vv..-vvvv` rendered no call tree while
+  every run paid the slow Movement-node boot. The shared node now prefers
+  movelite when its binary resolves (Movement node remains the fallback), so
+  scaffolded projects get sub-second boots and full traces out of the box.
+  Closes #339.
+
+### Changed
+
+- `LocalTestOptions.localNode` now accepts any `NodeProvider` (previously
+  `LocalNodeManager` only), and the `NodeProvider` interface is exported from
+  `movehat/helpers` — injecting a pre-started `MoveliteManager` into
+  `setupTestFixture` / `Harness.createLocal` is now expressible in user code.
+  Closes #339.
+
 ## [0.4.1] - 2026-06-15
 
 ### Fixed
