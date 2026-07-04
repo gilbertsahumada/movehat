@@ -47,7 +47,7 @@ export interface LocalTestOptions {
     mode?: LocalTestingMode;            // Testing mode: 'local-node' (full blockchain) or 'fork' (read-only snapshot) (default: 'local-node')
 
     // Shared node (when mode='local-node')
-    localNode?: import("../node/LocalNodeManager.js").LocalNodeManager; // Pre-started node to reuse; skips spawn when provided
+    localNode?: import("../node/NodeProvider.js").NodeProvider; // Pre-started node to reuse; skips spawn when provided (LocalNodeManager or MoveliteManager)
     useMovelite?: boolean;              // Try movelite before Movement node (default: true)
 
     // Local Node options (when mode='local-node')
