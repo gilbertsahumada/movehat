@@ -42,7 +42,8 @@ my-project/
 │   │   └── Counter.move       # Your Move smart contract
 │   └── Move.toml
 ├── tests/
-│   └── Counter.test.ts        # TypeScript tests
+│   ├── Counter.test.ts        # TypeScript tests
+│   └── setup.ts               # Shared local test node (mocha root hooks)
 ├── scripts/
 │   └── deploy-counter.ts      # Deployment script
 ├── movehat.config.ts          # Network configuration
