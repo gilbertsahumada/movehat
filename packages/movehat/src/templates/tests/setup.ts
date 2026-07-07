@@ -3,9 +3,10 @@ import {
   LocalNodeManager,
   MoveliteManager,
   findMoveliteBinary,
+  type NodeProvider,
 } from "movehat/helpers";
 
-let sharedNode;
+let sharedNode: NodeProvider | undefined;
 
 /**
  * Returns the shared local node started by root hooks.
@@ -22,7 +23,7 @@ let sharedNode;
  * `MOVEHAT_USE_MOVELITE=0` forces the Movement-node fallback — the same
  * contract the framework's own backend auto-selection honors.
  */
-export function getSharedNode() {
+export function getSharedNode(): NodeProvider {
   if (!sharedNode || !sharedNode.isRunning()) {
     throw new Error(
       "Shared node not available — it either never started (ensure " +
