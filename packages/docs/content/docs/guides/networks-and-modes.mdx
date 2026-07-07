@@ -133,7 +133,7 @@ Fix: keep `deployments/{network}/*.json` files committed (they're tracked by def
 
 ### "My test suite runs slowly because each spec spawns a node"
 
-Symptom: 10 test files = 10 sequential local-node spawns of pure startup overhead before any assertion runs.
+Symptom: 10 test files = 10 sequential local-node spawns — pure startup overhead before any assertion runs.
 
 What happened: each `Harness.createLocal()` call spawns its own local node by default. On the movelite backend that costs under a second per spec, so this usually only hurts when the suite fell back to the full Movement node (~15s per boot).
 
