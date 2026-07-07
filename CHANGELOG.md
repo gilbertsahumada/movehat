@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- The pre-publish gate (`scripts/pre-publish.sh`) no longer aborts on the
+  happy path. Its `check()` helper inspected `$?`, which at else-branch call
+  sites is the exit status of the just-failed `if` condition — so a clean
+  tree, an absent version tag, or a reasonable package size each printed a
+  false failure and killed the script under `set -e` precisely when
+  everything was fine (0.5.0 ran the gate's substance manually because of
+  this). Checks now use explicit `check_ok`/`check_fail` markers that
+  accumulate to the summary. Also adds `--non-interactive` (honors `CI=true`)
+  for automation, and treats missing local npm credentials as informational
+  since the publish path is OIDC via `publish.yml`. Closes #348.
+
 ## [0.5.0] - 2026-07-07
 
 ### Fixed
