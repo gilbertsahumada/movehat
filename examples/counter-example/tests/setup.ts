@@ -18,12 +18,16 @@ let sharedNode: NodeProvider | undefined;
  * When movelite is not installed (e.g. a platform without a published
  * binary) it falls back to the full Movement node, which still runs the
  * tests but renders only the degraded event/state trace.
+ *
+ * `MOVEHAT_USE_MOVELITE=0` forces the Movement-node fallback — the same
+ * contract the framework's own backend auto-selection honors.
  */
 export function getSharedNode(): NodeProvider {
   if (!sharedNode || !sharedNode.isRunning()) {
     throw new Error(
-      "Shared node not available. " +
-        'Ensure tests/setup.ts is listed in .mocharc.json under "require".'
+      "Shared node not available — it either never started (ensure " +
+        'tests/setup.ts is listed in .mocharc.json under "require") ' +
+        "or stopped/crashed mid-run."
     );
   }
   return sharedNode;
@@ -32,7 +36,8 @@ export function getSharedNode(): NodeProvider {
 export const mochaHooks = {
   async beforeAll(this: Mocha.Context) {
     this.timeout(60000);
-    const moveliteBinary = findMoveliteBinary();
+    const moveliteBinary =
+      process.env.MOVEHAT_USE_MOVELITE !== "0" ? findMoveliteBinary() : null;
     sharedNode = moveliteBinary
       ? new MoveliteManager(moveliteBinary)
       : new LocalNodeManager({ forceRestart: true });
