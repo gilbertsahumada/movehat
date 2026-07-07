@@ -21,11 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `LocalTestOptions.localNode` now accepts any `NodeProvider` (previously
-  `LocalNodeManager` only), and the `NodeProvider` interface is exported from
-  `movehat/helpers` — injecting a pre-started `MoveliteManager` into
-  `setupTestFixture` / `Harness.createLocal` is now expressible in user code.
-  Closes #339.
+- `LocalTestOptions.localNode` now accepts either bundled node manager —
+  `LocalNodeManager` or `MoveliteManager` — via the `NodeProvider` interface,
+  which is newly exported from `movehat/helpers` (previously the option was
+  typed `LocalNodeManager` only, so a pre-started `MoveliteManager` could not
+  be injected into `setupTestFixture` / `Harness.createLocal` at all). Note
+  that movelite-specific behavior (the trace endpoint and SDK publish) engages
+  only for an actual `MoveliteManager` instance; other `NodeProvider`
+  implementations run as a plain node. Closes #339.
 
 ## [0.4.1] - 2026-06-15
 
