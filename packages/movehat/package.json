@@ -1,6 +1,6 @@
 {
   "name": "movehat",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "description": "Hardhat-like development framework for Movement L1 smart contracts",
   "bin": {
