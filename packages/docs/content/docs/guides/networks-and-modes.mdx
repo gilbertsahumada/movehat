@@ -133,11 +133,11 @@ Fix: keep `deployments/{network}/*.json` files committed (they're tracked by def
 
 ### "My test suite runs slowly because each spec spawns a node"
 
-Symptom: 10 test files = 10 sequential local-node spawns = 2-5 minutes of pure startup overhead before any assertion runs.
+Symptom: 10 test files = 10 sequential local-node spawns — pure startup overhead before any assertion runs.
 
-What happened: each `Harness.createLocal()` call spawns its own Movement local node by default. The current architecture doesn't share a single node across specs.
+What happened: each `Harness.createLocal()` call spawns its own local node by default. On the movelite backend that costs under a second per spec, so this usually only hurts when the suite fell back to the full Movement node (~15s per boot).
 
-Fix: open issue [#235](https://github.com/gilbertsahumada/movehat/issues/235) tracks this; the proposed mocha root-hooks pattern (Option 1) brings N spawns down to 1. Until that ships, the workaround is to keep test spec counts low or split into separate `movehat test --ts` invocations.
+Fix: the scaffold's mocha root-hooks pattern boots one shared node for the whole run — see [Sharing one node across specs](./testing#sharing-one-node-across-specs-optional). If the per-spec boots themselves are slow, first check that movelite is actually the selected backend (see [movelite](./movelite)).
 
 ## Related
 

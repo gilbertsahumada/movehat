@@ -171,6 +171,22 @@ harness = await Harness.createLocal({
 See [movelite](./movelite) for supported platforms, the `MOVEHAT_USE_MOVELITE`
 override, and how to tell which backend started.
 
+### Sharing one node across specs (optional)
+
+With zero configuration, each spec boots its own local chain — with movelite
+that costs under a second per file, so many projects need nothing more. The
+scaffold that `movehat init` generates goes one step further: it ships a
+`tests/setup.ts` root hook that boots one shared node for the whole `mocha`
+run and hands it to every fixture via `{ localNode: getSharedNode() }` — see
+the
+[counter example](https://github.com/gilbertsahumada/movehat/blob/main/examples/counter-example/tests/setup.ts)
+for the full file.
+
+> **Passing `localNode` opts out of movelite auto-selection** — movehat uses
+> the node you hand it. To keep the full [execution traces](./traces),
+> construct a `MoveliteManager` (as the scaffold does); a plain
+> `LocalNodeManager` gives only the degraded event/state trace.
+
 ## Running All Tests
 
 Run both Move and TypeScript tests together:
