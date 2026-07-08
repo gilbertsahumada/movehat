@@ -154,8 +154,14 @@ echo "----------------------------------------"
 cd packages/movehat
 # --json puts machine-readable output on stdout (notices go to stderr);
 # unpackedSize is in bytes, so no unit parsing is needed.
+# The node validation must fail hard on a missing/non-numeric value: bash
+# arithmetic would silently coerce a stray string to 0 and pass the check.
 UNPACKED_BYTES=$(npm pack --dry-run --json 2>/dev/null \
-    | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(j[0].unpackedSize)")
+    | node -e "
+        const v = JSON.parse(require('fs').readFileSync(0, 'utf8'))[0].unpackedSize;
+        if (!Number.isInteger(v)) { console.error('unpackedSize missing from npm pack --json output'); process.exit(1); }
+        console.log(v);
+    ")
 echo "Unpacked size: $((UNPACKED_BYTES / 1024)) kB"
 
 # Warn if package is too large (>10MB)
