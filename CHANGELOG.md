@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for automation, and treats missing local npm credentials as informational
   since the publish path is OIDC via `publish.yml`. Closes #348.
 
+- Follow-up robustness fixes for `scripts/pre-publish.sh` from the post-merge
+  review of the #348 fix. The package-size check never actually measured
+  anything (it grepped for `"Unpacked size:"` while npm emits lowercase
+  `unpacked size:`, so the comparison always silently passed); it now parses
+  `npm pack --dry-run --json` and compares the byte-exact `unpackedSize`
+  against 10 MB. The script also anchors itself to the repo root at startup —
+  invoking it from a subdirectory previously died with a raw node
+  MODULE_NOT_FOUND stack — and rejects unknown arguments instead of silently
+  running interactive mode on a mistyped `--non-interactive`. Closes #351.
+
 ## [0.5.0] - 2026-07-07
 
 ### Fixed
