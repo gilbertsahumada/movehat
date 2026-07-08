@@ -8,12 +8,24 @@ set -e
 #   --non-interactive (or CI=true): never prompt; any condition that would
 #   have asked "Continue anyway?" fails immediately instead.
 
-# Detect project root
+# Detect project root and anchor there so the script behaves the same
+# regardless of the invocation directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 NON_INTERACTIVE=0
-if [[ "${1:-}" == "--non-interactive" ]] || [[ "${CI:-}" == "true" ]]; then
+for arg in "$@"; do
+    case "$arg" in
+        --non-interactive) NON_INTERACTIVE=1 ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            echo "Usage: bash scripts/pre-publish.sh [--non-interactive]" >&2
+            exit 1
+            ;;
+    esac
+done
+if [[ "${CI:-}" == "true" ]]; then
     NON_INTERACTIVE=1
 fi
 
@@ -140,12 +152,14 @@ echo -e "${BLUE}6. Checking Package Size${NC}"
 echo "----------------------------------------"
 
 cd packages/movehat
-PACKAGE_SIZE=$(npm pack --dry-run 2>&1 | grep "Unpacked size:" | awk '{print $3}')
-echo "Package size: $PACKAGE_SIZE"
+# --json puts machine-readable output on stdout (notices go to stderr);
+# unpackedSize is in bytes, so no unit parsing is needed.
+UNPACKED_BYTES=$(npm pack --dry-run --json 2>/dev/null \
+    | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(j[0].unpackedSize)")
+echo "Unpacked size: $((UNPACKED_BYTES / 1024)) kB"
 
 # Warn if package is too large (>10MB)
-SIZE_BYTES=$(echo "$PACKAGE_SIZE" | grep -o '[0-9.]*' | head -1)
-if (( $(echo "$SIZE_BYTES > 10" | bc -l) )); then
+if (( UNPACKED_BYTES > 10 * 1024 * 1024 )); then
     echo -e "${YELLOW}⚠${NC}  Package size is large (>10MB)"
     echo "   Consider excluding unnecessary files"
 else
