@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `normalizeAddress` is now exported from `movehat/helpers` (lowercase,
+  `0x`-prefixed, left-padded to 64 hex chars). On-chain view results return
+  addresses without leading-zero padding while the SDK's
+  `accountAddress.toString()` zero-pads them, so comparing the two raw
+  strings fails whenever an address happens to start with a zero byte —
+  roughly 1 run in 16 with randomly generated test accounts. The
+  counter-example's `get_module_address` test flaked exactly this way; it
+  now normalizes both sides. New public export, so the next release is a
+  minor bump. Closes #355.
+
 ### Fixed
 
 - `MoveliteManager` process lifecycle is now safe for long-lived use.
