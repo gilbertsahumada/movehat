@@ -158,7 +158,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build, unit-tests]
-    timeout-minutes: 12
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -271,6 +271,17 @@ jobs:
         # via the SDK path. The Movement CLI installed above provides the
         # `movement move build` compile step.
         run: MOVEHAT_EXPECT_BACKEND=movelite pnpm assert-backend
+        env:
+          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+
+      - name: Example suite (Tier 2 gate — movelite backend)
+        # The counter-example mocha suite is all-local: the root hook boots
+        # movelite (pulled by pnpm install as movehat's optionalDependency)
+        # and the Movement CLI installed above compiles the Move packages.
+        # The movement-node mode (MOVEHAT_USE_MOVELITE=0) stays deferred to
+        # the Linux MintFunder issue (#149), same as MOVEHAT_SKIP_LOCAL_NODE
+        # above.
+        run: pnpm test:example
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 

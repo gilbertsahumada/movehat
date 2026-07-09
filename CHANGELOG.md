@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MODULE_NOT_FOUND stack — and rejects unknown arguments instead of silently
   running interactive mode on a mistyped `--non-interactive`. Closes #351.
 
+- CI E2E job gains the example suite gate (Tier 2 from CLAUDE.md §6.2): the
+  counter-example mocha tests now run on every PR to main, in movelite mode
+  (movement-node deferred to #149). The job timeout increases from 12 to 15
+  minutes to accommodate the suite's cold Move compilation. Closes #356.
+
 ## [0.5.0] - 2026-07-07
 
 ### Fixed
