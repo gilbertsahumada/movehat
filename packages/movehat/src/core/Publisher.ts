@@ -60,7 +60,7 @@ export class Publisher {
   constructor(private readonly deps: PublisherDeps = {}) {}
 
   async deploy(input: PublishInput): Promise<DeploymentInfo> {
-    const { moduleName, config, account } = input;
+    const { moduleName, config } = input;
 
     validateSafeName(moduleName, "module");
 

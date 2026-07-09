@@ -85,7 +85,8 @@ export interface DeployCodeObjectOptions {
  * on-chain at `objectAddress` and have been deployed previously (typically
  * via `deployCodeObject`).
  */
-export interface UpgradeCodeObjectOptions extends DeployCodeObjectOptions {
+export interface UpgradeCodeObjectOptions
+  extends Omit<DeployCodeObjectOptions, "redeploy"> {
   /** Address of the existing code object to upgrade. Required. */
   objectAddress: string;
 }
