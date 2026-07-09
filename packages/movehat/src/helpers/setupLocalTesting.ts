@@ -252,30 +252,19 @@ async function setupWithLocalNode(
     if (options.autoDeploy && options.autoDeploy.length > 0) {
       logger.step(`Auto-deploying ${options.autoDeploy.length} module(s)...`);
 
-      const previousRedeploy = process.env.MH_CLI_REDEPLOY;
-      process.env.MH_CLI_REDEPLOY = 'true';
-
       // movelite's REST responses can't drive the Movement CLI publish flow,
       // so deploy through the TypeScript SDK when it is the spawned backend.
       const sdkPublish = isMovelite;
 
-      try {
-        for (const moduleName of options.autoDeploy) {
-          try {
-            logger.plain(`   Deploying ${moduleName}...`);
-            await runtime.deployContract(moduleName, { sdkPublish });
-            logger.success(`${moduleName} deployed`, 2);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            logger.error(`Failed to deploy ${moduleName}: ${msg}`, 2);
-            throw error;
-          }
-        }
-      } finally {
-        if (previousRedeploy === undefined) {
-          delete process.env.MH_CLI_REDEPLOY;
-        } else {
-          process.env.MH_CLI_REDEPLOY = previousRedeploy;
+      for (const moduleName of options.autoDeploy) {
+        try {
+          logger.plain(`   Deploying ${moduleName}...`);
+          await runtime.deployContract(moduleName, { sdkPublish, redeploy: true });
+          logger.success(`${moduleName} deployed`, 2);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          logger.error(`Failed to deploy ${moduleName}: ${msg}`, 2);
+          throw error;
         }
       }
 

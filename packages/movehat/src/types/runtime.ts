@@ -53,6 +53,12 @@ export interface MovehatRuntime {
        * is movelite, whose REST responses the Movement CLI cannot consume.
        */
       sdkPublish?: boolean;
+      /**
+       * Skip the already-deployed check and overwrite the deployment
+       * record. Falls back to the `MH_CLI_REDEPLOY=true` environment
+       * variable (set by the CLI's --redeploy flag) when omitted.
+       */
+      redeploy?: boolean;
     }
   ) => Promise<DeploymentInfo>;
   getDeployment: (moduleName: string) => DeploymentInfo | null;
