@@ -11,12 +11,12 @@ import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 import { withTimedSpinner, withSpinner } from "../ui/spinner.js";
 
 /**
- * Substrings that always surface from the movement subprocess regardless
- * of verbosity. These are signals the user must see to debug a stuck
+ * Substrings that always surface from a node subprocess regardless of
+ * verbosity. These are signals the user must see to debug a stuck
  * startup (panic, fatal, address-in-use). Tested in
  * __tests__/LocalNodeManager.test.ts to guard against silent regressions.
  */
-const CRITICAL_NODE_OUTPUT = /panic|fatal|address already in use|EADDRINUSE/i;
+export const CRITICAL_NODE_OUTPUT = /panic|fatal|address already in use|EADDRINUSE/i;
 
 export interface LocalNodeOptions {
   testDir?: string;           // Directory for node data (default: .movehat/local-node)

@@ -96,6 +96,13 @@ export interface SpawnedProcess {
   stdin: Writable | null;
   kill(signal?: NodeJS.Signals): boolean;
   /**
+   * Detaches the child AND its stdio pipes from the event-loop ref count
+   * so a long-lived child no longer keeps the parent process alive. Each
+   * stdio socket is a separately ref'd handle, so unref'ing only the
+   * child would leave the pipes holding the loop open.
+   */
+  unref(): void;
+  /**
    * Resolves once when the child exits, regardless of how the caller
    * triggered it (natural exit, `kill`, or process death). Safe to await
    * multiple times.
@@ -265,6 +272,13 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       stderr: child.stderr,
       stdin: child.stdin,
       kill: (signal?: NodeJS.Signals) => child.kill(signal),
+      unref: () => {
+        child.unref();
+        // Typed as Readable/Writable but net.Socket at runtime.
+        for (const stream of [child.stdout, child.stderr, child.stdin]) {
+          (stream as unknown as { unref?: () => void } | null)?.unref?.();
+        }
+      },
       exited,
     };
   }
