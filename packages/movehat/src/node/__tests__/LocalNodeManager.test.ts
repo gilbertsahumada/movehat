@@ -58,6 +58,7 @@ function buildFakeSpawned(): FakeSpawnedProcess {
       setImmediate(() => exitResolve({ code: null, signal: _signal ?? "SIGTERM" }));
       return true;
     },
+    unref: vi.fn(),
     exited,
     __exit: (code, signal) => exitResolve({ code, signal }),
   };
