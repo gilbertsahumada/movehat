@@ -1,6 +1,10 @@
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
-import { setupTestFixture, type TestFixture } from "movehat/helpers";
+import {
+  setupTestFixture,
+  normalizeAddress,
+  type TestFixture,
+} from "movehat/helpers";
 import { getSharedNode } from "./setup.js";
 
 describe("Greeting Contract", () => {
@@ -75,7 +79,11 @@ describe("Greeting Contract", () => {
     const moduleAddress = await greeting.view<string>("get_module_address", []);
     console.log(`   Module address: ${moduleAddress}`);
 
-    expect(moduleAddress).to.equal(fixture.accounts.deployer.accountAddress.toString());
+    // The on-chain view returns the address without leading-zero padding
+    // while the SDK zero-pads to 64 hex chars — normalize both sides.
+    expect(normalizeAddress(moduleAddress)).to.equal(
+      normalizeAddress(fixture.accounts.deployer.accountAddress.toString()),
+    );
   });
 
   after(async () => {
