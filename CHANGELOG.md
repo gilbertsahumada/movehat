@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `normalizeAddress` is now exported from `movehat/helpers` (lowercase,
-  `0x`-prefixed, left-padded to 64 hex chars). On-chain view results return
+- `normalizeAddress` and `isHexAddress` are now exported from
+  `movehat/helpers` (`normalizeAddress`: lowercase, `0x`-prefixed,
+  left-padded to 64 hex chars; `isHexAddress`: syntactic validation, which
+  `normalizeAddress`'s docs direct callers to). On-chain view results return
   addresses without leading-zero padding while the SDK's
   `accountAddress.toString()` zero-pads them, so comparing the two raw
   strings fails whenever an address happens to start with a zero byte —
