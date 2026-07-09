@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `MoveliteManager` process lifecycle is now safe for long-lived use.
+  Interrupting a test run with Ctrl+C no longer leaves an orphaned movelite
+  holding port 8090 (a sync kill hook now runs on process exit and on
+  SIGINT/SIGTERM), an unstopped node no longer keeps the mocha event loop
+  alive (the child and its stdio pipes are unref'd once ready), a chatty
+  node can no longer block on the undrained 64KB pipe buffer (output is
+  drained through the standard verbosity filter — critical signals always
+  surface, chatter only with `-v`), and a node that dies during boot now
+  fails immediately with its exit code and recent stderr instead of burning
+  the full 15s readiness timeout on a generic message. A stopped manager
+  can also be started again (the internal killed flag was never reset).
+  Closes #353.
+
 ### Internal
 
 - The pre-publish gate (`scripts/pre-publish.sh`) no longer aborts on the
