@@ -15,6 +15,7 @@ import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 
 const READY_TIMEOUT_MS = 15_000;
 const READY_POLL_INTERVAL_MS = 200;
+const READY_PROBE_TIMEOUT_MS = 2_000;
 const SIGKILL_GRACE_MS = 5_000;
 const MAX_STDERR_TAIL_LINES = 20;
 const MAX_STDERR_TAIL_LINE_LENGTH = 500;
@@ -167,7 +168,12 @@ export class MoveliteManager implements NodeProvider {
       // not mask a child that already died.
       if (exitInfo) throw this.buildBootFailure(exitInfo);
       try {
-        const res = await fetch(url);
+        // Per-probe timeout: without it, a wedged listener that accepts
+        // TCP but never responds would stall the loop far past the 15s
+        // deadline, which is only checked between iterations.
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(READY_PROBE_TIMEOUT_MS),
+        });
         if (res.ok && !exitInfo) return;
       } catch {
         // not ready yet

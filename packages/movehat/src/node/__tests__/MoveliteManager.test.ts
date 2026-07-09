@@ -136,7 +136,7 @@ describe("MoveliteManager — start / stop / lifecycle", () => {
   });
 
   it("start spawns 'movelite start --port 8090 --no-auth' via the adapter", async () => {
-    const { adapter, calls } = buildFakeAdapter();
+    const { adapter, calls, spawned } = buildFakeAdapter();
     stubFetchPortFreeThenReady();
     const mgr = new MoveliteManager("/bin/movelite", 8090, adapter);
     const info = await mgr.start();
@@ -144,6 +144,10 @@ describe("MoveliteManager — start / stop / lifecycle", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.command).toBe("/bin/movelite");
     expect(calls[0]!.args).toEqual(["start", "--port", "8090", "--no-auth"]);
+    expect(calls[0]!.stdio).toBe("pipe");
+    // Both pipes must have consumers or the child blocks on a full buffer.
+    expect(spawned[0]!.stdout!.listenerCount("data")).toBeGreaterThan(0);
+    expect(spawned[0]!.stderr!.listenerCount("data")).toBeGreaterThan(0);
     expect(info.rpcUrl).toBe("http://127.0.0.1:8090");
     expect(mgr.isRunning()).toBe(true);
     await mgr.stop();
@@ -264,15 +268,45 @@ describe("MoveliteManager — subprocess output filtering (§9 console UX)", () 
     await mgr.stop();
   });
 
+  it("hides routine stderr chatter in quiet mode", async () => {
+    const { mgr, proc } = await startedManager();
+    errSpy.mockClear();
+
+    proc.stderr!.emit("data", Buffer.from("applying genesis state"));
+    proc.stderr!.emit("data", Buffer.from("[WARN] deprecated config field"));
+
+    const errCalls = errSpy.mock.calls.flat().join(" ");
+    expect(errCalls).not.toContain("applying genesis state");
+    expect(errCalls).not.toContain("deprecated config field");
+    await mgr.stop();
+  });
+
   it("surfaces stdout chatter with the muted prefix in verbose mode", async () => {
     process.env.MOVEHAT_VERBOSE = "1";
     const { mgr, proc } = await startedManager();
     logSpy.mockClear();
 
+    // Two chunks: the handler must stay attached across emissions.
     proc.stdout!.emit("data", Buffer.from("block committed height=42"));
+    proc.stdout!.emit("data", Buffer.from("tx executed gas_used=7"));
 
     const stdoutCalls = logSpy.mock.calls.flat().join(" ");
     expect(stdoutCalls).toContain("block committed height=42");
+    expect(stdoutCalls).toContain("tx executed gas_used=7");
+    await mgr.stop();
+  });
+
+  it("surfaces stderr chatter via console.error in verbose mode", async () => {
+    process.env.MOVEHAT_VERBOSE = "1";
+    const { mgr, proc } = await startedManager();
+    errSpy.mockClear();
+
+    proc.stderr!.emit("data", Buffer.from("applying genesis state"));
+    proc.stderr!.emit("data", Buffer.from("opening state db"));
+
+    const errCalls = errSpy.mock.calls.flat().join(" ");
+    expect(errCalls).toContain("applying genesis state");
+    expect(errCalls).toContain("opening state db");
     await mgr.stop();
   });
 });
@@ -285,6 +319,8 @@ describe("MoveliteManager — boot failure and liveness", () => {
   });
 
   afterEach(() => {
+    // A failed assertion must not leak fake timers into later tests.
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -365,6 +401,63 @@ describe("MoveliteManager — boot failure and liveness", () => {
     // Trailing \n distinguishes boot-line-1 from boot-line-1x matches.
     expect(message).not.toContain("boot-line-1\n");
     expect(message).not.toContain("boot-line-5\n");
+    vi.useRealTimers();
+  });
+
+  it("rejects a ready response that arrives after the child died (foreign node on the same port)", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    // Port probe rejects; the first readiness fetch is a deferred promise
+    // we resolve ok only AFTER the child has died, emulating a foreign
+    // node answering on the port.
+    let resolveReady!: (v: { ok: boolean }) => void;
+    const fetchFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (resolveReady = resolve)),
+      )
+      .mockRejectedValue(new Error("ECONNREFUSED"));
+    vi.stubGlobal("fetch", fetchFn);
+    const mgr = new MoveliteManager("/bin/movelite", 8090, adapter);
+
+    let captured: unknown;
+    const startPromise = mgr.start().catch((e) => {
+      captured = e;
+    });
+    await flushMicrotasks();
+
+    spawned[0]!.__exit(1, null);
+    await flushMicrotasks();
+    resolveReady({ ok: true });
+    await startPromise;
+
+    expect(captured).toBeInstanceOf(Error);
+    expect((captured as Error).message).toMatch(/exited with code 1/);
+    expect(mgr.isRunning()).toBe(false);
+  });
+
+  it("truncates oversized stderr lines in the tail", async () => {
+    const { adapter, spawned } = buildFakeAdapter();
+    stubFetchNeverReady();
+    vi.useFakeTimers();
+    const mgr = new MoveliteManager("/bin/movelite", 8090, adapter);
+
+    let captured: unknown;
+    const startPromise = mgr.start().catch((e) => {
+      captured = e;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const proc = spawned[0]!;
+    proc.stderr!.emit("data", Buffer.from("x".repeat(600)));
+    proc.__exit(1, null);
+
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    const message = (captured as Error).message;
+    expect(message).toContain("x".repeat(500));
+    expect(message).not.toContain("x".repeat(501));
     vi.useRealTimers();
   });
 
@@ -473,6 +566,7 @@ describe("MoveliteManager — stop", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
