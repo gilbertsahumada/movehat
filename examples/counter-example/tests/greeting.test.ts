@@ -5,7 +5,6 @@ import {
   normalizeAddress,
   type TestFixture,
 } from "movehat/helpers";
-import { getSharedNode } from "./setup.js";
 
 describe("Greeting Contract", () => {
   let fixture: TestFixture<'greeting'>;
@@ -13,9 +12,7 @@ describe("Greeting Contract", () => {
   before(async function () {
     this.timeout(60000);
 
-    fixture = await setupTestFixture(['greeting'] as const, ['alice', 'bob'], {
-      localNode: getSharedNode(),
-    });
+    fixture = await setupTestFixture(['greeting'] as const, ['alice', 'bob']);
 
     console.log(`\n✅ Testing Greeting Contract on local blockchain`);
     console.log(`   Deployer: ${fixture.accounts.deployer.accountAddress.toString()}`);
@@ -87,7 +84,7 @@ describe("Greeting Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node
+    // Releases the fixture; the shared node keeps running for later specs.
     await fixture.teardown();
   });
 });

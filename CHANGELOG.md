@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Local node sharing is now implicit — user tests carry zero node-lifecycle
+  code, matching the Hardhat/Foundry experience. When movelite is the
+  selected backend, the first `setupTestFixture()` / `setupLocalTesting()` /
+  `Harness.createLocal()` in a process boots one node, every later fixture
+  reuses it, and the node is killed automatically at process exit (no
+  explicit stop anywhere). The `movehat init` scaffold and the
+  counter-example no longer ship `tests/setup.ts`, `getSharedNode()`, or the
+  mocha `require` wiring — that entire pattern moved into the framework.
+  Opt-outs: pass `localNode` (never touched), pass any `node*` option (a
+  private per-fixture node), or disable movelite (`useMovelite: false` /
+  `MOVEHAT_USE_MOVELITE=0` — the full Movement node stays per-fixture, which
+  keeps the backend-assertion gate meaningful). `LocalTestingContext` gains
+  a public `ownsNode` field, which `Harness.cleanup()` now respects so a
+  per-spec cleanup can no longer stop the shared node. New public field, so
+  the next release is a minor bump. Closes #361. Tracks #341.
+
 ### Added
 
 - `normalizeAddress` and `isHexAddress` are now exported from

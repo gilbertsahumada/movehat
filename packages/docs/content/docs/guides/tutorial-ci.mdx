@@ -17,7 +17,7 @@ The minimum gate is:
 
 That's it for the mandatory layer. Three things stay opt-in because they trade off CI minutes against catch-rate:
 
-- **TypeScript integration tests** (`movehat test --ts`) — each spec spawns a real local Movement node. Useful but slow.
+- **TypeScript integration tests** (`movehat test --ts`) — the suite boots a real local node (one shared movelite per run when available, or a full Movement node) plus compiles and deploys your modules. Useful but slower than Move unit tests.
 - **Fork-mode tests** — depend on upstream RPC; can be flaky under rate limits.
 - **Live-network tests** — never. `createLive` belongs in `scripts/*.ts`, not `tests/*.test.ts`. See [Networks and modes](./networks-and-modes).
 
@@ -33,8 +33,9 @@ name: CI
 #
 # Compiles the Move package and runs Move-level unit tests on every PR
 # against main. TypeScript integration tests are opt-in (commented step
-# at the bottom) because each spec spawns a local Movement node and
-# adds ~30-60s of latency.
+# at the bottom) because they boot a local node and compile + deploy
+# the Move modules, adding minutes of latency on a full Movement node
+# (movelite, where available, cuts the node boot to under a second).
 
 on:
   push:
@@ -104,9 +105,10 @@ jobs:
       - name: Run Move unit tests
         run: npx movehat test --move
 
-      # Opt-in: TypeScript integration tests. Each spec spawns a local
-      # Movement node (~15-30s startup) + runs assertions, so a 5-spec
-      # suite can take 3-5 minutes. Uncomment when your project has
+      # Opt-in: TypeScript integration tests. The suite boots one local
+      # node (shared across specs with movelite; ~15-30s per spec on a
+      # full Movement node) and compiles + deploys your modules, so it
+      # can take minutes. Uncomment when your project has
       # tests/*.test.ts files you want gated on every PR.
       #
       # - name: Run TypeScript integration tests

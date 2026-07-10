@@ -1,7 +1,6 @@
 import { describe, it, before } from "mocha";
 import { expect } from "chai";
 import { setupTestFixture, type TestFixture } from "movehat/helpers";
-import { getSharedNode } from "./setup.js";
 
 describe("Message Contract", () => {
   let fixture: TestFixture<'message'>;
@@ -9,9 +8,7 @@ describe("Message Contract", () => {
   before(async function () {
     this.timeout(60000);
 
-    fixture = await setupTestFixture(['message'] as const, [], {
-      localNode: getSharedNode(),
-    });
+    fixture = await setupTestFixture(['message'] as const, []);
   });
 
   describe("get_message", () => {

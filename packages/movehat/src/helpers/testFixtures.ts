@@ -26,7 +26,9 @@ export interface TestFixture<TModules extends string = string> {
   contracts: Record<TModules, MoveContract>;
 
   /**
-   * Stop the local node / fork server this fixture started.
+   * Stop the node / fork server this fixture owns. A no-op when the
+   * fixture reuses the process-shared movelite node or a caller-provided
+   * `localNode` — those keep running.
    *
    * Each fixture owns its own `AccountManager` instance (via
    * `setupLocalTesting` → `initRuntime`), so there is no shared pool

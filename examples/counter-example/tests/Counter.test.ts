@@ -2,7 +2,6 @@ import { Harness } from "movehat";
 import type { MoveContract } from "movehat/helpers";
 import type { Account } from "@aptos-labs/ts-sdk";
 import { expect } from "chai";
-import { getSharedNode } from "./setup.js";
 
 /**
  * Uses the Harness API: Harness.createLocal with autoDeploy. Sibling
@@ -22,7 +21,6 @@ describe("Counter Contract", () => {
     this.timeout(60000);
 
     harness = await Harness.createLocal({
-      localNode: getSharedNode(),
       accountLabels: ["deployer", "alice", "bob"],
       autoDeploy: ["counter"],
     });

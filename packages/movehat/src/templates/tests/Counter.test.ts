@@ -2,7 +2,6 @@
 import { describe, it, before, after } from "mocha";
 import { expect } from "chai";
 import { Harness } from "movehat";
-import { getSharedNode } from "./setup.js";
 
 describe("Counter Contract", () => {
   let harness;
@@ -12,10 +11,10 @@ describe("Counter Contract", () => {
   before(async function () {
     this.timeout(60000);
 
-    // Reuses the shared Movement node started by root hooks (tests/setup.ts).
+    // The first fixture in the process boots one shared local node; later
+    // fixtures reuse it and it shuts down automatically at process exit.
     // Each spec still gets its own accounts + deployments for isolation.
     harness = await Harness.createLocal({
-      localNode: getSharedNode(),
       accountLabels: ["deployer", "alice", "bob"],
       autoDeploy: ["counter"],
     });
@@ -103,9 +102,9 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // harness.cleanup() stops the local node and poisons the harness —
-    // any further method call (other than cleanup itself) throws
-    // HarnessDisposedError synchronously.
+    // harness.cleanup() poisons the harness — any further method call
+    // (other than cleanup itself) throws HarnessDisposedError
+    // synchronously. The shared node keeps running for later specs.
     await harness.cleanup();
   });
 });

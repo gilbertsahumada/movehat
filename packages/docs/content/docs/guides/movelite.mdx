@@ -116,10 +116,11 @@ If you expected movelite but see the Movement-node line, there are two causes:
   slower.
 - **Your tests inject a node** — passing `localNode` to `Harness.createLocal`
   or `setupTestFixture` overrides backend detection entirely; movehat uses
-  whatever node you hand it. Older scaffolds pinned `LocalNodeManager` in
-  `tests/setup.ts` — construct a `MoveliteManager` there instead (see
-  [Sharing one node across
-  specs](./testing#sharing-one-node-across-specs-optional)).
+  whatever node you hand it. Older scaffolds shipped a `tests/setup.ts` root
+  hook that pinned a node this way — current movehat shares one movelite
+  node per process implicitly, so that file can simply be deleted (see
+  [One shared node per
+  process](./testing#one-shared-node-per-process-automatic)).
 
 ## Transaction traces
 
