@@ -9,6 +9,7 @@ import type { LocalNodeInfo } from "../node/LocalNodeManager.js";
 import { MoveliteManager, findMoveliteBinary } from "../node/MoveliteManager.js";
 import type { NodeProvider } from "../node/NodeProvider.js";
 import { AccountManager } from "../core/AccountManager.js";
+import { acquireSharedMoveliteNode } from "./sharedMoveliteNode.js";
 import { logger } from "../ui/index.js";
 import type { LocalTestOptions } from "../types/config.js";
 
@@ -34,13 +35,16 @@ function resolveForkRpcUrl(
 /**
  * Context returned by {@link setupLocalTesting}.
  *
- * Each invocation owns its own handles, so two parallel `setupLocalTesting`
- * calls in the same process do not trample each other.
+ * Each invocation gets its own runtime and accounts. The local node may be
+ * shared: when movelite is the auto-selected backend, every context in the
+ * process reuses one node (`ownsNode` is false and `teardown` leaves it
+ * running; it is killed automatically at process exit).
  *
- * @public The `runtime` and `teardown` fields are the supported surface.
- *         `localNode`, `forkServer`, and `forkManager` are exposed for
- *         escape hatches (e.g. mid-test `forkManager.resetState()`) but
- *         their concrete shapes are `@internal`.
+ * @public The `runtime`, `ownsNode`, and `teardown` fields are the
+ *         supported surface. `localNode`, `forkServer`, and `forkManager`
+ *         are exposed for escape hatches (e.g. mid-test
+ *         `forkManager.resetState()`) but their concrete shapes are
+ *         `@internal`.
  */
 export interface LocalTestingContext {
   runtime: MovehatRuntime;
@@ -50,6 +54,12 @@ export interface LocalTestingContext {
   forkServer?: ForkServer;
   /** @internal */
   forkManager?: ForkManager;
+  /**
+   * Whether this context owns its local node. False when the node is the
+   * process-shared movelite instance or was injected via
+   * `options.localNode` — `teardown()` then leaves the node running.
+   */
+  ownsNode: boolean;
   /** Stop the local node and/or fork server owned by this context. */
   teardown: () => Promise<void>;
 }
@@ -108,6 +118,7 @@ export async function setupLocalTesting(
     return {
       runtime,
       localNode,
+      ownsNode,
       teardown: async () => {
         if (!ownsNode) return;
         logger.newline();
@@ -125,6 +136,7 @@ export async function setupLocalTesting(
       runtime,
       forkServer,
       forkManager,
+      ownsNode: true,
       teardown: async () => {
         logger.newline();
         logger.step("Stopping local testing environment...");
@@ -145,6 +157,22 @@ export async function setupLocalTesting(
 function resolveUseMovelite(useMovelite: boolean | undefined): boolean {
   if (useMovelite !== undefined) return useMovelite;
   return process.env.MOVEHAT_USE_MOVELITE !== "0";
+}
+
+/**
+ * Any explicit node* option means the caller wants a node with a specific
+ * configuration — a shared node cannot honor that per-caller, so those
+ * callers get a private per-fixture spawn.
+ */
+function hasExplicitNodeOptions(options: LocalTestOptions): boolean {
+  return (
+    options.nodeTestDir !== undefined ||
+    options.nodeForceRestart !== undefined ||
+    options.nodeFaucetPort !== undefined ||
+    options.nodeApiPort !== undefined ||
+    options.nodeReadyPort !== undefined ||
+    options.nodeSilent !== undefined
+  );
 }
 
 /**
@@ -171,9 +199,22 @@ async function setupWithLocalNode(
     }
     nodeInfo = localNode.getNodeInfo();
   } else if (resolveUseMovelite(options.useMovelite) && findMoveliteBinary()) {
-    localNode = new MoveliteManager(findMoveliteBinary()!);
-    nodeInfo = await localNode.start();
-    ownsNode = true;
+    const binary = findMoveliteBinary()!;
+    if (hasExplicitNodeOptions(options)) {
+      localNode = new MoveliteManager(binary);
+      nodeInfo = await localNode.start();
+      ownsNode = true;
+    } else {
+      // Implicit sharing: the first fixture in the process boots one
+      // movelite node, later fixtures reuse it. Nothing stops it — once
+      // ready it is unref'd and the process-exit hooks kill it.
+      const acquired = await acquireSharedMoveliteNode(
+        () => new MoveliteManager(binary)
+      );
+      localNode = acquired.node;
+      nodeInfo = acquired.nodeInfo;
+      ownsNode = false;
+    }
   } else {
     const nodeTestDir = options.nodeTestDir || join(process.cwd(), ".movehat", "local-node");
     const nodeForceRestart = options.nodeForceRestart !== false;

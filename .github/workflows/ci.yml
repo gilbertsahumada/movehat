@@ -275,9 +275,10 @@ jobs:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
       - name: Example suite (Tier 2 gate — movelite backend)
-        # The counter-example mocha suite is all-local: the root hook boots
-        # movelite (pulled by pnpm install as movehat's optionalDependency)
-        # and the Movement CLI installed above compiles the Move packages.
+        # The counter-example mocha suite is all-local: the fixtures share
+        # one implicit movelite node (pulled by pnpm install as movehat's
+        # optionalDependency) and the Movement CLI installed above compiles
+        # the Move packages.
         # The movement-node mode (MOVEHAT_USE_MOVELITE=0) stays deferred to
         # the Linux MintFunder issue (#149), same as MOVEHAT_SKIP_LOCAL_NODE
         # above.

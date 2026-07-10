@@ -112,7 +112,7 @@ export class Harness {
     const init: HarnessInit = {
       mode: "local",
       runtime: ctx.runtime,
-      ownsLocalNode: !options.localNode,
+      ownsLocalNode: ctx.ownsNode,
     };
     if (ctx.localNode) init.localNode = ctx.localNode;
     const instance = new Harness(init);
