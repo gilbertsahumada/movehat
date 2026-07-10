@@ -108,8 +108,9 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Stops the local node and poisons the harness — any further
-    // method call (other than cleanup) throws HarnessDisposedError.
+    // Poisons the harness — any further method call (other than
+    // cleanup) throws HarnessDisposedError. The shared local node
+    // keeps running for later specs and stops at process exit.
     await harness.cleanup();
   });
 });

@@ -84,7 +84,7 @@ describe("Greeting Contract", () => {
   });
 
   after(async () => {
-    // Cleanup: Stop local node
+    // Releases the fixture; the shared node keeps running for later specs.
     await fixture.teardown();
   });
 });
