@@ -1,6 +1,6 @@
 import { Account, Aptos, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
 import {
@@ -23,6 +23,7 @@ import {
   cleanupCallbacks,
 } from "./movementProfile.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
+import { withKeyedLock } from "../utils/keyedMutex.js";
 
 /** @internal */
 export interface PublisherDeps {
@@ -42,6 +43,12 @@ export interface PublishInput {
    */
   sdkPublish?: boolean | undefined;
   aptos?: Aptos | undefined;
+  /**
+   * Skip the already-deployed check and overwrite the deployment record.
+   * Falls back to `MH_CLI_REDEPLOY=true` (set by the CLI's --redeploy flag)
+   * when omitted.
+   */
+  redeploy?: boolean | undefined;
 }
 
 /**
@@ -53,11 +60,38 @@ export class Publisher {
   constructor(private readonly deps: PublisherDeps = {}) {}
 
   async deploy(input: PublishInput): Promise<DeploymentInfo> {
-    const { moduleName, config, account } = input;
+    const { moduleName, config } = input;
 
     validateSafeName(moduleName, "module");
 
-    const forceRedeploy = process.env.MH_CLI_REDEPLOY === "true";
+    const dir = input.packageDir || config.moveDir;
+
+    // Validate (no shell escape — runCli uses spawn, which takes args
+    // verbatim and would treat the single-quote wrapping as part of the
+    // literal path, breaking Movement CLI argument parsing).
+    const safeDir = validatePathSafety(dir, "package directory");
+
+    // Serialize per package dir: the build step writes in-place to
+    // <safeDir>/build/ with the deployer address baked into the bytecode,
+    // and the SDK publish path reads those bytes back from disk — a
+    // concurrent deploy of the same package would publish bytecode
+    // compiled for the other deploy's address. Locking from the
+    // already-deployed check through saveDeployment also closes the
+    // check-then-publish TOCTOU for same-module deploys.
+    return withKeyedLock(resolve(safeDir), () =>
+      this.deployLocked(input, dir, safeDir),
+    );
+  }
+
+  private async deployLocked(
+    input: PublishInput,
+    dir: string,
+    safeDir: string,
+  ): Promise<DeploymentInfo> {
+    const { moduleName, config, account } = input;
+
+    const forceRedeploy =
+      input.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
 
     const existingDeployment = loadDeployment(config.network, moduleName);
     if (existingDeployment && !forceRedeploy) {
@@ -101,13 +135,6 @@ export class Publisher {
     if (forceRedeploy && existingDeployment) {
       logger.info(`Redeploying module "${moduleName}" on ${config.network}...`);
     }
-
-    const dir = input.packageDir || config.moveDir;
-
-    // Validate (no shell escape — runCli uses spawn, which takes args
-    // verbatim and would treat the single-quote wrapping as part of the
-    // literal path, breaking Movement CLI argument parsing).
-    const safeDir = validatePathSafety(dir, "package directory");
 
     logger.step(`Publishing module "${moduleName}" from ${dir}...`);
 

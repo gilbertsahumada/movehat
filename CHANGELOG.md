@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Concurrent deploys of the same Move package no longer race. The build
+  step writes in-place to `<packageDir>/build/` with the deployer address
+  baked into the bytecode, and the SDK publish path (movelite) reads those
+  bytes back from disk — so two overlapping deploys could publish bytecode
+  compiled for the other deploy's address, and two same-module deploys
+  could both pass the already-deployed check and double-publish. Deploys
+  now serialize per package directory through an in-process keyed lock
+  covering the idempotency check, build, publish, and deployment record —
+  in both write paths (`deployContract` and `deployCodeObject`, which
+  share the lock). The autoDeploy loop also no longer mutates the
+  process-global `MH_CLI_REDEPLOY` environment variable (interleaved
+  set/restore across concurrent fixtures could strand it as `true`);
+  `deployContract` and `deployCodeObject` instead accept an explicit
+  `redeploy` option, with the env var still honored as a fallback for the
+  CLI's `--redeploy` flag. New public option, so the next release is a
+  minor bump. Serial mocha hides these races today; they become reachable
+  with the implicit shared node planned in #341. Closes #359.
+
 - `MoveliteManager` process lifecycle is now safe for long-lived use.
   Interrupting a test run with Ctrl+C no longer leaves an orphaned movelite
   holding port 8090 (a sync kill hook now runs on process exit and on

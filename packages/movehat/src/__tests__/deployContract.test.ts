@@ -754,3 +754,230 @@ describe("Publisher — SDK publish path (movelite backend)", () => {
     ).rejects.toThrow(/Expected exactly one compiled package/);
   });
 });
+
+/**
+ * The build step writes in-place to <packageDir>/build/ with the deployer
+ * address baked into the bytecode, and publishViaSdk reads those bytes
+ * back from disk. Without per-package-dir serialization, two overlapping
+ * deploys publish each other's artifacts. These tests pin the lock.
+ */
+describe("Publisher — per-package-dir deploy serialization", () => {
+  const PKG = "dummy";
+  let tmpCwd: string;
+  let tmpHome: string;
+  let origCwd: string;
+  let origHome: string | undefined;
+  let origRedeploy: string | undefined;
+
+  beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), "movehat-lock-home-"));
+    tmpCwd = mkdtempSync(join(tmpdir(), "movehat-lock-cwd-"));
+
+    writeFileSync(
+      join(tmpCwd, "movehat.config.js"),
+      `export default {
+  defaultNetwork: "testnet",
+  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } }
+};
+`
+    );
+
+    const moveDir = join(tmpCwd, "move");
+    mkdirSync(join(moveDir, "sources"), { recursive: true });
+    writeFileSync(
+      join(moveDir, "Move.toml"),
+      `[package]\nname = "${PKG}"\nversion = "0.0.1"\n\n[addresses]\n`
+    );
+    writeFileSync(join(moveDir, "sources", "dummy.move"), "// intentionally empty\n");
+
+    origHome = process.env.HOME;
+    process.env.HOME = tmpHome;
+    origCwd = process.cwd();
+    process.chdir(tmpCwd);
+    origRedeploy = process.env.MH_CLI_REDEPLOY;
+    delete process.env.MH_CLI_REDEPLOY;
+  });
+
+  afterEach(() => {
+    try {
+      process.chdir(origCwd);
+    } finally {
+      if (origHome === undefined) delete process.env.HOME;
+      else process.env.HOME = origHome;
+      if (origRedeploy === undefined) delete process.env.MH_CLI_REDEPLOY;
+      else process.env.MH_CLI_REDEPLOY = origRedeploy;
+      if (existsSync(tmpHome)) rmSync(tmpHome, { recursive: true, force: true });
+      if (existsSync(tmpCwd)) rmSync(tmpCwd, { recursive: true, force: true });
+    }
+  });
+
+  function makeMockAptos(hash: string) {
+    const publishPackageTransaction = vi.fn(async (args: unknown) => ({ __tx: true, args }));
+    const aptos = {
+      publishPackageTransaction,
+      transaction: { sign: vi.fn(() => ({})), submit: { simple: vi.fn(async () => ({ hash })) } },
+      waitForTransaction: vi.fn(async () => ({ success: true, hash })),
+    } as unknown as Aptos;
+    return { aptos, publishPackageTransaction };
+  }
+
+  /**
+   * Build adapter that actually writes marker artifacts into build/ (the
+   * way the real CLI bakes the deployer address into the bytecode), then
+   * yields long enough for a concurrent unserialized build to stomp them.
+   */
+  function makeMarkingAdapter(marker: number): ChildProcessAdapter {
+    return {
+      async run(input) {
+        if (input.args[1] !== "build") {
+          throw new Error(`SDK path must not invoke the CLI for: ${input.args.join(" ")}`);
+        }
+        const pkgDir = join(tmpCwd, "move", "build", PKG);
+        mkdirSync(join(pkgDir, "bytecode_modules"), { recursive: true });
+        writeFileSync(join(pkgDir, "package-metadata.bcs"), new Uint8Array([marker]));
+        writeFileSync(
+          join(pkgDir, "bytecode_modules", "m.mv"),
+          new Uint8Array([marker, marker])
+        );
+        await new Promise((res) => setTimeout(res, 30));
+        return { exitCode: 0, stdout: "build ok", stderr: "" };
+      },
+      spawn() {
+        throw new Error("spawn not used");
+      },
+    };
+  }
+
+  it("concurrent same-dir deploys each publish their own build artifacts", async () => {
+    const { config, account } = await initRuntime();
+    const a = makeMockAptos("0x" + "a".repeat(64));
+    const b = makeMockAptos("0x" + "b".repeat(64));
+
+    await Promise.all([
+      new Publisher({ adapter: makeMarkingAdapter(0xaa) }).deploy({
+        moduleName: "stomp_a",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos: a.aptos,
+      }),
+      new Publisher({ adapter: makeMarkingAdapter(0xbb) }).deploy({
+        moduleName: "stomp_b",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos: b.aptos,
+      }),
+    ]);
+
+    const publishedMetadata = (mock: ReturnType<typeof makeMockAptos>) => {
+      const args = mock.publishPackageTransaction.mock.calls[0]![0] as {
+        metadataBytes: Uint8Array;
+      };
+      return Array.from(args.metadataBytes);
+    };
+    expect(publishedMetadata(a)).toEqual([0xaa]);
+    expect(publishedMetadata(b)).toEqual([0xbb]);
+  });
+
+  it("concurrent same-module deploys publish exactly once; the loser throws ModuleAlreadyDeployedError", async () => {
+    const { config, account } = await initRuntime();
+    const a = makeMockAptos("0x" + "c".repeat(64));
+    const b = makeMockAptos("0x" + "d".repeat(64));
+
+    const results = await Promise.allSettled([
+      new Publisher({ adapter: makeMarkingAdapter(0xaa) }).deploy({
+        moduleName: "counter",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos: a.aptos,
+      }),
+      new Publisher({ adapter: makeMarkingAdapter(0xbb) }).deploy({
+        moduleName: "counter",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos: b.aptos,
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      ModuleAlreadyDeployedError
+    );
+
+    const publishCount =
+      a.publishPackageTransaction.mock.calls.length +
+      b.publishPackageTransaction.mock.calls.length;
+    expect(publishCount).toBe(1);
+  });
+
+  it("redeploy: true bypasses the already-deployed check without touching the env", async () => {
+    const { config, account } = await initRuntime();
+    const { aptos } = makeMockAptos("0x" + "e".repeat(64));
+
+    mkdirSync(join(tmpCwd, "deployments", "testnet"), { recursive: true });
+    writeFileSync(
+      join(tmpCwd, "deployments", "testnet", "counter.json"),
+      JSON.stringify({
+        address: "0x1",
+        moduleName: "counter",
+        network: "testnet",
+        deployer: "0x1",
+        timestamp: 0,
+      })
+    );
+
+    const deployment = await new Publisher({ adapter: makeMarkingAdapter(0xaa) }).deploy({
+      moduleName: "counter",
+      config,
+      account,
+      packageDir: join(tmpCwd, "move"),
+      sdkPublish: true,
+      aptos,
+      redeploy: true,
+    });
+
+    expect(deployment.moduleName).toBe("counter");
+    expect(process.env.MH_CLI_REDEPLOY).toBeUndefined();
+  });
+
+  it("redeploy: false wins over MH_CLI_REDEPLOY=true", async () => {
+    const { config, account } = await initRuntime();
+    const { aptos, publishPackageTransaction } = makeMockAptos("0x" + "f".repeat(64));
+
+    mkdirSync(join(tmpCwd, "deployments", "testnet"), { recursive: true });
+    writeFileSync(
+      join(tmpCwd, "deployments", "testnet", "counter.json"),
+      JSON.stringify({
+        address: "0x1",
+        moduleName: "counter",
+        network: "testnet",
+        deployer: "0x1",
+        timestamp: 0,
+      })
+    );
+
+    process.env.MH_CLI_REDEPLOY = "true";
+    await expect(
+      new Publisher({ adapter: makeMarkingAdapter(0xaa) }).deploy({
+        moduleName: "counter",
+        config,
+        account,
+        packageDir: join(tmpCwd, "move"),
+        sdkPublish: true,
+        aptos,
+        redeploy: false,
+      })
+    ).rejects.toThrow(ModuleAlreadyDeployedError);
+    expect(publishPackageTransaction).not.toHaveBeenCalled();
+  });
+});

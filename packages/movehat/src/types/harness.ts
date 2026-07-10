@@ -64,6 +64,13 @@ export interface DeployCodeObjectOptions {
   includedArtifacts?: "none" | "sparse" | "all";
 
   /**
+   * Skip the already-deployed check and overwrite the deployment record.
+   * Falls back to the `MH_CLI_REDEPLOY=true` environment variable when
+   * omitted.
+   */
+  redeploy?: boolean;
+
+  /**
    * Test-only override for the child-process adapter. Production callers
    * leave this undefined so the default spawn-based adapter is used.
    * @internal
@@ -78,7 +85,8 @@ export interface DeployCodeObjectOptions {
  * on-chain at `objectAddress` and have been deployed previously (typically
  * via `deployCodeObject`).
  */
-export interface UpgradeCodeObjectOptions extends DeployCodeObjectOptions {
+export interface UpgradeCodeObjectOptions
+  extends Omit<DeployCodeObjectOptions, "redeploy"> {
   /** Address of the existing code object to upgrade. Required. */
   objectAddress: string;
 }

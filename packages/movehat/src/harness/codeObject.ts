@@ -1,4 +1,5 @@
 import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
+import { resolve } from "node:path";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   DeployCodeObjectOptions,
@@ -28,13 +29,14 @@ import {
   ensureSignalHandler,
   cleanupCallbacks,
 } from "../core/movementProfile.js";
+import { withKeyedLock } from "../utils/keyedMutex.js";
 
 /**
  * Deploy a Move package as a code object via `movement move deploy-object`.
  *
  * Mirrors `core/Publisher.deploy` exactly for the security-critical parts
- * (per-deploy unique profile, atomic ~/.aptos/config.yaml mutation under
- * the shared mutex, SIGINT-safe sync cleanup, stderr redaction via
+ * (per-deploy unique temp key file, per-package-dir deploy lock shared
+ * with the Publisher, SIGINT-safe sync cleanup, stderr redaction via
  * `runCli`). The only differences are:
  *
  *   1. CLI subcommand: `deploy-object` instead of `publish` + a required
@@ -60,6 +62,7 @@ export async function deployCodeObject(
     subcommand: "deploy-object",
     extraArgs: [],
     checkIdempotency: true,
+    redeploy: options.redeploy,
   });
 }
 
@@ -114,6 +117,11 @@ interface ExecuteOptions {
   /** Whether to throw `ModuleAlreadyDeployedError` if a record exists. */
   checkIdempotency: boolean;
   /**
+   * Skip the already-deployed check and overwrite the deployment record.
+   * Falls back to `MH_CLI_REDEPLOY=true` when omitted.
+   */
+  redeploy?: boolean | undefined;
+  /**
    * For upgrade-object: the object's existing address. Skips the parse-
    * from-stdout step (the address is known up front).
    */
@@ -123,15 +131,37 @@ interface ExecuteOptions {
 async function executeMovementMoveObject(
   opts: ExecuteOptions
 ): Promise<CodeObjectInfo> {
+  const { runtime, moduleName } = opts;
+  const config = runtime.config;
+
+  validateSafeName(moduleName, "module");
+
+  const dir = opts.packageDir || config.moveDir;
+  const safeDir = validatePathSafety(dir, "package directory");
+
+  // Serialize per package dir, sharing the Publisher's lock map: both
+  // write paths build in-place into <safeDir>/build/, so a concurrent
+  // deploy of the same package (through either path) could publish
+  // bytecode compiled for the other deploy's address. Upgrade builds
+  // too, so it takes the lock as well.
+  return withKeyedLock(resolve(safeDir), () =>
+    executeMovementMoveObjectLocked(opts, dir, safeDir),
+  );
+}
+
+async function executeMovementMoveObjectLocked(
+  opts: ExecuteOptions,
+  dir: string,
+  safeDir: string,
+): Promise<CodeObjectInfo> {
   const { runtime, moduleName, subcommand } = opts;
   const config = runtime.config;
   const account = runtime.account;
 
-  validateSafeName(moduleName, "module");
-
   // Idempotency: deploy-object refuses re-deploy unless MH_CLI_REDEPLOY=true.
   // Upgrade does not check this (the whole point is to overwrite).
-  const forceRedeploy = process.env.MH_CLI_REDEPLOY === "true";
+  const forceRedeploy =
+    opts.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
   if (opts.checkIdempotency) {
     const existing = loadDeployment(config.network, moduleName);
     if (existing && !forceRedeploy) {
@@ -165,9 +195,6 @@ async function executeMovementMoveObject(
       );
     }
   }
-
-  const dir = opts.packageDir || config.moveDir;
-  const safeDir = validatePathSafety(dir, "package directory");
 
   logger.step(
     `${subcommand === "deploy-object" ? "Deploying" : "Upgrading"} module "${moduleName}" from ${dir}...`
