@@ -185,9 +185,10 @@ To opt out of the shared node:
 
 - Pass your own `localNode` — movehat uses the node you hand it and never
   stops it.
-- Pass any `node*` option (`nodeApiPort`, `nodeTestDir`, ...) — a node with
-  a specific configuration can't be shared, so that fixture gets a private
-  one it owns and stops on `teardown()`.
+- Pass any `node*` option (`nodeApiPort`, `nodeTestDir`, ...) — these
+  configure the full Movement node, and movelite does not consume them,
+  but passing one always marks the fixture as wanting a private node: it
+  gets its own instance, owns it, and stops it on `teardown()`.
 - Disable movelite (`useMovelite: false` or `MOVEHAT_USE_MOVELITE=0`) — the
   full Movement node always runs per-fixture.
 

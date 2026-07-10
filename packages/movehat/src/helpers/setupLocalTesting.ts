@@ -58,6 +58,7 @@ export interface LocalTestingContext {
    * Whether this context owns its local node. False when the node is the
    * process-shared movelite instance or was injected via
    * `options.localNode` — `teardown()` then leaves the node running.
+   * Fork-mode contexts always report true (they own their fork server).
    */
   ownsNode: boolean;
   /** Stop the local node and/or fork server owned by this context. */
@@ -160,9 +161,10 @@ function resolveUseMovelite(useMovelite: boolean | undefined): boolean {
 }
 
 /**
- * Any explicit node* option means the caller wants a node with a specific
- * configuration — a shared node cannot honor that per-caller, so those
- * callers get a private per-fixture spawn.
+ * Any explicit node* option opts the caller out of the shared node and
+ * into a private per-fixture spawn. The options themselves configure the
+ * full Movement node only — movelite does not consume them — but they
+ * still signal "this fixture wants its own node".
  */
 function hasExplicitNodeOptions(options: LocalTestOptions): boolean {
   return (

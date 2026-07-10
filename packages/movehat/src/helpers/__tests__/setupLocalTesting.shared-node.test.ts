@@ -148,18 +148,28 @@ describe("setupLocalTesting — implicit shared movelite node", () => {
     expect(moveliteInstances[0]!.isRunning()).toBe(true);
   });
 
-  it("an explicit node option gets a private movelite that teardown stops", async () => {
-    const ctx = await setupLocalTesting({
-      accountLabels: ["deployer"],
-      nodeApiPort: 9999,
-    });
+  it.each([
+    { nodeTestDir: "/tmp/private-node" },
+    { nodeForceRestart: false },
+    { nodeFaucetPort: 9081 },
+    { nodeApiPort: 9999 },
+    { nodeReadyPort: 9070 },
+    { nodeSilent: true },
+  ])(
+    "an explicit node option (%o) gets a private movelite that teardown stops",
+    async (nodeOption) => {
+      const ctx = await setupLocalTesting({
+        accountLabels: ["deployer"],
+        ...nodeOption,
+      });
 
-    expect(moveliteInstances).toHaveLength(1);
-    expect(ctx.ownsNode).toBe(true);
+      expect(moveliteInstances).toHaveLength(1);
+      expect(ctx.ownsNode).toBe(true);
 
-    await ctx.teardown();
-    expect(moveliteInstances[0]!.stopCalls).toBe(1);
-  });
+      await ctx.teardown();
+      expect(moveliteInstances[0]!.stopCalls).toBe(1);
+    },
+  );
 
   it("an injected localNode bypasses the singleton and is never stopped", async () => {
     const injected = new FakeMovelite("/injected");
