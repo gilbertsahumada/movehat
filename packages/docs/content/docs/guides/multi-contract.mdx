@@ -258,7 +258,7 @@ movehat test --ts --redeploy
 
 - One Movehat project can ship multiple Move modules under the same named address (`hello_blockchain` here).
 - `autoDeploy` accepts an array — every named module gets published as a separate transaction.
-- Each test spec is independent: its own local node, its own labeled accounts, its own deployment cache entry.
+- Each test spec is independent: its own labeled accounts and its own deployment cache entry — while sharing one local node across the process.
 - The same `Harness` API works whether you have one module or many.
 
 ## Troubleshooting

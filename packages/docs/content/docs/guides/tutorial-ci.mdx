@@ -128,7 +128,7 @@ jobs:
 Uncomment the last step when:
 
 - You have at least one file in `tests/*.test.ts`.
-- The CI minutes are acceptable (each test spec spawns a local Movement node, ~15-30s startup).
+- The CI minutes are acceptable (the suite boots one shared node — ~15-30s once on a full Movement node — plus Move compilation and deploys per spec).
 
 If you also rely on a `PRIVATE_KEY` for some test paths (e.g., live-network sanity), add it as a GitHub Actions secret and pass it through:
 
