@@ -42,6 +42,7 @@ declare module 'movehat' {
       moduleName: string,
       options?: {
         packageDir?: string;
+        redeploy?: boolean;
       }
     ) => Promise<DeploymentInfo>;
     getDeployment: (moduleName: string) => DeploymentInfo | null;

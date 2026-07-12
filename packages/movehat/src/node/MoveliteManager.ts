@@ -1,20 +1,42 @@
-import { execSync, spawn, type ChildProcess } from "child_process";
+import { execSync } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
 import { createRequire } from "module";
 import type { Account } from "@aptos-labs/ts-sdk";
-import type { LocalNodeInfo } from "./LocalNodeManager.js";
-import { logger } from "../ui/index.js";
+import { CRITICAL_NODE_OUTPUT, type LocalNodeInfo } from "./LocalNodeManager.js";
+import type { NodeProvider } from "./NodeProvider.js";
+import {
+  defaultChildProcessAdapter,
+  type ChildProcessAdapter,
+  type SpawnedProcess,
+} from "../utils/childProcessAdapter.js";
+import { cleanupCallbacks, ensureSignalHandler } from "../core/movementProfile.js";
+import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 
-export class MoveliteManager {
-  private process: ChildProcess | null = null;
+const READY_TIMEOUT_MS = 15_000;
+const READY_POLL_INTERVAL_MS = 200;
+const READY_PROBE_TIMEOUT_MS = 2_000;
+const SIGKILL_GRACE_MS = 5_000;
+const MAX_STDERR_TAIL_LINES = 20;
+const MAX_STDERR_TAIL_LINE_LENGTH = 500;
+
+export class MoveliteManager implements NodeProvider {
+  private spawned: SpawnedProcess | null = null;
   private port: number;
   private killed = false;
   private readonly binaryPath: string;
+  private readonly adapter: ChildProcessAdapter;
+  private readonly stderrTail: string[] = [];
+  private exitHook: (() => void) | null = null;
 
-  constructor(binaryPath: string, port = 8090) {
+  constructor(
+    binaryPath: string,
+    port = 8090,
+    adapter: ChildProcessAdapter = defaultChildProcessAdapter,
+  ) {
     this.binaryPath = binaryPath;
     this.port = port;
+    this.adapter = adapter;
   }
 
   async start(): Promise<LocalNodeInfo> {
@@ -32,41 +54,158 @@ export class MoveliteManager {
 
     logger.step("Starting movelite...");
 
-    this.process = spawn(
-      binary,
-      ["start", "--port", String(this.port), "--no-auth"],
-      {
-        stdio: "pipe",
-        detached: false,
-      },
-    );
+    this.killed = false;
+    this.stderrTail.length = 0;
 
-    this.process.on("exit", () => {
-      this.process = null;
+    const spawned = this.adapter.spawn({
+      command: binary,
+      args: ["start", "--port", String(this.port), "--no-auth"],
+      stdio: "pipe",
+    });
+    this.spawned = spawned;
+
+    // An undrained pipe fills its 64KB buffer and blocks the node's
+    // writes, so stdout/stderr must always be consumed.
+    spawned.stdout?.on("data", (data: Buffer) => {
+      const output = data.toString().trim();
+      if (!output) return;
+      if (CRITICAL_NODE_OUTPUT.test(output)) {
+        logger.warning(output);
+        return;
+      }
+      if (isVerbose()) {
+        for (const line of output.split("\n")) {
+          if (line) console.log(`  ${colors.muted(symbols.pointer + " " + line)}`);
+        }
+      }
     });
 
-    await this.waitForReady();
+    spawned.stderr?.on("data", (data: Buffer) => {
+      const output = data.toString().trim();
+      if (!output) return;
+      for (const line of output.split("\n")) {
+        if (!line) continue;
+        this.stderrTail.push(line.slice(0, MAX_STDERR_TAIL_LINE_LENGTH));
+        if (this.stderrTail.length > MAX_STDERR_TAIL_LINES) {
+          this.stderrTail.shift();
+        }
+      }
+      if (CRITICAL_NODE_OUTPUT.test(output)) {
+        logger.error(output);
+        return;
+      }
+      if (isVerbose()) {
+        for (const line of output.split("\n")) {
+          if (line) console.error(`  ${colors.muted(symbols.pointer + " " + line)}`);
+        }
+      }
+    });
+
+    // The 'exit' handler gets one synchronous turn and no supervisor
+    // remains to escalate afterwards, so the reap must be SIGKILL. The
+    // guard covers the double invocation on signals (cleanupCallbacks
+    // runs first, then process.exit fires 'exit').
+    let hookFired = false;
+    const exitHook = () => {
+      if (hookFired) return;
+      hookFired = true;
+      spawned.kill("SIGKILL");
+    };
+    this.exitHook = exitHook;
+    ensureSignalHandler();
+    cleanupCallbacks.add(exitHook);
+    process.on("exit", exitHook);
+
+    void spawned.exited.then(({ code }) => {
+      if (code !== null && code !== 0 && !this.killed) {
+        logger.error(`movelite exited with code ${code}`);
+      }
+      this.deregisterExitHook(exitHook);
+      if (this.spawned === spawned) {
+        this.spawned = null;
+      }
+    });
+
+    try {
+      await this.waitForReady(spawned);
+    } catch (err) {
+      spawned.kill("SIGKILL");
+      this.deregisterExitHook(exitHook);
+      if (this.spawned === spawned) {
+        this.spawned = null;
+      }
+      throw err;
+    }
+
+    // Unref only after readiness so an unstopped node can't keep the
+    // parent's event loop alive.
+    spawned.unref();
+
     logger.success(`movelite ready on port ${this.port}`);
 
     return this.getNodeInfo();
   }
 
-  private async waitForReady(): Promise<void> {
-    const url = `http://127.0.0.1:${this.port}/v1`;
-    const timeout = 15_000;
-    const start = Date.now();
+  private deregisterExitHook(hook: () => void): void {
+    cleanupCallbacks.delete(hook);
+    process.removeListener("exit", hook);
+    if (this.exitHook === hook) {
+      this.exitHook = null;
+    }
+  }
 
-    while (Date.now() - start < timeout) {
+  private async waitForReady(spawned: SpawnedProcess): Promise<void> {
+    const url = `http://127.0.0.1:${this.port}/v1`;
+
+    let exitInfo: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+    void spawned.exited.then((info) => {
+      exitInfo = info;
+    });
+
+    const deadline = Date.now() + READY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      // Liveness first: a foreign node answering on the same port must
+      // not mask a child that already died.
+      if (exitInfo) throw this.buildBootFailure(exitInfo);
       try {
-        const res = await fetch(url);
-        if (res.ok) return;
+        // Per-probe timeout: without it, a wedged listener that accepts
+        // TCP but never responds would stall the loop far past the 15s
+        // deadline, which is only checked between iterations.
+        const res = await fetch(url, {
+          signal: AbortSignal.timeout(READY_PROBE_TIMEOUT_MS),
+        });
+        if (res.ok && !exitInfo) return;
       } catch {
         // not ready yet
       }
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, READY_POLL_INTERVAL_MS));
     }
 
-    throw new Error(`movelite did not become ready within ${timeout}ms`);
+    if (exitInfo) throw this.buildBootFailure(exitInfo);
+    throw new Error(
+      `movelite did not become ready within ${READY_TIMEOUT_MS}ms on port ${this.port}` +
+        this.stderrTailSuffix(),
+    );
+  }
+
+  private buildBootFailure(exitInfo: {
+    code: number | null;
+    signal: NodeJS.Signals | null;
+  }): Error {
+    let reason: string;
+    if (exitInfo.code === null && exitInfo.signal === null) {
+      reason = `movelite failed to start — check that ${this.binaryPath} exists and is executable`;
+    } else if (exitInfo.signal !== null) {
+      reason = `movelite was killed by ${exitInfo.signal} before becoming ready`;
+    } else {
+      reason = `movelite exited with code ${exitInfo.code} before becoming ready`;
+    }
+    return new Error(reason + this.stderrTailSuffix());
+  }
+
+  private stderrTailSuffix(): string {
+    if (this.stderrTail.length === 0) return "";
+    return `\nRecent stderr:\n  ${this.stderrTail.join("\n  ")}`;
   }
 
   async fundAccount(address: string, amount: number): Promise<void> {
@@ -86,27 +225,31 @@ export class MoveliteManager {
   }
 
   async stop(): Promise<void> {
-    if (!this.process || this.killed) return;
+    const spawned = this.spawned;
+    if (!spawned || this.killed) return;
+    const hook = this.exitHook;
     this.killed = true;
-    this.process.kill("SIGTERM");
+    spawned.kill("SIGTERM");
 
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        if (this.process) this.process.kill("SIGKILL");
-        resolve();
-      }, 5_000);
-      if (this.process) {
-        this.process.on("exit", () => {
-          clearTimeout(timer);
-          resolve();
-        });
-      } else {
-        clearTimeout(timer);
-        resolve();
+    // The exited continuation nulls this.spawned — exactly the condition
+    // under which skipping the SIGKILL is correct.
+    const forceTimer = setTimeout(() => {
+      if (this.spawned === spawned) {
+        spawned.kill("SIGKILL");
       }
-    });
+    }, SIGKILL_GRACE_MS);
 
-    this.process = null;
+    try {
+      await spawned.exited;
+    } finally {
+      clearTimeout(forceTimer);
+      // The hook stays armed through the grace window in case the parent
+      // dies before the child does.
+      if (hook) this.deregisterExitHook(hook);
+      if (this.spawned === spawned) {
+        this.spawned = null;
+      }
+    }
   }
 
   private async isPortInUse(port: number): Promise<boolean> {
@@ -119,7 +262,7 @@ export class MoveliteManager {
   }
 
   isRunning(): boolean {
-    return this.process !== null && !this.killed;
+    return this.spawned !== null && !this.killed;
   }
 
   getNodeInfo(): LocalNodeInfo {

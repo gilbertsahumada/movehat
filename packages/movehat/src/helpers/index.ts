@@ -35,5 +35,6 @@ export {
   setupMinimalFixture,
 } from "./testFixtures.js";
 export type { TestFixture } from "./testFixtures.js";
+export { normalizeAddress, isHexAddress } from "../utils/address.js";
 
 export type { MovehatConfig, LocalTestOptions } from "../types/config.js";

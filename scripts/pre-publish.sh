@@ -3,10 +3,31 @@ set -e
 
 # Pre-Publish Checklist Script
 # We Run this before publishing to npm
+#
+# Usage: bash scripts/pre-publish.sh [--non-interactive]
+#   --non-interactive (or CI=true): never prompt; any condition that would
+#   have asked "Continue anyway?" fails immediately instead.
 
-# Detect project root
+# Detect project root and anchor there so the script behaves the same
+# regardless of the invocation directory.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+NON_INTERACTIVE=0
+for arg in "$@"; do
+    case "$arg" in
+        --non-interactive) NON_INTERACTIVE=1 ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            echo "Usage: bash scripts/pre-publish.sh [--non-interactive]" >&2
+            exit 1
+            ;;
+    esac
+done
+if [[ "${CI:-}" == "true" ]]; then
+    NON_INTERACTIVE=1
+fi
 
 echo "=========================================="
 echo "MoveHat Pre-Publish Checklist"
@@ -23,16 +44,19 @@ NC='\033[0m'
 CHECKS_PASSED=0
 CHECKS_FAILED=0
 
-check() {
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} $1"
-        CHECKS_PASSED=$((CHECKS_PASSED + 1))
-        return 0
-    else
-        echo -e "${RED}✗${NC} $1"
-        CHECKS_FAILED=$((CHECKS_FAILED + 1))
-        return 1
-    fi
+# Explicit pass/fail markers. Never inspect $? here: at else-branch call
+# sites $? is the exit status of the just-failed `if` condition, which made
+# the old check() print a false ✗ and abort under `set -e` on the exact
+# path where everything was fine. Both helpers return 0 so failures
+# accumulate to the summary, which exits 1 when any check failed.
+check_ok() {
+    echo -e "${GREEN}✓${NC} $1"
+    CHECKS_PASSED=$((CHECKS_PASSED + 1))
+}
+
+check_fail() {
+    echo -e "${RED}✗${NC} $1"
+    CHECKS_FAILED=$((CHECKS_FAILED + 1))
 }
 
 echo -e "${BLUE}1. Checking Git Status${NC}"
@@ -43,13 +67,17 @@ if [[ -n $(git status -s) ]]; then
     echo -e "${YELLOW}⚠${NC}  You have uncommitted changes"
     git status -s
     echo ""
+    if [[ $NON_INTERACTIVE -eq 1 ]]; then
+        echo -e "${RED}✗${NC} Uncommitted changes (non-interactive mode refuses to continue)"
+        exit 1
+    fi
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 1
     fi
 else
-    check "No uncommitted changes"
+    check_ok "No uncommitted changes"
 fi
 
 # Check current branch
@@ -58,6 +86,10 @@ echo "Current branch: $CURRENT_BRANCH"
 
 if [[ "$CURRENT_BRANCH" != "main" ]] && [[ "$CURRENT_BRANCH" != "master" ]]; then
     echo -e "${YELLOW}⚠${NC}  Not on main/master branch"
+    if [[ $NON_INTERACTIVE -eq 1 ]]; then
+        echo -e "${RED}✗${NC} Not on main/master (non-interactive mode refuses to continue)"
+        exit 1
+    fi
     read -p "Continue anyway? (y/N) " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -78,7 +110,7 @@ if git rev-parse "v$PACKAGE_VERSION" >/dev/null 2>&1; then
     echo "   Please bump version in package.json"
     exit 1
 else
-    check "Version tag v$PACKAGE_VERSION does not exist (good)"
+    check_ok "Version tag v$PACKAGE_VERSION does not exist (good)"
 fi
 
 echo ""
@@ -87,7 +119,7 @@ echo "----------------------------------------"
 
 cd packages/movehat
 pnpm tsc --noEmit
-check "TypeScript types are valid"
+check_ok "TypeScript types are valid"
 
 echo ""
 echo -e "${BLUE}4. Building Package${NC}"
@@ -95,14 +127,14 @@ echo "----------------------------------------"
 
 cd "$PROJECT_ROOT"
 pnpm build:movehat
-check "Build successful"
+check_ok "Build successful"
 
 echo ""
 echo -e "${BLUE}5. Running Smoke Tests${NC}"
 echo "----------------------------------------"
 
 bash scripts/smoke-test.sh
-check "Smoke tests passed"
+check_ok "Smoke tests passed"
 
 echo ""
 echo -e "${BLUE}5b. Running Tier 3 Install-Experience E2E${NC}"
@@ -113,23 +145,33 @@ echo "----------------------------------------"
 # to catch packaging regressions (missing dist files, broken exports,
 # stale templates) before the artifact reaches npm users.
 bash scripts/e2e-local.sh
-check "Install-experience E2E passed"
+check_ok "Install-experience E2E passed"
 
 echo ""
 echo -e "${BLUE}6. Checking Package Size${NC}"
 echo "----------------------------------------"
 
 cd packages/movehat
-PACKAGE_SIZE=$(npm pack --dry-run 2>&1 | grep "Unpacked size:" | awk '{print $3}')
-echo "Package size: $PACKAGE_SIZE"
+# --json puts machine-readable output on stdout (notices go to stderr);
+# unpackedSize is in bytes, so no unit parsing is needed.
+# Two-step capture so a failing `npm pack` aborts under set -e instead of
+# being masked by the parser's exit status (no pipeline involved).
+# The node validation must fail hard on a missing/non-numeric value: bash
+# arithmetic would silently coerce a stray string to 0 and pass the check.
+PACK_JSON=$(npm pack --dry-run --json 2>/dev/null)
+UNPACKED_BYTES=$(node -e "
+        const v = JSON.parse(require('fs').readFileSync(0, 'utf8'))[0].unpackedSize;
+        if (!Number.isInteger(v)) { console.error('unpackedSize missing from npm pack --json output'); process.exit(1); }
+        console.log(v);
+    " <<<"$PACK_JSON")
+echo "Unpacked size: $((UNPACKED_BYTES / 1024)) kB"
 
 # Warn if package is too large (>10MB)
-SIZE_BYTES=$(echo "$PACKAGE_SIZE" | grep -o '[0-9.]*' | head -1)
-if (( $(echo "$SIZE_BYTES > 10" | bc -l) )); then
+if (( UNPACKED_BYTES > 10 * 1024 * 1024 )); then
     echo -e "${YELLOW}⚠${NC}  Package size is large (>10MB)"
     echo "   Consider excluding unnecessary files"
 else
-    check "Package size is reasonable"
+    check_ok "Package size is reasonable"
 fi
 
 echo ""
@@ -141,11 +183,9 @@ REQUIRED_FIELDS=("name" "version" "description" "author" "license" "repository" 
 for field in "${REQUIRED_FIELDS[@]}"; do
     VALUE=$(node -p "require('./package.json').$field || 'MISSING'")
     if [[ "$VALUE" == "MISSING" ]] || [[ "$VALUE" == "undefined" ]]; then
-        echo -e "${RED}✗${NC} Missing required field: $field"
-        CHECKS_FAILED=$((CHECKS_FAILED + 1))
+        check_fail "Missing required field: $field"
     else
-        echo -e "${GREEN}✓${NC} $field: $VALUE"
-        CHECKS_PASSED=$((CHECKS_PASSED + 1))
+        check_ok "$field: $VALUE"
     fi
 done
 
@@ -167,36 +207,36 @@ echo -e "${BLUE}9. Testing README${NC}"
 echo "----------------------------------------"
 
 if [ -f "README.md" ]; then
-    check "README.md exists"
+    check_ok "README.md exists"
 
     # Check for required sections
     if grep -q "## Installation" README.md; then
-        check "README has Installation section"
+        check_ok "README has Installation section"
     else
         echo -e "${YELLOW}⚠${NC}  README missing Installation section"
     fi
 
     if grep -q "## Usage" README.md || grep -q "## Quick Start" README.md; then
-        check "README has Usage/Quick Start section"
+        check_ok "README has Usage/Quick Start section"
     else
         echo -e "${YELLOW}⚠${NC}  README missing Usage section"
     fi
 else
-    echo -e "${RED}✗${NC} README.md is missing"
-    CHECKS_FAILED=$((CHECKS_FAILED + 1))
+    check_fail "README.md is missing"
 fi
 
 echo ""
 echo -e "${BLUE}10. Checking npm credentials${NC}"
 echo "----------------------------------------"
 
+# Informational only: the real publish runs in CI (publish.yml, triggered by
+# a GitHub Release) via OIDC/Trusted Publishers and needs no local login.
+# Local credentials matter only for a manual `npm publish` fallback.
 if npm whoami > /dev/null 2>&1; then
     NPM_USER=$(npm whoami)
-    check "Logged into npm as: $NPM_USER"
+    check_ok "Logged into npm as: $NPM_USER"
 else
-    echo -e "${RED}✗${NC} Not logged into npm"
-    echo "   Run: npm login"
-    CHECKS_FAILED=$((CHECKS_FAILED + 1))
+    echo -e "${YELLOW}⚠${NC}  Not logged into npm (fine: publish runs via OIDC in CI; needed only for manual npm publish)"
 fi
 
 echo ""
@@ -210,12 +250,11 @@ echo ""
 if [ $CHECKS_FAILED -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed!${NC}"
     echo ""
-    echo "Ready to publish? Run:"
-    echo -e "${BLUE}  cd packages/movehat${NC}"
-    echo -e "${BLUE}  npm publish${NC}"
+    echo "Ready to publish? Create the GitHub Release (publish.yml pushes to npm via OIDC):"
+    echo -e "${BLUE}  gh release create v$PACKAGE_VERSION --target main --title \"v$PACKAGE_VERSION\"${NC}"
     echo ""
-    echo "Or for a dry run:"
-    echo -e "${BLUE}  npm publish --dry-run${NC}"
+    echo "Or publish manually (requires npm login):"
+    echo -e "${BLUE}  cd packages/movehat && npm publish${NC}"
     exit 0
 else
     echo -e "${RED}✗ Some checks failed. Please fix before publishing.${NC}"

@@ -7,6 +7,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Local node sharing is now implicit — user tests carry zero node-lifecycle
+  code, matching the Hardhat/Foundry experience. When movelite is the
+  selected backend, the first `setupTestFixture()` / `setupLocalTesting()` /
+  `Harness.createLocal()` in a process boots one node, every later fixture
+  reuses it, and the node is killed automatically at process exit (no
+  explicit stop anywhere). The `movehat init` scaffold and the
+  counter-example no longer ship `tests/setup.ts`, `getSharedNode()`, or the
+  mocha `require` wiring — that entire pattern moved into the framework.
+  Opt-outs: pass `localNode` (never touched), pass any `node*` option (a
+  private per-fixture node), or disable movelite (`useMovelite: false` /
+  `MOVEHAT_USE_MOVELITE=0` — the full Movement node stays per-fixture, which
+  keeps the backend-assertion gate meaningful). `LocalTestingContext` gains
+  a public `ownsNode` field, which `Harness.cleanup()` now respects so a
+  per-spec cleanup can no longer stop the shared node. New public field, so
+  the next release is a minor bump. Closes #361. Tracks #341.
+
+### Added
+
+- `normalizeAddress` and `isHexAddress` are now exported from
+  `movehat/helpers` (`normalizeAddress`: lowercase, `0x`-prefixed,
+  left-padded to 64 hex chars; `isHexAddress`: syntactic validation, which
+  `normalizeAddress`'s docs direct callers to). On-chain view results return
+  addresses without leading-zero padding while the SDK's
+  `accountAddress.toString()` zero-pads them, so comparing the two raw
+  strings fails whenever an address happens to start with a zero byte —
+  roughly 1 run in 16 with randomly generated test accounts. The
+  counter-example's `get_module_address` test flaked exactly this way; it
+  now normalizes both sides. New public export, so the next release is a
+  minor bump. Closes #355.
+
+### Fixed
+
+- `parseTxHash` now recognizes the Movement CLI's JSON output
+  (`"transaction_hash": "0x…"` inside the `Result` block) in addition to
+  the free-text `transaction hash: 0x…` shape. With the current CLI, the
+  old parser missed the JSON form twice over (the underscore broke the
+  keyword context and the quoted value broke the hex match), so
+  `runMoveScript` threw "Could not parse transaction hash" even though
+  the script executed successfully, and any flow whose output carries the
+  JSON hash recorded `txHash: undefined`. The JSON pattern is checked
+  first and stays context-bound, so the strict no-loose-64-hex-fallback
+  guarantee is unchanged. Note: `deploy-object` / `upgrade-object` on the
+  current CLI emit no transaction hash in any shape (`"Result": "Success"`
+  only), so their records legitimately omit `txHash` — that field is
+  optional by design. Closes #363.
+
+- Concurrent deploys of the same Move package no longer race. The build
+  step writes in-place to `<packageDir>/build/` with the deployer address
+  baked into the bytecode, and the SDK publish path (movelite) reads those
+  bytes back from disk — so two overlapping deploys could publish bytecode
+  compiled for the other deploy's address, and two same-module deploys
+  could both pass the already-deployed check and double-publish. Deploys
+  now serialize per package directory through an in-process keyed lock
+  covering the idempotency check, build, publish, and deployment record —
+  in both write paths (`deployContract` and `deployCodeObject`, which
+  share the lock). The autoDeploy loop also no longer mutates the
+  process-global `MH_CLI_REDEPLOY` environment variable (interleaved
+  set/restore across concurrent fixtures could strand it as `true`);
+  `deployContract` and `deployCodeObject` instead accept an explicit
+  `redeploy` option, with the env var still honored as a fallback for the
+  CLI's `--redeploy` flag. New public option, so the next release is a
+  minor bump. Serial mocha hides these races today; they become reachable
+  with the implicit shared node planned in #341. Closes #359.
+
+- `MoveliteManager` process lifecycle is now safe for long-lived use.
+  Interrupting a test run with Ctrl+C no longer leaves an orphaned movelite
+  holding port 8090 (a sync kill hook now runs on process exit and on
+  SIGINT/SIGTERM), an unstopped node no longer keeps the mocha event loop
+  alive (the child and its stdio pipes are unref'd once ready), a chatty
+  node can no longer block on the undrained 64KB pipe buffer (output is
+  drained through the standard verbosity filter — critical signals always
+  surface, chatter only with `-v`), and a node that dies during boot now
+  fails immediately with its exit code and recent stderr instead of burning
+  the full 15s readiness timeout on a generic message. A stopped manager
+  can also be started again (the internal killed flag was never reset).
+  Closes #353.
+
+### Tests
+
+- The harness-local integration suite is pinned to the full Movement node
+  (`useMovelite: false`): it drives the CLI flows (`deploy-object`,
+  `run-script`), and the Movement CLI cannot parse movelite's REST
+  responses, so running it against the auto-selected movelite backend
+  failed all five tests. The movelite backend remains covered by the
+  example suite and the backend-assertion gate. An SDK-based path for the
+  code-object and run-script flows — which would let this suite run on
+  movelite too — is tracked in #362.
+
+### Internal
+
+- The pre-publish gate (`scripts/pre-publish.sh`) no longer aborts on the
+  happy path. Its `check()` helper inspected `$?`, which at else-branch call
+  sites is the exit status of the just-failed `if` condition — so a clean
+  tree, an absent version tag, or a reasonable package size each printed a
+  false failure and killed the script under `set -e` precisely when
+  everything was fine (0.5.0 ran the gate's substance manually because of
+  this). Checks now use explicit `check_ok`/`check_fail` markers that
+  accumulate to the summary. Also adds `--non-interactive` (honors `CI=true`)
+  for automation, and treats missing local npm credentials as informational
+  since the publish path is OIDC via `publish.yml`. Closes #348.
+
+- Follow-up robustness fixes for `scripts/pre-publish.sh` from the post-merge
+  review of the #348 fix. The package-size check never actually measured
+  anything (it grepped for `"Unpacked size:"` while npm emits lowercase
+  `unpacked size:`, so the comparison always silently passed); it now parses
+  `npm pack --dry-run --json` and compares the byte-exact `unpackedSize`
+  against 10 MB. The script also anchors itself to the repo root at startup —
+  invoking it from a subdirectory previously died with a raw node
+  MODULE_NOT_FOUND stack — and rejects unknown arguments instead of silently
+  running interactive mode on a mistyped `--non-interactive`. Closes #351.
+
+- CI E2E job gains the example suite gate (Tier 2 from CLAUDE.md §6.2): the
+  counter-example mocha tests now run on every PR to main, in movelite mode
+  (movement-node deferred to #149). The job timeout increases from 12 to 15
+  minutes to accommodate the suite's cold Move compilation. Closes #356.
+
 ## [0.5.0] - 2026-07-07
 
 ### Fixed

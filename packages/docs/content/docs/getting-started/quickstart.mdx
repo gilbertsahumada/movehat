@@ -42,8 +42,7 @@ my-project/
 │   │   └── Counter.move       # Your Move smart contract
 │   └── Move.toml
 ├── tests/
-│   ├── Counter.test.ts        # TypeScript tests
-│   └── setup.ts               # Shared local test node (mocha root hooks)
+│   └── Counter.test.ts        # TypeScript tests
 ├── scripts/
 │   └── deploy-counter.ts      # Deployment script
 ├── movehat.config.ts          # Network configuration
@@ -109,8 +108,9 @@ describe("Counter Contract", () => {
   });
 
   after(async () => {
-    // Stops the local node and poisons the harness — any further
-    // method call (other than cleanup) throws HarnessDisposedError.
+    // Poisons the harness — any further method call (other than
+    // cleanup) throws HarnessDisposedError. The shared local node
+    // keeps running for later specs and stops at process exit.
     await harness.cleanup();
   });
 });

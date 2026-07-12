@@ -171,21 +171,31 @@ harness = await Harness.createLocal({
 See [movelite](./movelite) for supported platforms, the `MOVEHAT_USE_MOVELITE`
 override, and how to tell which backend started.
 
-### Sharing one node across specs (optional)
+### One shared node per process (automatic)
 
-With zero configuration, each spec boots its own local chain — with movelite
-that costs under a second per file, so many projects need nothing more. The
-scaffold that `movehat init` generates goes one step further: it ships a
-`tests/setup.ts` root hook that boots one shared node for the whole `mocha`
-run and hands it to every fixture via `{ localNode: getSharedNode() }` — see
-the
-[counter example](https://github.com/gilbertsahumada/movehat/blob/main/examples/counter-example/tests/setup.ts)
-for the full file.
+When movelite is the selected backend, node sharing needs zero
+configuration: the first fixture in a `mocha` run boots one movelite node,
+every later fixture in the same process reuses it, and the node shuts down
+automatically when the process exits. Your test files contain no
+node-lifecycle code at all — no setup file, no `localNode` wiring, no
+explicit stop. Each fixture still gets its own accounts and deployments,
+so specs stay isolated.
+
+To opt out of the shared node:
+
+- Pass your own `localNode` — movehat uses the node you hand it and never
+  stops it.
+- Pass any `node*` option (`nodeApiPort`, `nodeTestDir`, ...) — these
+  configure the full Movement node, and movelite does not consume them,
+  but passing one always marks the fixture as wanting a private node: it
+  gets its own instance, owns it, and stops it on `teardown()`.
+- Disable movelite (`useMovelite: false` or `MOVEHAT_USE_MOVELITE=0`) — the
+  full Movement node always runs per-fixture.
 
 > **Passing `localNode` opts out of movelite auto-selection** — movehat uses
 > the node you hand it. To keep the full [execution traces](./traces),
-> construct a `MoveliteManager` (as the scaffold does); a plain
-> `LocalNodeManager` gives only the degraded event/state trace.
+> construct a `MoveliteManager`; a plain `LocalNodeManager` gives only the
+> degraded event/state trace.
 
 ## Running All Tests
 

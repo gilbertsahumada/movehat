@@ -37,6 +37,7 @@ export default defineConfig({
         // lifecycle managers
         "src/fork/manager.ts":          { lines: 80, statements: 80, functions: 75, branches: 60 },
         "src/node/LocalNodeManager.ts": { lines: 80, statements: 80, functions: 75, branches: 60 },
+        "src/node/MoveliteManager.ts":  { lines: 80, statements: 80, functions: 75, branches: 60 },
         // top-level commands
         // run.ts threshold intentionally below 80: the orchestrator's
         // "tsx-not-found" branch (lines 80-101) requires patching

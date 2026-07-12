@@ -207,7 +207,7 @@ Key points:
 
 - **`accountLabels` must include `"deployer"`** — `Harness.createLocal` uses that label to bootstrap the runtime. Other labels (`alice`, `bob`) are arbitrary identifiers your test body reads via `harness.accounts.<label>`.
 - **`autoDeploy: ["registry"]`** publishes your new module automatically when the harness starts. The deployer is the account labeled `"deployer"`.
-- **`harness.cleanup()` in `after`** shuts down the local node so the next test spec (Counter, in your case) can start its own clean instance.
+- **`harness.cleanup()` in `after`** releases the harness (further calls throw). It does not stop the shared movelite node — the next spec reuses it, and isolation comes from each fixture's own accounts and deployments, not from a fresh chain.
 
 ## Step 4 — Run
 
@@ -236,7 +236,7 @@ You should see both Counter and Registry test suites pass:
   7 passing (2m)
 ```
 
-Each spec spins up its own local Movement node, publishes the relevant module, runs its tests, then tears the node down. You'll see the spinner-driven setup output described in the [Console output](/docs/guides/console-output) guide.
+The first spec boots one shared local node; each spec then publishes its relevant module with its own accounts, runs its tests, and releases its harness — the node itself stops at process exit. You'll see the spinner-driven setup output described in the [Console output](/docs/guides/console-output) guide.
 
 ## Step 5 — Verify the deployment record
 
@@ -258,7 +258,7 @@ movehat test --ts --redeploy
 
 - One Movehat project can ship multiple Move modules under the same named address (`hello_blockchain` here).
 - `autoDeploy` accepts an array — every named module gets published as a separate transaction.
-- Each test spec is independent: its own local node, its own labeled accounts, its own deployment cache entry.
+- Each test spec is independent: its own labeled accounts and its own deployment cache entry — while sharing one local node across the process.
 - The same `Harness` API works whether you have one module or many.
 
 ## Troubleshooting

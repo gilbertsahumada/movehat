@@ -135,9 +135,9 @@ Fix: keep `deployments/{network}/*.json` files committed (they're tracked by def
 
 Symptom: 10 test files = 10 sequential local-node spawns — pure startup overhead before any assertion runs.
 
-What happened: each `Harness.createLocal()` call spawns its own local node by default. On the movelite backend that costs under a second per spec, so this usually only hurts when the suite fell back to the full Movement node (~15s per boot).
+What happened: on the movelite backend this doesn't occur — the whole `mocha` run shares one implicitly-booted node (see [One shared node per process](./testing#one-shared-node-per-process-automatic)). Per-spec spawns mean the suite fell back to the full Movement node (~15s per boot) or opted out of sharing.
 
-Fix: the scaffold's mocha root-hooks pattern boots one shared node for the whole run — see [Sharing one node across specs](./testing#sharing-one-node-across-specs-optional). If the per-spec boots themselves are slow, first check that movelite is actually the selected backend (see [movelite](./movelite)).
+Fix: check that movelite is actually the selected backend (see [movelite](./movelite)), and that your fixtures don't pass `localNode`, `node*` options, or `useMovelite: false` — each of those opts that fixture out of the shared node.
 
 ## Related
 
