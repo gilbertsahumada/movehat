@@ -80,8 +80,13 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
       );
     }
 
+    // Pinned to the full Movement node: this suite drives the CLI flows
+    // (deploy-object, run-script), and the Movement CLI cannot parse
+    // movelite's REST responses. The movelite backend is covered by the
+    // example suite and the backend-assertion gate.
     harness = await Harness.createLocal({
       accountLabels: ['deployer', 'alice'],
+      useMovelite: false,
     });
   }, 180_000);
 
@@ -137,13 +142,13 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
 
   it('upgradeCodeObject reports success against the same object address', async () => {
     // KNOWN UPSTREAM SURPRISE (tracked in #146): on this CLI version
-    // `movement move upgrade-object` returns `Result: Success` and
-    // reports a new tx hash, but the on-chain `exposed_functions`
-    // list still shows only the v1 functions (no `reset`). The
-    // Harness contract for `upgradeCodeObject` is only that it
-    // submits the upgrade tx and returns the bound address — that
-    // contract is honored. When #146 is diagnosed, re-add the v2
-    // ABI assertion (instructions in the issue body).
+    // `movement move upgrade-object` returns `Result: Success`, but
+    // the on-chain `exposed_functions` list still shows only the v1
+    // functions (no `reset`). The Harness contract for
+    // `upgradeCodeObject` is only that it submits the upgrade tx and
+    // returns the bound address — that contract is honored. When #146
+    // is diagnosed, re-add the v2 ABI assertion (instructions in the
+    // issue body).
     const info = await harness.upgradeCodeObject({
       moduleName: 'counter',
       addressName: 'integration_counter',
@@ -151,6 +156,11 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
       objectAddress: codeObjectAddr,
     });
     expect(info.address).toBe(codeObjectAddr);
-    expect(info.txHash).toMatch(/^0x[a-fA-F0-9]+$/);
+    // The current CLI prints only `"Result": "Success"` plus the object
+    // address for upgrade-object — no tx hash in any shape. txHash is
+    // optional in DeploymentInfo; when present it must be well-formed.
+    if (info.txHash !== undefined) {
+      expect(info.txHash).toMatch(/^0x[a-fA-F0-9]+$/);
+    }
   });
 });

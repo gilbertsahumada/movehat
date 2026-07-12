@@ -60,4 +60,43 @@ describe('parseTxHash (regression: #51)', () => {
     expect(parseTxHash(`TRANSACTION HASH: ${REAL_TX_HASH}`)).toBe(REAL_TX_HASH);
     expect(parseTxHash(`Hash: ${REAL_TX_HASH}`)).toBe(REAL_TX_HASH);
   });
+
+  it("extracts hash from the CLI's JSON Result block (regression: #363)", () => {
+    // Verbatim shape of `movement move run-script` / `deploy-object`
+    // output from the current CLI. Neither free-text pattern matches it:
+    // the underscore breaks the "transaction hash" context and the
+    // quoted value breaks ":\\s*0x".
+    const stdout = `{
+  "Result": {
+    "transaction_hash": "${REAL_TX_HASH}",
+    "gas_used": 3,
+    "gas_unit_price": 100,
+    "sender": "828a0c3d3b456381db210daf69f90ef3e2683b74fd7a8cb4ece9b7deab6c1fe3",
+    "sequence_number": 2,
+    "success": true,
+    "timestamp_us": 1783701141094452,
+    "version": 43,
+    "vm_status": "Executed successfully"
+  }
+}`;
+    expect(parseTxHash(stdout)).toBe(REAL_TX_HASH);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('JSON shape wins even when a trap hash appears earlier in the output', () => {
+    const stdout = `Module address: ${TRAP_HASH}\n{"Result": {"transaction_hash": "${REAL_TX_HASH}"}}`;
+    expect(parseTxHash(stdout)).toBe(REAL_TX_HASH);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('tolerates whitespace variations around the JSON separator', () => {
+    expect(parseTxHash(`"transaction_hash":"${REAL_TX_HASH}"`)).toBe(REAL_TX_HASH);
+    expect(parseTxHash(`"transaction_hash" : "${REAL_TX_HASH}"`)).toBe(REAL_TX_HASH);
+  });
+
+  it('does not match an unquoted or non-hash transaction_hash value', () => {
+    expect(parseTxHash(`"transaction_hash": "not-a-hash"`)).toBeUndefined();
+    expect(parseTxHash(`"transaction_hash": "0x1234"`)).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+  });
 });

@@ -41,6 +41,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `parseTxHash` now recognizes the Movement CLI's JSON output
+  (`"transaction_hash": "0x…"` inside the `Result` block) in addition to
+  the free-text `transaction hash: 0x…` shape. With the current CLI, the
+  old parser missed the JSON form twice over (the underscore broke the
+  keyword context and the quoted value broke the hex match), so
+  `runMoveScript` threw "Could not parse transaction hash" even though
+  the script executed successfully, and any flow whose output carries the
+  JSON hash recorded `txHash: undefined`. The JSON pattern is checked
+  first and stays context-bound, so the strict no-loose-64-hex-fallback
+  guarantee is unchanged. Note: `deploy-object` / `upgrade-object` on the
+  current CLI emit no transaction hash in any shape (`"Result": "Success"`
+  only), so their records legitimately omit `txHash` — that field is
+  optional by design. Closes #363.
+
 - Concurrent deploys of the same Move package no longer race. The build
   step writes in-place to `<packageDir>/build/` with the deployer address
   baked into the bytecode, and the SDK publish path (movelite) reads those
@@ -71,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the full 15s readiness timeout on a generic message. A stopped manager
   can also be started again (the internal killed flag was never reset).
   Closes #353.
+
+### Tests
+
+- The harness-local integration suite is pinned to the full Movement node
+  (`useMovelite: false`): it drives the CLI flows (`deploy-object`,
+  `run-script`), and the Movement CLI cannot parse movelite's REST
+  responses, so running it against the auto-selected movelite backend
+  failed all five tests. The movelite backend remains covered by the
+  example suite and the backend-assertion gate. An SDK-based path for the
+  code-object and run-script flows — which would let this suite run on
+  movelite too — is tracked in #362.
 
 ### Internal
 
