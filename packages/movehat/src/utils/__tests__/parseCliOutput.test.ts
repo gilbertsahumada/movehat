@@ -62,10 +62,10 @@ describe('parseTxHash (regression: #51)', () => {
   });
 
   it("extracts hash from the CLI's JSON Result block (regression: #363)", () => {
-    // Verbatim shape of `movement move run-script` / `deploy-object`
-    // output from the current CLI. Neither free-text pattern matches it:
-    // the underscore breaks the "transaction hash" context and the
-    // quoted value breaks ":\\s*0x".
+    // Verbatim shape of `movement move run-script` output from the
+    // current CLI. Neither free-text pattern matches it: the underscore
+    // breaks the "transaction hash" context and the quoted value breaks
+    // ":\\s*0x".
     const stdout = `{
   "Result": {
     "transaction_hash": "${REAL_TX_HASH}",
@@ -95,8 +95,9 @@ describe('parseTxHash (regression: #51)', () => {
   });
 
   it('does not match an unquoted or non-hash transaction_hash value', () => {
+    expect(parseTxHash(`"transaction_hash": ${REAL_TX_HASH}`)).toBeUndefined();
     expect(parseTxHash(`"transaction_hash": "not-a-hash"`)).toBeUndefined();
     expect(parseTxHash(`"transaction_hash": "0x1234"`)).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(3);
   });
 });

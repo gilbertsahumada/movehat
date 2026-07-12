@@ -108,6 +108,11 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
     });
     expect(info.address).toMatch(/^0x[a-fA-F0-9]+$/);
     expect(info.moduleName).toBe('counter');
+    // Same CLI caveat as the upgrade test below: no tx hash is emitted
+    // for object flows, so txHash is optional — well-formed when present.
+    if (info.txHash !== undefined) {
+      expect(info.txHash).toMatch(/^0x[a-fA-F0-9]+$/);
+    }
     codeObjectAddr = info.address;
   });
 

@@ -12,7 +12,8 @@ import { logger } from '../ui/index.js';
  * Two context-bearing shapes are accepted, checked in order:
  *
  *   1. JSON `Result` block: `"transaction_hash": "0x…"` — what the CLI
- *      emits for `run-script`, `deploy-object`, and `publish` today.
+ *      emits for `run-script` today. (`deploy-object` / `upgrade-object`
+ *      print no hash in any shape — callers treat txHash as optional.)
  *   2. Free text: `transaction hash: 0x…`, `txn hash: 0x…`, `hash: 0x…`.
  *
  * When neither context is present we log a warning and return
@@ -29,7 +30,7 @@ import { logger } from '../ui/index.js';
  */
 export function parseTxHash(stdout: string): string | undefined {
   const jsonShape = stdout.match(
-    /"transaction_hash"\s*:\s*"(0x[a-fA-F0-9]{64})"/i
+    /"transaction_hash"\s*:\s*"(0x[a-fA-F0-9]{64})"/
   );
   if (jsonShape?.[1]) return jsonShape[1];
   const withContext = stdout.match(
