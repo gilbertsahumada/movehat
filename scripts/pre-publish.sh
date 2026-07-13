@@ -160,7 +160,10 @@ cd packages/movehat
 # arithmetic would silently coerce a stray string to 0 and pass the check.
 PACK_JSON=$(npm pack --dry-run --json 2>/dev/null)
 UNPACKED_BYTES=$(node -e "
-        const v = JSON.parse(require('fs').readFileSync(0, 'utf8'))[0].unpackedSize;
+        // npm <= 11 emits an array; npm >= 12 an object keyed by name.
+        const parsed = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+        const packument = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+        const v = packument && packument.unpackedSize;
         if (!Number.isInteger(v)) { console.error('unpackedSize missing from npm pack --json output'); process.exit(1); }
         console.log(v);
     " <<<"$PACK_JSON")

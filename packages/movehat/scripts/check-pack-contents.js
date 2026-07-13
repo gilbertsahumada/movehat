@@ -23,7 +23,14 @@ try {
   rmSync(npmCache, { recursive: true, force: true });
 }
 
-const [packument] = JSON.parse(raw);
+// npm <= 11 emits `[ { ...packument } ]`; npm >= 12 emits
+// `{ "<package-name>": { ...packument } }`.
+const parsed = JSON.parse(raw);
+const packument = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0];
+if (!packument || !Array.isArray(packument.files)) {
+  console.error('Unrecognized `npm pack --json` output shape; cannot verify package contents.');
+  process.exit(1);
+}
 const files = packument.files.map((file) => file.path).sort();
 
 const allowedTemplatePath = (path) => path.startsWith('dist/templates/');
