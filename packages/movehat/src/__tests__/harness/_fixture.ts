@@ -73,6 +73,11 @@ export function setupHarnessTestFixture(
     testnet: {
       url: "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
+      // Public networks require explicit credentials. This deterministic key
+      // is test-fixture data only; production config never auto-injects it.
+      accounts: [
+        "0x0000000000000000000000000000000000000000000000000000000000000001",
+      ],
     },
     ...(options.extraNetworks ?? {}),
   };

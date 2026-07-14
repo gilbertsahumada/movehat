@@ -10,6 +10,10 @@ import { extractNamedAddresses } from "../commands/compile.js";
 import {
   saveDeployment,
   loadDeployment,
+  assertDeploymentEnvironment,
+  fingerprintRpcUrl,
+  hashBuildArtifacts,
+  sanitizeRpcUrl,
   validateSafeName,
   type DeploymentInfo,
 } from "../core/deployments.js";
@@ -30,6 +34,16 @@ import {
   cleanupCallbacks,
 } from "../core/movementProfile.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
+import { withFileLocks } from "../utils/fileLock.js";
+import { isHexAddress, normalizeAddress } from "../utils/address.js";
+
+function validateMoveIdentifier(value: string, label: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(
+      `${label} '${value}' is not a valid Move identifier; expected [A-Za-z_][A-Za-z0-9_]*`,
+    );
+  }
+}
 
 /**
  * Deploy a Move package as a code object via `movement move deploy-object`.
@@ -135,6 +149,8 @@ async function executeMovementMoveObject(
   const config = runtime.config;
 
   validateSafeName(moduleName, "module");
+  validateMoveIdentifier(moduleName, "Module name");
+  validateMoveIdentifier(opts.addressName ?? moduleName, "Address name");
 
   const dir = opts.packageDir || config.moveDir;
   const safeDir = validatePathSafety(dir, "package directory");
@@ -144,8 +160,15 @@ async function executeMovementMoveObject(
   // deploy of the same package (through either path) could publish
   // bytecode compiled for the other deploy's address. Upgrade builds
   // too, so it takes the lock as well.
+  const chainIdentity = config.networkConfig.chainId ?? config.network;
   return withKeyedLock(resolve(safeDir), () =>
-    executeMovementMoveObjectLocked(opts, dir, safeDir),
+    withFileLocks(
+      [
+        `package:${resolve(safeDir)}`,
+        `deployment:${chainIdentity}:${moduleName}`,
+      ],
+      () => executeMovementMoveObjectLocked(opts, dir, safeDir),
+    ),
   );
 }
 
@@ -162,8 +185,25 @@ async function executeMovementMoveObjectLocked(
   // Upgrade does not check this (the whole point is to overwrite).
   const forceRedeploy =
     opts.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
+  const existing = loadDeployment(config.network, moduleName);
+  if (existing) {
+    assertDeploymentEnvironment(existing, {
+      ...(config.networkConfig.chainId !== undefined
+        ? { chainId: config.networkConfig.chainId }
+        : {}),
+      rpc: config.rpc,
+    });
+  }
+  if (
+    subcommand === "upgrade-object" &&
+    existing &&
+    normalizeAddress(existing.address) !== normalizeAddress(opts.fixedAddress ?? "")
+  ) {
+    throw new Error(
+      `Upgrade object '${opts.fixedAddress}' does not match recorded deployment '${existing.address}'`,
+    );
+  }
   if (opts.checkIdempotency) {
-    const existing = loadDeployment(config.network, moduleName);
     if (existing && !forceRedeploy) {
       const errorDetails = [
         `Module "${moduleName}" is already deployed on ${config.network}`,
@@ -196,6 +236,16 @@ async function executeMovementMoveObjectLocked(
     }
   }
 
+  logger.section("Transaction preflight");
+  logger.kv("Operation", subcommand, 2);
+  logger.kv("Network", config.network, 2);
+  logger.kv("Chain ID", config.networkConfig.chainId ?? "unknown", 2);
+  logger.kv("RPC", sanitizeRpcUrl(config.rpc), 2);
+  logger.kv("Signer", account.accountAddress.toString(), 2);
+  logger.kv("Module", moduleName, 2);
+  if (opts.fixedAddress) logger.kv("Object", opts.fixedAddress, 2);
+  logger.newline();
+
   logger.step(
     `${subcommand === "deploy-object" ? "Deploying" : "Upgrading"} module "${moduleName}" from ${dir}...`
   );
@@ -208,9 +258,19 @@ async function executeMovementMoveObjectLocked(
     // Caller-supplied `namedAddresses` overlay on top.
     const detectedAddresses = extractNamedAddresses(dir);
     const addrMap = new Map<string, string>();
-    for (const name of detectedAddresses) addrMap.set(name, deployerAddress);
+    for (const name of detectedAddresses) {
+      addrMap.set(name, config.namedAddresses[name] ?? deployerAddress);
+    }
     if (opts.namedAddresses) {
       for (const [k, v] of Object.entries(opts.namedAddresses)) addrMap.set(k, v);
+    }
+    for (const [name, address] of addrMap) {
+      validateMoveIdentifier(name, "Named address");
+      if (!isHexAddress(address)) {
+        throw new Error(
+          `Named address '${name}' must be a 1-64 digit hexadecimal address`,
+        );
+      }
     }
     const namedAddrArgs: string[] =
       addrMap.size > 0
@@ -331,6 +391,7 @@ async function executeMovementMoveObjectLocked(
     // Publish/upgrade succeeded. Everything below this point that throws
     // is a local-side bookkeeping failure, not an on-chain failure.
 
+    const artifactHash = hashBuildArtifacts(safeDir);
     const deployment: DeploymentInfo = {
       address: objectAddress,
       moduleName,
@@ -338,6 +399,16 @@ async function executeMovementMoveObjectLocked(
       deployer: deployerAddress,
       timestamp: Date.now(),
       ...(txHash !== undefined ? { txHash } : {}),
+      schemaVersion: 2,
+      ...(config.networkConfig.chainId !== undefined
+        ? { chainId: config.networkConfig.chainId }
+        : {}),
+      rpcFingerprint: fingerprintRpcUrl(config.rpc),
+      ...(artifactHash !== undefined ? { artifactHash } : {}),
+      kind: subcommand === "deploy-object" ? "code-object" : "upgrade-object",
+      ...(subcommand === "upgrade-object" && existing?.txHash !== undefined
+        ? { previousTxHash: existing.txHash }
+        : {}),
     };
 
     try {

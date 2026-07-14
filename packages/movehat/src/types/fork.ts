@@ -3,6 +3,8 @@
  */
 
 export interface ForkMetadata {
+  /** On-disk schema version. Absent means the original v1-compatible format. */
+  schemaVersion?: 1;
   network: string;
   nodeUrl: string;
   chainId: number;

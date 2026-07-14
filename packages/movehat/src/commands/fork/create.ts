@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import prompts from 'prompts';
-import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
+import { loadUserConfig, resolveNetworkEndpoint } from '../../core/config.js';
 import { ForkManager } from '../../fork/manager.js';
 import { logger, withSpinner, createKVTable, formatCommand } from '../../ui/index.js';
 
@@ -35,6 +35,15 @@ export function validateForkName(name: string): string {
   return name;
 }
 
+function displayRpcUrl(rpc: string): string {
+  try {
+    const parsed = new URL(rpc);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
 /**
  * Create a local fork of a Movement network
  *
@@ -61,8 +70,11 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
   try {
     // Load MoveHat config
     const userConfig = await loadUserConfig();
-    const networkName = options.network || process.env.MH_CLI_NETWORK || userConfig.defaultNetwork || 'testnet';
-    const networkConfig = await resolveNetworkConfig(userConfig, networkName);
+    // Fork creation is read-only and does not sign transactions, so resolving
+    // the RPC must not require or auto-inject a private key.
+    const endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    const networkName = endpoint.network;
+    const rpc = endpoint.networkConfig.url;
 
     // Determine fork name and path
     const forkName = validateForkName(options.name || `${networkName}-fork`);
@@ -70,23 +82,25 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
 
     logger.newline();
     logger.info(`Creating fork of ${networkName}`);
-    logger.kv('Network', networkConfig.rpc, 2);
+    logger.kv('Network', displayRpcUrl(rpc), 2);
     logger.kv('Fork path', forkPath, 2);
     logger.newline();
 
     // Check if fork already exists
+    let overwrite = false;
     if (existsSync(forkPath)) {
-      const { overwrite } = await prompts({
+      const { overwrite: confirmedOverwrite } = await prompts({
         type: 'confirm',
         name: 'overwrite',
         message: `Fork already exists at ${forkPath}. Overwrite?`,
         initial: false,
       });
 
-      if (!overwrite) {
+      if (!confirmedOverwrite) {
         logger.warning('Fork creation cancelled');
         return;
       }
+      overwrite = true;
     }
 
     // Create fork manager
@@ -96,7 +110,11 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     const metadata = await withSpinner(
       'Initializing fork...',
       async () => {
-        await forkManager.initialize(networkConfig.rpc, networkName);
+        if (overwrite) {
+          await forkManager.initialize(rpc, networkName, undefined, { overwrite: true });
+        } else {
+          await forkManager.initialize(rpc, networkName);
+        }
         return forkManager.getMetadata();
       },
       'Fork initialized successfully!'

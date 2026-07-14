@@ -1,8 +1,23 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  unlinkSync,
+  renameSync,
+} from 'fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
-import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
+import {
+  assertForkMetadata,
+  assertAccountStateRecord,
+  assertSafeJsonValue,
+  assertSafeRecordKey,
+} from './validation.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -36,8 +51,16 @@ function ensurePrivateDirectory(path: string): void {
 }
 
 function writePrivateFile(path: string, data: string): void {
-  writeFileSync(path, data, { mode: PRIVATE_FILE_MODE });
-  chmodSync(path, PRIVATE_FILE_MODE);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, data, { mode: PRIVATE_FILE_MODE });
+    chmodSync(temporaryPath, PRIVATE_FILE_MODE);
+    renameSync(temporaryPath, path);
+    chmodSync(path, PRIVATE_FILE_MODE);
+  } catch (error) {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+    throw error;
+  }
 }
 
 function readJsonFile<T>(path: string, label: string): T {
@@ -46,6 +69,7 @@ function readJsonFile<T>(path: string, label: string): T {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`Invalid JSON in ${label} at ${path}. Expected an object.`);
     }
+    assertSafeJsonValue(value);
     return value as T;
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -73,6 +97,11 @@ export class ForkStorage {
   private getResourceFilePath(address: string): string {
     const safeFilename = sanitizeAddressForFilename(address);
     return join(this.forkPath, 'resources', `${safeFilename}.json`);
+  }
+
+  private getAllResourcesMarkerPath(address: string): string {
+    const safeFilename = sanitizeAddressForFilename(address);
+    return join(this.forkPath, 'cache', `${safeFilename}.all-resources`);
   }
 
   /**
@@ -143,7 +172,9 @@ export class ForkStorage {
     }
 
     const accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
-    return accounts[address] || null;
+    return Object.prototype.hasOwnProperty.call(accounts, address)
+      ? accounts[address] ?? null
+      : null;
   }
 
   /**
@@ -157,6 +188,8 @@ export class ForkStorage {
       accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
     }
 
+    assertSafeRecordKey(address, 'account key');
+    assertSafeJsonValue(state);
     accounts[address] = state;
     writePrivateFile(accountsPath, JSON.stringify(accounts, null, 2));
   }
@@ -172,7 +205,10 @@ export class ForkStorage {
     }
 
     const resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
-    return resources[resourceType] || null;
+    assertSafeRecordKey(resourceType, 'resource type');
+    return Object.prototype.hasOwnProperty.call(resources, resourceType)
+      ? resources[resourceType]
+      : null;
   }
 
   /**
@@ -203,6 +239,8 @@ export class ForkStorage {
       resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
     }
 
+    assertSafeRecordKey(resourceType, 'resource type');
+    assertSafeJsonValue(data);
     resources[resourceType] = data;
     writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
   }
@@ -217,14 +255,28 @@ export class ForkStorage {
     const resourcesDir = join(this.forkPath, 'resources');
     ensurePrivateDirectory(resourcesDir);
 
+    assertSafeJsonValue(resources);
     writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
+
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    writePrivateFile(this.getAllResourcesMarkerPath(address), 'complete\n');
   }
 
   /**
    * Check if resource is cached
    */
   hasResource(address: string, resourceType: string): boolean {
-    return this.getResource(address, resourceType) !== null;
+    assertSafeRecordKey(resourceType, 'resource type');
+    const resourceFilePath = this.getResourceFilePath(address);
+    if (!existsSync(resourceFilePath)) return false;
+    const resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
+    return Object.prototype.hasOwnProperty.call(resources, resourceType);
+  }
+
+  /** Whether a complete (possibly empty) upstream resource list was cached. */
+  hasAllResources(address: string): boolean {
+    return existsSync(this.getAllResourcesMarkerPath(address));
   }
 
   /**
@@ -257,18 +309,24 @@ export class ForkStorage {
   clearResources(): void {
     const resourcesDir = join(this.forkPath, 'resources');
 
-    if (!existsSync(resourcesDir)) {
-      return;
+    // Remove completeness markers first. If the process stops mid-reset, a
+    // later read will safely refetch instead of trusting a partially-cleared
+    // resource directory as a complete snapshot.
+    const cacheDir = join(this.forkPath, 'cache');
+    if (existsSync(cacheDir)) {
+      for (const file of readdirSync(cacheDir)) {
+        if (file.endsWith('.all-resources')) {
+          unlinkSync(join(cacheDir, file));
+        }
+      }
     }
 
-    // Read all files in resources directory
-    const files = readdirSync(resourcesDir);
-
-    // Delete each resource file
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const filePath = join(resourcesDir, file);
-        unlinkSync(filePath);
+    if (existsSync(resourcesDir)) {
+      for (const file of readdirSync(resourcesDir)) {
+        if (file.endsWith('.json')) {
+          const filePath = join(resourcesDir, file);
+          unlinkSync(filePath);
+        }
       }
     }
   }

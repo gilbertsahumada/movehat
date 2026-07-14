@@ -8,7 +8,9 @@ import {
   assertAccountData,
   assertAccountResource,
   assertAccountResourceArray,
+  assertViewResponse,
 } from './validation.js';
+import { MovementApiError } from './errors.js';
 
 export interface MovementApiClientOptions {
   /** Abort the request after this many ms (default: 30_000). */
@@ -40,12 +42,37 @@ export class MovementApiClient {
     options: MovementApiClientOptions = {}
   ) {
     // Remove trailing slash
-    let normalized = nodeUrl.replace(/\/$/, '');
+    const normalized = nodeUrl.replace(/\/$/, '');
 
     // If URL already ends with /v1, use as is
     // Otherwise, assume it's the base URL
     if (!normalized.endsWith('/v1')) {
       // Base URL without /v1, we'll add it in requests
+    }
+
+    let parsedNodeUrl: URL;
+    try {
+      parsedNodeUrl = new URL(normalized);
+    } catch (cause) {
+      throw new MovementApiError('Movement API URL is invalid', 'invalid_response', { cause });
+    }
+    if (parsedNodeUrl.protocol !== 'http:' && parsedNodeUrl.protocol !== 'https:') {
+      throw new MovementApiError(
+        `Unsupported Movement API protocol: ${parsedNodeUrl.protocol}`,
+        'invalid_response'
+      );
+    }
+    if (
+      !Number.isSafeInteger(options.timeoutMs ?? DEFAULT_TIMEOUT_MS) ||
+      (options.timeoutMs ?? DEFAULT_TIMEOUT_MS) <= 0
+    ) {
+      throw new RangeError('timeoutMs must be a positive safe integer');
+    }
+    if (
+      !Number.isSafeInteger(options.maxBytes ?? DEFAULT_MAX_BYTES) ||
+      (options.maxBytes ?? DEFAULT_MAX_BYTES) <= 0
+    ) {
+      throw new RangeError('maxBytes must be a positive safe integer');
     }
 
     this.nodeUrl = normalized;
@@ -98,8 +125,9 @@ export class MovementApiClient {
             req.destroy();
             settle(() =>
               reject(
-                new Error(
-                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
+                new MovementApiError(
+                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`,
+                  'response_too_large'
                 )
               )
             );
@@ -114,8 +142,10 @@ export class MovementApiClient {
           if (res.statusCode !== 200) {
             settle(() =>
               reject(
-                new Error(
-                  `API request failed with status ${res.statusCode}: ${data}`
+                new MovementApiError(
+                  `Movement API request failed with status ${res.statusCode}`,
+                  'http_error',
+                  { statusCode: res.statusCode ?? 0 }
                 )
               )
             );
@@ -127,7 +157,7 @@ export class MovementApiClient {
             settle(() => resolve(parsed));
           } catch (err) {
             settle(() =>
-              reject(new Error(`Failed to parse JSON response: ${err}`))
+              reject(new MovementApiError('Movement API returned invalid JSON', 'invalid_response', { cause: err }))
             );
           }
         });
@@ -136,15 +166,14 @@ export class MovementApiClient {
       req.setTimeout(timeoutMs, () => {
         req.destroy();
         settle(() =>
-          reject(new Error(`API request timed out after ${timeoutMs}ms`))
+          reject(new MovementApiError(`Movement API request timed out after ${timeoutMs}ms`, 'timeout'))
         );
       });
 
       req.on('error', (err) => {
-        settle(() => reject(new Error(`API request failed: ${err.message}`)));
+        settle(() => reject(new MovementApiError(`Movement API request failed: ${err.message}`, 'network_error', { cause: err })));
       });
 
-      req.end();
     });
   }
 
@@ -205,8 +234,9 @@ export class MovementApiClient {
             req.destroy();
             settle(() =>
               reject(
-                new Error(
-                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
+                new MovementApiError(
+                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`,
+                  'response_too_large'
                 )
               )
             );
@@ -221,8 +251,10 @@ export class MovementApiClient {
           if (res.statusCode !== 200) {
             settle(() =>
               reject(
-                new Error(
-                  `API request failed with status ${res.statusCode}: ${data}`
+                new MovementApiError(
+                  `Movement API request failed with status ${res.statusCode}`,
+                  'http_error',
+                  { statusCode: res.statusCode ?? 0 }
                 )
               )
             );
@@ -234,7 +266,7 @@ export class MovementApiClient {
             settle(() => resolve(parsed));
           } catch (err) {
             settle(() =>
-              reject(new Error(`Failed to parse JSON response: ${err}`))
+              reject(new MovementApiError('Movement API returned invalid JSON', 'invalid_response', { cause: err }))
             );
           }
         });
@@ -243,12 +275,12 @@ export class MovementApiClient {
       req.setTimeout(timeoutMs, () => {
         req.destroy();
         settle(() =>
-          reject(new Error(`API request timed out after ${timeoutMs}ms`))
+          reject(new MovementApiError(`Movement API request timed out after ${timeoutMs}ms`, 'timeout'))
         );
       });
 
       req.on('error', (err) => {
-        settle(() => reject(new Error(`API request failed: ${err.message}`)));
+        settle(() => reject(new MovementApiError(`Movement API request failed: ${err.message}`, 'network_error', { cause: err })));
       });
 
       req.write(payload);
@@ -265,45 +297,77 @@ export class MovementApiClient {
     return this.nodeUrl.endsWith('/v1') ? suffix : `/v1${suffix}`;
   }
 
+  private atLedgerVersion(path: string, ledgerVersion?: string): string {
+    if (ledgerVersion === undefined) return path;
+    if (!/^\d+$/.test(ledgerVersion)) {
+      throw new MovementApiError('ledgerVersion must be an unsigned integer string', 'invalid_response');
+    }
+    const separator = path.includes('?') ? '&' : '?';
+    return `${path}${separator}ledger_version=${encodeURIComponent(ledgerVersion)}`;
+  }
+
+  private validateResponse<T>(raw: unknown, validator: (value: unknown) => T): T {
+    try {
+      return validator(raw);
+    } catch (cause) {
+      throw new MovementApiError('Movement API response failed schema validation', 'invalid_response', {
+        cause,
+      });
+    }
+  }
+
   /**
    * Get ledger information
    */
   async getLedgerInfo(): Promise<LedgerInfo> {
     const raw = await this.get<unknown>(this.apiPath('/'));
-    return assertLedgerInfo(raw);
+    return this.validateResponse(raw, assertLedgerInfo);
   }
 
   /**
    * Get account information
    */
-  async getAccount(address: string): Promise<AccountData> {
+  async getAccount(address: string, ledgerVersion?: string): Promise<AccountData> {
     const normalizedAddress = normalizeAddressShort(address);
 
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}`));
-    return assertAccountData(raw);
+    const raw = await this.get<unknown>(
+      this.atLedgerVersion(this.apiPath(`/accounts/${normalizedAddress}`), ledgerVersion)
+    );
+    return this.validateResponse(raw, assertAccountData);
   }
 
   /**
    * Get a specific account resource
    */
-  async getAccountResource(address: string, resourceType: string): Promise<AccountResource> {
+  async getAccountResource(
+    address: string,
+    resourceType: string,
+    ledgerVersion?: string
+  ): Promise<AccountResource> {
     const normalizedAddress = normalizeAddressShort(address);
 
     // URL encode the resource type
     const encodedType = encodeURIComponent(resourceType);
 
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resource/${encodedType}`));
-    return assertAccountResource(raw);
+    const raw = await this.get<unknown>(
+      this.atLedgerVersion(
+        this.apiPath(`/accounts/${normalizedAddress}/resource/${encodedType}`),
+        ledgerVersion
+      )
+    );
+    return this.validateResponse(raw, assertAccountResource);
   }
 
   /**
    * Get all resources for an account
    */
-  async getAccountResources(address: string): Promise<AccountResource[]> {
+  async getAccountResources(address: string, ledgerVersion?: string): Promise<AccountResource[]> {
     const normalizedAddress = normalizeAddressShort(address);
 
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
-    return assertAccountResourceArray(raw);
+    const raw = await this.get<unknown>(
+      this.atLedgerVersion(this.apiPath(`/accounts/${normalizedAddress}/resources`), ledgerVersion)
+    );
+    return this.validateResponse(raw, assertAccountResourceArray);
   }
 
   /**
@@ -319,8 +383,14 @@ export class MovementApiClient {
    */
   async view(
     payload: unknown,
-    extraHeaders: Record<string, string> = {}
+    extraHeaders: Record<string, string> = {},
+    ledgerVersion?: string
   ): Promise<unknown[]> {
-    return this.post<unknown[]>(this.apiPath('/view'), payload, extraHeaders);
+    const raw = await this.post<unknown>(
+      this.atLedgerVersion(this.apiPath('/view'), ledgerVersion),
+      payload,
+      extraHeaders
+    );
+    return this.validateResponse(raw, assertViewResponse);
   }
 }

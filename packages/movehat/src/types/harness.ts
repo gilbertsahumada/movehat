@@ -1,6 +1,24 @@
 import type { DeploymentInfo } from "../core/deployments.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 
+/** Options-object form of `Harness.createFork` (positional calls remain supported). */
+export interface CreateForkOptions {
+  /** Network snapshot to read. Defaults to `testnet`. */
+  network?: string;
+  /** Optional bearer token for the upstream Movement RPC. */
+  apiKey?: string;
+  /** RPC override, required for custom network names. */
+  rpcUrl?: string;
+  /** Persistent fork directory name. */
+  name?: string;
+  /** Local JSON-RPC server port. */
+  port?: number;
+  /** Clear the local overlay before starting. Defaults to true. */
+  resetState?: boolean;
+  /** Labels for isolated accounts owned by this Harness. */
+  accountLabels?: readonly string[];
+}
+
 /**
  * Options for `harness.deployCodeObject(options)`.
  *

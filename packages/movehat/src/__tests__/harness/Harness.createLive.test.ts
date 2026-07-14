@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Harness } from "../../harness/index.js";
+import { NetworkConflictError } from "../../errors.js";
 import { setupHarnessTestFixture, type HarnessTestFixture } from "./_fixture.js";
 
 describe("Harness.createLive", () => {
@@ -45,6 +46,28 @@ describe("Harness.createLive", () => {
       expect(harness.runtime.network.rpc).toContain("custom.example.com");
     } finally {
       await harness.cleanup();
+    }
+  });
+
+  it("uses config/env resolution when the network argument is omitted", async () => {
+    const harness = await Harness.createLive();
+    try {
+      expect(harness.runtime.network.name).toBe("testnet");
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  it("fails before runtime construction when API and CLI networks conflict", async () => {
+    const previous = process.env.MH_CLI_NETWORK;
+    process.env.MH_CLI_NETWORK = "custom";
+    try {
+      await expect(Harness.createLive("testnet")).rejects.toBeInstanceOf(
+        NetworkConflictError
+      );
+    } finally {
+      if (previous === undefined) delete process.env.MH_CLI_NETWORK;
+      else process.env.MH_CLI_NETWORK = previous;
     }
   });
 

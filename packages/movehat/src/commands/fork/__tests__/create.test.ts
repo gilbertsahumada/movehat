@@ -8,7 +8,7 @@ const forkManagerInitialize = vi.fn();
 const forkManagerGetMetadata = vi.fn();
 const ForkManagerCtor = vi.fn();
 const loadUserConfigMock = vi.fn();
-const resolveNetworkConfigMock = vi.fn();
+const resolveNetworkEndpointMock = vi.fn();
 
 vi.mock("prompts", () => ({ default: promptsMock }));
 
@@ -24,7 +24,7 @@ vi.mock("../../../fork/manager.js", () => ({
 
 vi.mock("../../../core/config.js", () => ({
   loadUserConfig: loadUserConfigMock,
-  resolveNetworkConfig: resolveNetworkConfigMock,
+  resolveNetworkEndpoint: resolveNetworkEndpointMock,
 }));
 
 const { default: forkCreateCommand, validateForkName } = await import("../create.js");
@@ -52,16 +52,12 @@ describe("forkCreateCommand", () => {
       defaultNetwork: "testnet",
       networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } },
     });
-    resolveNetworkConfigMock.mockReset().mockResolvedValue({
-      network: "testnet",
-      rpc: "https://testnet.movementnetwork.xyz/v1",
-      privateKey: "0x" + "1".repeat(64),
-      allAccounts: [],
-      profile: "default",
-      moveDir: "./move",
-      account: "",
-      namedAddresses: {},
-      networkConfig: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+    resolveNetworkEndpointMock.mockReset().mockImplementation((config, network) => {
+      const selected = network ?? config.defaultNetwork ?? "testnet";
+      return {
+        network: selected,
+        networkConfig: config.networks[selected],
+      };
     });
 
     origCwd = process.cwd();
@@ -126,6 +122,29 @@ describe("forkCreateCommand", () => {
 
     expect(promptsMock).toHaveBeenCalledTimes(1);
     expect(forkManagerInitialize).toHaveBeenCalledTimes(1);
+    expect(forkManagerInitialize).toHaveBeenCalledWith(
+      "https://testnet.movementnetwork.xyz/v1",
+      "testnet",
+      undefined,
+      { overwrite: true }
+    );
+  });
+
+  it("resolves the read-only RPC without requiring an account or private key", async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      defaultNetwork: "mainnet",
+      networks: {
+        mainnet: { url: "https://mainnet.movementnetwork.xyz/v1" },
+      },
+    });
+
+    await forkCreateCommand({ network: "mainnet" });
+
+    expect(resolveNetworkEndpointMock).toHaveBeenCalled();
+    expect(forkManagerInitialize).toHaveBeenCalledWith(
+      "https://mainnet.movementnetwork.xyz/v1",
+      "mainnet"
+    );
   });
 
   it("aborts gracefully when the user declines the overwrite prompt", async () => {

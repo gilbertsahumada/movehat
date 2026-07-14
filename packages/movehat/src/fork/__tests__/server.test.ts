@@ -141,13 +141,14 @@ describe("ForkServer — POST /v1/view proxy", () => {
     // X-Aptos-Client, but undici sets a default `Accept: */*` we round-
     // trip transparently.
     const firstCall = fakeApi.view.mock.calls[0]!;
-    const [forwardedPayload, forwardedHeaders] = firstCall;
+    const [forwardedPayload, forwardedHeaders, ledgerVersion] = firstCall;
     expect(forwardedPayload).toEqual({
       function: "0x1::coin::supply",
       type_arguments: [],
       arguments: [],
     });
     expect(forwardedHeaders).not.toHaveProperty("X-Aptos-Client");
+    expect(ledgerVersion).toBe("0");
   });
 
   it("rejects malformed JSON with 400 invalid_body", async () => {
@@ -187,7 +188,7 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(logged).toContain("***REDACTED***");
   });
 
-  it("forwards Accept and X-Aptos-Client headers to upstream", async () => {
+  it("explicitly rejects BCS view responses the JSON fork server cannot preserve", async () => {
     fakeApi.view.mockResolvedValueOnce(["forwarded"]);
 
     server = new ForkServer(forkDir, 0);
@@ -205,14 +206,9 @@ describe("ForkServer — POST /v1/view proxy", () => {
       body: JSON.stringify({ function: "0x1::coin::supply" }),
     });
 
-    expect(res.status).toBe(200);
-    expect(fakeApi.view).toHaveBeenCalledWith(
-      { function: "0x1::coin::supply" },
-      {
-        Accept: "application/x-bcs",
-        "X-Aptos-Client": "my-test-client/1.0",
-      },
-    );
+    expect(res.status).toBe(406);
+    expect((await res.json()).error_code).toBe("unsupported_response_format");
+    expect(fakeApi.view).not.toHaveBeenCalled();
   });
 
   it("returns 413 body_too_large when the request body exceeds 1 MiB", async () => {

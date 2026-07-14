@@ -263,6 +263,40 @@ describe('ForkStorage', () => {
       expect(storage.hasResource('0x1', '0x1::nonexistent::Resource')).toBe(false);
     });
 
+    it.each([false, 0, '', null])('should preserve and cache falsy resource value %j', (value) => {
+      const storage = new ForkStorage(forkPath);
+      storage.saveResource('0x1', 'test::Falsy', value);
+
+      expect(storage.hasResource('0x1', 'test::Falsy')).toBe(true);
+      expect(storage.getResource('0x1', 'test::Falsy')).toBe(value);
+    });
+
+    it('should distinguish a cached empty complete resource list from a cache miss', () => {
+      const storage = new ForkStorage(forkPath);
+      expect(storage.hasAllResources('0x1')).toBe(false);
+
+      storage.saveAllResources('0x1', {});
+      expect(storage.hasAllResources('0x1')).toBe(true);
+      expect(storage.getAllResources('0x1')).toEqual({});
+
+      storage.clearResources();
+      expect(storage.hasAllResources('0x1')).toBe(false);
+    });
+
+    it('rejects prototype-polluting resource keys and persisted payloads', () => {
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.saveResource('0x1', '__proto__', { polluted: true })).toThrow(
+        /Unsafe resource type/
+      );
+
+      vol.writeFileSync(
+        `${forkPath}/resources/0x1.json`,
+        '{"safe":{"__proto__":{"polluted":true}}}'
+      );
+      expect(() => storage.getAllResources('0x1')).toThrow(/Unsafe object key/);
+      expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    });
+
     it('should clear all resources', () => {
       vol.fromJSON({
         [`${forkPath}/resources/0x1.json`]: '{}',

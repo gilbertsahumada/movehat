@@ -40,8 +40,8 @@ describe("runtime.deployContract — secret redaction", () => {
     tmpHome = mkdtempSync(join(tmpdir(), "movehat-test-home-"));
     tmpCwd = mkdtempSync(join(tmpdir(), "movehat-test-cwd-"));
 
-    // Minimal movehat.config.js — testnet with no `accounts` means the
-    // auto-generated deterministic test key is used (config.ts:147-155).
+    // Public networks require explicit credentials. The deterministic value
+    // below is fixture-only and is never auto-injected by production config.
     writeFileSync(
       join(tmpCwd, "movehat.config.js"),
       `export default {
@@ -49,7 +49,8 @@ describe("runtime.deployContract — secret redaction", () => {
   networks: {
     testnet: {
       url: "https://testnet.movementnetwork.xyz/v1",
-      chainId: "testnet"
+      chainId: "testnet",
+      accounts: ["0x0000000000000000000000000000000000000000000000000000000000000001"]
     }
   }
 };
@@ -597,7 +598,7 @@ describe("Publisher — SDK publish path (movelite backend)", () => {
       join(tmpCwd, "movehat.config.js"),
       `export default {
   defaultNetwork: "testnet",
-  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } }
+  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet", accounts: ["0x0000000000000000000000000000000000000000000000000000000000000001"] } }
 };
 `
     );
@@ -777,7 +778,7 @@ describe("Publisher — per-package-dir deploy serialization", () => {
       join(tmpCwd, "movehat.config.js"),
       `export default {
   defaultNetwork: "testnet",
-  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } }
+  networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet", accounts: ["0x0000000000000000000000000000000000000000000000000000000000000001"] } }
 };
 `
     );

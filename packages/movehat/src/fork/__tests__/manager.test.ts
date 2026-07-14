@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -18,6 +18,7 @@ const fakeApi = {
   getAccount: vi.fn(),
   getAccountResource: vi.fn(),
   getAccountResources: vi.fn(),
+  view: vi.fn(),
 };
 
 // Track the (nodeUrl, apiKey) pair every constructor call sees, so we
@@ -33,11 +34,13 @@ vi.mock("../api.js", () => ({
     getAccount = fakeApi.getAccount;
     getAccountResource = fakeApi.getAccountResource;
     getAccountResources = fakeApi.getAccountResources;
+    view = fakeApi.view;
   },
 }));
 
 // Static import after the mock declaration — vi hoists vi.mock calls.
 import { ForkManager } from "../manager.js";
+import { MovementApiError } from "../errors.js";
 
 const TEST_NODE_URL = "https://testnet.movementnetwork.xyz/v1";
 const TEST_ADDR = "0x" + "a".repeat(64);
@@ -65,6 +68,7 @@ describe("ForkManager — initialize / load", () => {
     fakeApi.getAccount.mockReset();
     fakeApi.getAccountResource.mockReset();
     fakeApi.getAccountResources.mockReset();
+    fakeApi.view.mockReset();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
   });
 
@@ -158,6 +162,23 @@ describe("ForkManager — initialize / load", () => {
     mgr.setApiKey("key");
     expect(apiCtorCalls).toHaveLength(0);
   });
+
+  it("overwrite clears the previous account/resource overlay after preflight", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    fakeApi.getAccount.mockResolvedValue({
+      sequence_number: "7",
+      authentication_key: "0xabc",
+    });
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL);
+    await mgr.getAccount(TEST_ADDR);
+    await mgr.setResource(TEST_ADDR, "0x1::m::R", false);
+
+    await mgr.initialize(TEST_NODE_URL, "custom", undefined, { overwrite: true });
+
+    expect(mgr.listAccounts()).toEqual([]);
+    expect(existsSync(join(forkPath, "resources", `${TEST_ADDR}.json`))).toBe(false);
+  });
 });
 
 describe("ForkManager — account + resource fetch", () => {
@@ -173,6 +194,7 @@ describe("ForkManager — account + resource fetch", () => {
     fakeApi.getAccount.mockReset();
     fakeApi.getAccountResource.mockReset();
     fakeApi.getAccountResources.mockReset();
+    fakeApi.view.mockReset();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     mgr = new ForkManager(forkPath);
@@ -194,6 +216,7 @@ describe("ForkManager — account + resource fetch", () => {
     expect(state.sequenceNumber).toBe("7");
     expect(state.authenticationKey).toBe("0xabc");
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+    expect(fakeApi.getAccount).toHaveBeenCalledWith(TEST_ADDR, "100");
   });
 
   it("getAccount returns the cached state on second call (no extra API hit)", async () => {
@@ -206,6 +229,18 @@ describe("ForkManager — account + resource fetch", () => {
     await mgr.getAccount(TEST_ADDR);
 
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps accounts fetched concurrently instead of losing one JSON update", async () => {
+    const secondAddress = "0x" + "b".repeat(64);
+    fakeApi.getAccount.mockImplementation(async (address: string) => ({
+      sequence_number: address === TEST_ADDR ? "1" : "2",
+      authentication_key: address,
+    }));
+
+    await Promise.all([mgr.getAccount(TEST_ADDR), mgr.getAccount(secondAddress)]);
+
+    expect(mgr.listAccounts().sort()).toEqual([TEST_ADDR, secondAddress].sort());
   });
 
   it("getAccount throws if the manager was never initialized/loaded", async () => {
@@ -225,10 +260,25 @@ describe("ForkManager — account + resource fetch", () => {
     const r2 = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
     expect(r2).toEqual({ value: "42" });
     expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
+    expect(fakeApi.getAccountResource).toHaveBeenCalledWith(
+      TEST_ADDR,
+      "0x1::counter::Counter",
+      "100"
+    );
+  });
+
+  it.each([false, 0, '', null])("does not refetch cached falsy resource %j", async (value) => {
+    fakeApi.getAccountResource.mockResolvedValue({ data: value });
+
+    expect(await mgr.getResource(TEST_ADDR, "0x1::m::Falsy")).toBe(value);
+    expect(await mgr.getResource(TEST_ADDR, "0x1::m::Falsy")).toBe(value);
+    expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
   });
 
   it("getResource rethrows a clean 'not found' for upstream 404 errors", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await expect(
       mgr.getResource(TEST_ADDR, "0x1::missing::Resource")
     ).rejects.toThrow(/Resource .* not found for account/);
@@ -254,6 +304,25 @@ describe("ForkManager — account + resource fetch", () => {
     // Second call should hit cache (API call count stays at 1).
     await mgr.getAllResources(TEST_ADDR);
     expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
+    expect(fakeApi.getAccountResources).toHaveBeenCalledWith(TEST_ADDR, "100");
+  });
+
+  it("caches an empty upstream resource list without refetching", async () => {
+    fakeApi.getAccountResources.mockResolvedValue([]);
+
+    expect(await mgr.getAllResources(TEST_ADDR)).toEqual({});
+    expect(await mgr.getAllResources(TEST_ADDR)).toEqual({});
+    expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
+  });
+
+  it("pins view calls to the fork ledger version", async () => {
+    fakeApi.view.mockResolvedValue(["42"]);
+    await expect(mgr.forwardView({ function: "0x1::m::v" })).resolves.toEqual(["42"]);
+    expect(fakeApi.view).toHaveBeenCalledWith(
+      { function: "0x1::m::v" },
+      {},
+      "100"
+    );
   });
 });
 
@@ -270,6 +339,7 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
     fakeApi.getAccount.mockReset();
     fakeApi.getAccountResource.mockReset();
     fakeApi.getAccountResources.mockReset();
+    fakeApi.view.mockReset();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     mgr = new ForkManager(forkPath);
@@ -282,7 +352,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundAccount creates a fresh CoinStore when none exists upstream", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     await mgr.fundAccount(TEST_ADDR, 1_000);
 
@@ -295,12 +367,29 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundAccount adds to existing balance on a second call (accumulates)", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await mgr.fundAccount(TEST_ADDR, 1_000);
     await mgr.fundAccount(TEST_ADDR, 500);
 
     const stored = await mgr.getResource(TEST_ADDR, COIN_TYPE);
     expect(stored.coin.value).toBe("1500");
+  });
+
+  it("serializes concurrent balance updates without losing increments", async () => {
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
+
+    await Promise.all([
+      mgr.fundAccount(TEST_ADDR, 100),
+      mgr.fundAccount(TEST_ADDR, 200),
+      mgr.fundAccount(TEST_ADDR, 300),
+    ]);
+
+    const stored = await mgr.getResource(TEST_ADDR, COIN_TYPE);
+    expect(stored.coin.value).toBe("600");
   });
 
   it("fundAccount rethrows non-404 errors from getResource", async () => {
@@ -309,7 +398,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundMultipleAccounts funds every address in the list", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     const addrs = [
       "0x" + "1".repeat(64),
@@ -334,8 +425,20 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
     expect(stored).toEqual({ value: 2 });
   });
 
+  it("keeps distinct resources written concurrently for the same account", async () => {
+    await Promise.all([
+      mgr.setResource(TEST_ADDR, "0x1::custom::A", { value: 1 }),
+      mgr.setResource(TEST_ADDR, "0x1::custom::B", { value: 2 }),
+    ]);
+
+    expect(await mgr.getResource(TEST_ADDR, "0x1::custom::A")).toEqual({ value: 1 });
+    expect(await mgr.getResource(TEST_ADDR, "0x1::custom::B")).toEqual({ value: 2 });
+  });
+
   it("listAccounts returns the cached account list", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await mgr.fundAccount(TEST_ADDR, 100);
     const list = mgr.listAccounts();
     expect(list.length).toBeGreaterThan(0);
@@ -357,12 +460,35 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   it("getOrCreateAccount synthesizes a minimal account when the upstream lookup fails", async () => {
     // Force the storage cache miss AND the API throw, exercising the
     // catch arm that creates the account locally.
-    fakeApi.getAccount.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccount.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     const result = await mgr.getOrCreateAccount(TEST_ADDR);
     expect(result.sequenceNumber).toBe("0");
     expect(result.authenticationKey).toHaveLength(66);
   });
+
+  it("does not turn a timeout into a local account", async () => {
+    fakeApi.getAccount.mockRejectedValue(
+      new MovementApiError("timed out", "timeout")
+    );
+
+    await expect(mgr.getOrCreateAccount(TEST_ADDR)).rejects.toMatchObject({
+      code: "timeout",
+    });
+    expect(mgr.listAccounts()).not.toContain(TEST_ADDR);
+  });
+
+  it.each([-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid funding amount %s before reading upstream",
+    async (amount) => {
+      await expect(mgr.fundAccount(TEST_ADDR, amount)).rejects.toThrow(
+        /non-negative safe integer/
+      );
+      expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
+    }
+  );
 
   it("resetState clears cached accounts and resources", async () => {
     fakeApi.getAccount.mockResolvedValue({

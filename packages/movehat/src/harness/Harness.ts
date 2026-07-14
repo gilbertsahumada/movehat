@@ -11,6 +11,7 @@ import type {
   RunViewFunctionOptions,
   RunMoveScriptOptions,
   MoveScriptResult,
+  CreateForkOptions,
 } from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
 import { initRuntime } from "../runtime.js";
@@ -126,6 +127,10 @@ export class Harness {
    * and `runMoveScript` throw with a message pointing at `createLocal`.
    * `runViewFunction` works (read-only path).
    *
+   * Accepts the original positional form (`network, apiKey?, rpcUrl?`) and a
+   * Hardhat-style options object (`{ network, apiKey, rpcUrl, name, port,
+   * resetState, accountLabels }`). The object form defaults to testnet.
+   *
    * @param network - Network to fork. Built-ins: `"testnet"`, `"mainnet"`.
    *   Any other name requires `rpcUrl`.
    * @param apiKey - Optional Movement API key. When set, every upstream
@@ -137,17 +142,37 @@ export class Harness {
    *   Ignored when a fork already exists on disk (the saved metadata's
    *   nodeUrl is reused).
    */
-  static async createFork(
+  static createFork(
     network: string,
     apiKey?: string,
     rpcUrl?: string
+  ): Promise<Harness>;
+  static createFork(options?: CreateForkOptions): Promise<Harness>;
+  static async createFork(
+    networkOrOptions: string | CreateForkOptions = {},
+    apiKey?: string,
+    rpcUrl?: string,
   ): Promise<Harness> {
+    const options: CreateForkOptions =
+      typeof networkOrOptions === "string"
+        ? {
+            network: networkOrOptions,
+            ...(apiKey === undefined ? {} : { apiKey }),
+            ...(rpcUrl === undefined ? {} : { rpcUrl }),
+          }
+        : networkOrOptions;
     const setupOpts: import("../types/config.js").LocalTestOptions = {
       mode: "fork",
-      forkNetwork: network,
+      forkNetwork: options.network ?? "testnet",
     };
-    if (apiKey !== undefined) setupOpts.forkApiKey = apiKey;
-    if (rpcUrl !== undefined) setupOpts.forkRpcUrl = rpcUrl;
+    if (options.apiKey !== undefined) setupOpts.forkApiKey = options.apiKey;
+    if (options.rpcUrl !== undefined) setupOpts.forkRpcUrl = options.rpcUrl;
+    if (options.name !== undefined) setupOpts.forkName = options.name;
+    if (options.port !== undefined) setupOpts.forkPort = options.port;
+    if (options.resetState !== undefined) setupOpts.forkResetState = options.resetState;
+    if (options.accountLabels !== undefined) {
+      setupOpts.accountLabels = options.accountLabels;
+    }
     const ctx = await setupLocalTesting(setupOpts);
 
     // Wrap getContract so contracts obtained in fork mode reject .call()
@@ -172,11 +197,15 @@ export class Harness {
    * custom network defined in `movehat.config.ts`). No local process is
    * spawned; transactions are submitted to the configured RPC.
    *
-   * @param network - Named network from movehat.config.ts.
-   * @param _faucetUrl - Reserved for future auto-fund support on networks with a faucet.
+   * The optional first argument is a named network from `movehat.config.ts`.
+   * The second argument is reserved for future faucet support.
    */
-  static async createLive(network: string, _faucetUrl?: string): Promise<Harness> {
-    const runtime = await initRuntime({ network });
+  static createLive(): Promise<Harness>;
+  static createLive(network: string, faucetUrl?: string): Promise<Harness>;
+  static async createLive(network?: string, _faucetUrl?: string): Promise<Harness> {
+    const runtime = await initRuntime(
+      network === undefined ? {} : { network }
+    );
     const instance = new Harness({ mode: "live", runtime });
     return createHarnessProxy(instance, () => instance._poisoned);
   }
@@ -205,7 +234,7 @@ export class Harness {
    *
    * The derived object address is bound to `options.moduleName` as a
    * named address at compile time, then captured into the returned
-   * {@link CodeObjectInfo.address} for later use with
+   * `CodeObjectInfo.address` for later use with
    * `harness.runtime.getContract(address, moduleName)`.
    *
    * Not available on fork-mode harnesses (forks are read-only). Calling

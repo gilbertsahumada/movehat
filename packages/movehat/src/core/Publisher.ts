@@ -7,6 +7,10 @@ import {
   saveDeployment,
   loadDeployment,
   DeploymentInfo,
+  assertDeploymentEnvironment,
+  fingerprintRpcUrl,
+  hashBuildArtifacts,
+  sanitizeRpcUrl,
   validateSafeName,
 } from "./deployments.js";
 import { validatePathSafety } from "./shell.js";
@@ -24,6 +28,8 @@ import {
 } from "./movementProfile.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
+import { withFileLocks } from "../utils/fileLock.js";
+import { isHexAddress } from "../utils/address.js";
 
 /** @internal */
 export interface PublisherDeps {
@@ -78,8 +84,15 @@ export class Publisher {
     // compiled for the other deploy's address. Locking from the
     // already-deployed check through saveDeployment also closes the
     // check-then-publish TOCTOU for same-module deploys.
+    const chainIdentity = config.networkConfig.chainId ?? config.network;
     return withKeyedLock(resolve(safeDir), () =>
-      this.deployLocked(input, dir, safeDir),
+      withFileLocks(
+        [
+          `package:${resolve(safeDir)}`,
+          `deployment:${chainIdentity}:${moduleName}`,
+        ],
+        () => this.deployLocked(input, dir, safeDir),
+      ),
     );
   }
 
@@ -94,6 +107,14 @@ export class Publisher {
       input.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
 
     const existingDeployment = loadDeployment(config.network, moduleName);
+    if (existingDeployment) {
+      assertDeploymentEnvironment(existingDeployment, {
+        ...(config.networkConfig.chainId !== undefined
+          ? { chainId: config.networkConfig.chainId }
+          : {}),
+        rpc: config.rpc,
+      });
+    }
     if (existingDeployment && !forceRedeploy) {
       // Build detailed error message with all deployment info
       const errorDetails = [
@@ -136,6 +157,15 @@ export class Publisher {
       logger.info(`Redeploying module "${moduleName}" on ${config.network}...`);
     }
 
+    logger.section("Transaction preflight");
+    logger.kv("Operation", forceRedeploy ? "redeploy" : "publish", 2);
+    logger.kv("Network", config.network, 2);
+    logger.kv("Chain ID", config.networkConfig.chainId ?? "unknown", 2);
+    logger.kv("RPC", sanitizeRpcUrl(config.rpc), 2);
+    logger.kv("Signer", account.accountAddress.toString(), 2);
+    logger.kv("Module", moduleName, 2);
+    logger.newline();
+
     logger.step(`Publishing module "${moduleName}" from ${dir}...`);
 
     try {
@@ -145,7 +175,8 @@ export class Publisher {
       // Detect named addresses from Move files
       const detectedAddresses = extractNamedAddresses(dir);
 
-      // Build named addresses argument - use deployer address for all detected addresses.
+      // Build named addresses argument. Explicit runtime configuration wins;
+      // unresolved names retain the legacy deployer-address default.
       // Stored as a pre-split args fragment so the spawn path never has to parse
       // shell tokens; an empty fragment becomes a no-op via spread.
       const namedAddrArgs: string[] =
@@ -153,7 +184,15 @@ export class Publisher {
           ? [
               "--named-addresses",
               Array.from(detectedAddresses)
-                .map((name) => `${name}=${deployerAddress}`)
+                .map((name) => {
+                  const address = config.namedAddresses[name] ?? deployerAddress;
+                  if (!isHexAddress(address)) {
+                    throw new Error(
+                      `Named address '${name}' must be a 1-64 digit hexadecimal address`,
+                    );
+                  }
+                  return `${name}=${address}`;
+                })
                 .join(","),
             ]
           : [];
@@ -204,6 +243,7 @@ export class Publisher {
       // can distinguish a genuine publish failure from a local
       // bookkeeping failure (and avoid a wasteful redeploy).
 
+      const artifactHash = hashBuildArtifacts(safeDir);
       const deployment: DeploymentInfo = {
         address: account.accountAddress.toString(),
         moduleName,
@@ -211,6 +251,13 @@ export class Publisher {
         deployer: account.accountAddress.toString(),
         timestamp: Date.now(),
         txHash,
+        schemaVersion: 2,
+        ...(config.networkConfig.chainId !== undefined
+          ? { chainId: config.networkConfig.chainId }
+          : {}),
+        rpcFingerprint: fingerprintRpcUrl(config.rpc),
+        ...(artifactHash !== undefined ? { artifactHash } : {}),
+        kind: "publish",
       };
 
       try {
@@ -284,8 +331,8 @@ export class Publisher {
     // leaving the user's file mutated if the process died before the
     // restore step.
 
-    let publishOut = "";
-    let publishErr = "";
+    let publishOut: string;
+    let publishErr: string;
 
     // Pass the private key to Movement CLI via a 0o600 temp file
     // (`--private-key-file <path>`) and the on-chain address via

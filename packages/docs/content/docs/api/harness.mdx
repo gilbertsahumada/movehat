@@ -36,7 +36,7 @@ Three static factories cover the three execution modes. Each returns a `Harness`
 | Factory | Mode | What it spawns | When to use |
 |---|---|---|---|
 | `Harness.createLocal(options?)` | `'local'` | Movement local node (real blockchain on `localhost:8080`) | Unit + integration tests that need real transaction flow |
-| `Harness.createFork(network, apiKey?)` | `'fork'` | Movement fork server (read-only snapshot of `network`) | View-only tests against real network state, no writes |
+| `Harness.createFork(network, apiKey?)` or `createFork(options)` | `'fork'` | Movement fork server (read-only snapshot of `network`) | View-only tests against real network state, no writes |
 | `Harness.createLive(network, faucetUrl?)` | `'live'` | Nothing — binds to a real RPC (testnet / mainnet / custom) | Deployment scripts, real-network interactions |
 
 ### When to use which factory
@@ -84,12 +84,20 @@ The names you pick are arbitrary — `["alice", "bob"]`, `["payer", "recipient"]
 
 If you don't pass `accountLabels`, the harness defaults to `["deployer", "alice", "bob"]` — so the legacy `setupTestFixture` shape works out of the box.
 
-### `Harness.createFork(network: string, apiKey?: string)`
+### `Harness.createFork(network, apiKey?)` / `Harness.createFork(options)`
 
 Read-only path. `network` is `'testnet'`, `'mainnet'`, or any custom name resolvable by `loadUserConfig`. Spawns a `ForkServer` reading from the upstream JSON-RPC endpoint and caching responses on disk.
 
 ```typescript
 const harness = await Harness.createFork("testnet");
+
+// Equivalent options-object form; useful when a test needs an isolated fork.
+const isolated = await Harness.createFork({
+  network: "testnet",
+  name: "payments-test",
+  resetState: true,
+  accountLabels: ["deployer", "alice"],
+});
 // harness.runViewFunction works against runtime.aptos.view payloads that
 // hit the fork's account/resource pass-through path; calls that require
 // the SDK to hydrate a module ABI (e.g. anything that resolves a fully

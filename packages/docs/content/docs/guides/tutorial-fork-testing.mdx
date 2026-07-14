@@ -139,7 +139,7 @@ The fork server forwards the entire payload to the upstream RPC and returns the 
 
 Run the test twice in a row. The second run is dramatically faster because every resource read hits the on-disk snapshot under `.movehat/forks/test-local/` instead of the upstream mainnet RPC.
 
-If you want a clean re-fetch, delete the fork directory or pass `forkResetState: true` (the default for `setupLocalTesting` direct use — `Harness.createFork` does not expose a knob for this; if you need it, drop down to `setupLocalTesting({ mode: "fork", forkResetState: true })`).
+If you want a clean re-fetch, use the options form: `Harness.createFork({ network: "mainnet", resetState: true })`. The positional form remains available for short calls.
 
 ## Step 6 — Verify writes are rejected
 
@@ -190,7 +190,7 @@ Expected output:
 The default fork name is `test-local` and is **not** network-suffixed. Switching networks against the same fork name is refused on purpose to prevent cross-network state corruption. Two ways out:
 
 - Delete the stale fork: `rm -rf .movehat/forks/test-local`.
-- Use a network-specific name: `Harness.createFork("mainnet")` does not currently expose `forkName` directly — drop down to `setupLocalTesting({ mode: "fork", forkNetwork: "mainnet", forkName: "mainnet-local" })` and build a `Harness` over the returned context if you need parallel forks per network.
+- Use a network-specific name when running forks in parallel: `Harness.createFork({ network: "mainnet", name: "mainnet-local" })`.
 
 ### `Auto-deploy doesn't work in fork mode (read-only)`
 

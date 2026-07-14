@@ -14,6 +14,8 @@ const {
   loadDeployment,
   getAllDeployments,
   getDeployedAddress,
+  InvalidPersistedStateError,
+  fingerprintRpcUrl,
 } = await import('../deployments.js');
 
 describe('validateSafeName', () => {
@@ -101,6 +103,33 @@ describe('saveDeployment and loadDeployment', () => {
   it('should return null for non-existent deployment', () => {
     const loaded = loadDeployment('testnet', 'nonexistent');
     expect(loaded).toBeNull();
+    expect(vol.existsSync('/project/deployments')).toBe(false);
+  });
+
+  it('rejects corrupt or path-mismatched records instead of treating them as absent', () => {
+    vol.fromJSON({
+      '/project/deployments/testnet/counter.json': '{not-json',
+    });
+    expect(() => loadDeployment('testnet', 'counter')).toThrow(InvalidPersistedStateError);
+
+    vol.writeFileSync('/project/deployments/testnet/counter.json', JSON.stringify({
+      address: '0x1', moduleName: 'other', network: 'testnet', deployer: '0x2', timestamp: 1,
+    }));
+    expect(() => loadDeployment('testnet', 'counter')).toThrow('identity does not match');
+  });
+
+  it('persists additive v2 metadata and leaves no temporary file', () => {
+    const deployment = {
+      address: '0x1234', moduleName: 'counter', network: 'testnet',
+      deployer: '0xabcd', timestamp: 1, schemaVersion: 2 as const,
+      chainId: '126', rpcFingerprint: fingerprintRpcUrl('https://user:secret@example.com/v1?key=x'),
+      artifactHash: 'abc', kind: 'publish' as const,
+    };
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    saveDeployment(deployment);
+    expect(loadDeployment('testnet', 'counter')).toEqual(deployment);
+    expect(vol.readdirSync('/project/deployments/testnet')).toEqual(['counter.json']);
+    expect(deployment.rpcFingerprint).not.toContain('secret');
   });
 
   it('should create directories if they do not exist', () => {

@@ -5,6 +5,16 @@ import type { ForkMetadata, AccountState, CoinStore } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
 import { assertCoinStore } from './validation.js';
+import {
+  ForkDataNotFoundError,
+  isMovementApiHttpError,
+} from './errors.js';
+import { withFileLock } from '../utils/fileLock.js';
+
+export interface ForkInitializeOptions {
+  /** Clear cached account/resource overlay after the upstream preflight succeeds. */
+  overwrite?: boolean;
+}
 
 /**
  * Derive a deterministic 32-byte hex placeholder for the `authentication_key`
@@ -26,6 +36,7 @@ function forkAuthKeyPlaceholder(normalizedAddress: string): string {
  * Orchestrates API client and storage
  */
 export class ForkManager {
+  private readonly forkPath: string;
   private storage: ForkStorage;
   private apiClient: MovementApiClient | null = null;
   private metadata: ForkMetadata | null = null;
@@ -34,12 +45,21 @@ export class ForkManager {
    * Optional API key sent as `Authorization: Bearer <key>` on every
    * outgoing Movement API request. Not persisted to disk via
    * {@link ForkMetadata} (keys stay in process memory). For the
-   * load-then-set pattern, call {@link setApiKey} after `load()`.
+   * load-then-set pattern, call {@link ForkManager.setApiKey} after `load()`.
    */
   private apiKey?: string;
 
   constructor(forkPath: string) {
+    this.forkPath = forkPath;
     this.storage = new ForkStorage(forkPath);
+  }
+
+  private accountLockKey(): string {
+    return `fork:${this.forkPath}:accounts`;
+  }
+
+  private resourceLockKey(address: string): string {
+    return `fork:${this.forkPath}:resources:${address}`;
   }
 
   /**
@@ -67,7 +87,8 @@ export class ForkManager {
   async initialize(
     nodeUrl: string,
     networkName: string = 'custom',
-    apiKey?: string
+    apiKey?: string,
+    options: ForkInitializeOptions = {}
   ): Promise<void> {
     if (apiKey !== undefined) this.apiKey = apiKey;
 
@@ -76,8 +97,13 @@ export class ForkManager {
     const ledgerInfo = await this.apiClient.getLedgerInfo();
 
     this.storage.initialize();
+    if (options.overwrite) {
+      this.storage.clearAccounts();
+      this.storage.clearResources();
+    }
 
     this.metadata = {
+      schemaVersion: 1,
       network: networkName,
       nodeUrl,
       chainId: ledgerInfo.chain_id,
@@ -96,7 +122,7 @@ export class ForkManager {
   /**
    * Load an existing fork. The API key is NOT persisted to disk —
    * callers needing authenticated upstream reads after `load()` must
-   * call {@link setApiKey} explicitly.
+   * call {@link ForkManager.setApiKey} explicitly.
    */
   load(): void {
     if (!this.storage.exists()) {
@@ -125,15 +151,34 @@ export class ForkManager {
       }
 
       logger.info(`Fetching account ${normalizedAddress} from network...`, 2);
-      const accountData = await this.apiClient.getAccount(normalizedAddress);
+      let accountData;
+      try {
+        accountData = await this.apiClient.getAccount(
+          normalizedAddress,
+          this.getMetadata().ledgerVersion
+        );
+      } catch (error) {
+        if (isMovementApiHttpError(error, 404)) {
+          throw new ForkDataNotFoundError(
+            `Account not found: ${normalizedAddress}`,
+            { cause: error }
+          );
+        }
+        throw error;
+      }
 
       accountState = {
         sequenceNumber: accountData.sequence_number,
         authenticationKey: accountData.authentication_key,
       };
 
-      this.storage.saveAccount(normalizedAddress, accountState);
-      logger.success(`Cached account ${normalizedAddress}`, 2);
+      accountState = await withFileLock(this.accountLockKey(), async () => {
+        const concurrentlyCached = this.storage.getAccount(normalizedAddress);
+        if (concurrentlyCached) return concurrentlyCached;
+        this.storage.saveAccount(normalizedAddress, accountState!);
+        logger.success(`Cached account ${normalizedAddress}`, 2);
+        return accountState!;
+      });
     }
 
     return accountState;
@@ -142,9 +187,12 @@ export class ForkManager {
   async getResource(address: string, resourceType: string): Promise<unknown> {
     const normalizedAddress = normalizeAddress(address);
 
-    let resource = this.storage.getResource(normalizedAddress, resourceType);
+    if (this.storage.hasResource(normalizedAddress, resourceType)) {
+      return this.storage.getResource(normalizedAddress, resourceType);
+    }
 
-    if (!resource) {
+    let resource: unknown;
+    {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
@@ -152,15 +200,30 @@ export class ForkManager {
       logger.info(`Fetching resource ${resourceType} for ${normalizedAddress}...`, 2);
 
       try {
-        const resourceData = await this.apiClient.getAccountResource(normalizedAddress, resourceType);
+        const resourceData = await this.apiClient.getAccountResource(
+          normalizedAddress,
+          resourceType,
+          this.getMetadata().ledgerVersion
+        );
         resource = resourceData.data;
 
-        this.storage.saveResource(normalizedAddress, resourceType, resource);
-        logger.success(`Cached resource ${resourceType}`, 2);
+        resource = await withFileLock(
+          this.resourceLockKey(normalizedAddress),
+          async () => {
+            if (this.storage.hasResource(normalizedAddress, resourceType)) {
+              return this.storage.getResource(normalizedAddress, resourceType);
+            }
+            this.storage.saveResource(normalizedAddress, resourceType, resource);
+            logger.success(`Cached resource ${resourceType}`, 2);
+            return resource;
+          },
+        );
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        if (msg.includes('404')) {
-          throw new Error(`Resource ${resourceType} not found for account ${normalizedAddress}`);
+        if (isMovementApiHttpError(error, 404)) {
+          throw new ForkDataNotFoundError(
+            `Resource ${resourceType} not found for account ${normalizedAddress}`,
+            { cause: error }
+          );
         }
         throw error;
       }
@@ -172,23 +235,55 @@ export class ForkManager {
   async getAllResources(address: string): Promise<Record<string, unknown>> {
     const normalizedAddress = normalizeAddress(address);
 
-    let resources = this.storage.getAllResources(normalizedAddress);
+    if (this.storage.hasAllResources(normalizedAddress)) {
+      return this.storage.getAllResources(normalizedAddress);
+    }
 
-    if (Object.keys(resources).length === 0) {
+    let resources: Record<string, unknown>;
+    {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
 
       logger.info(`Fetching all resources for ${normalizedAddress}...`, 2);
-      const resourcesList = await this.apiClient.getAccountResources(normalizedAddress);
+      let resourcesList;
+      try {
+        resourcesList = await this.apiClient.getAccountResources(
+          normalizedAddress,
+          this.getMetadata().ledgerVersion
+        );
+      } catch (error) {
+        if (isMovementApiHttpError(error, 404)) {
+          throw new ForkDataNotFoundError(
+            `Account not found: ${normalizedAddress}`,
+            { cause: error }
+          );
+        }
+        throw error;
+      }
 
-      resources = {};
+      resources = Object.create(null) as Record<string, unknown>;
       for (const resource of resourcesList) {
         resources[resource.type] = resource.data;
       }
 
-      this.storage.saveAllResources(normalizedAddress, resources);
-      logger.success(`Cached ${Object.keys(resources).length} resources`, 2);
+      resources = await withFileLock(
+        this.resourceLockKey(normalizedAddress),
+        async () => {
+          if (this.storage.hasAllResources(normalizedAddress)) {
+            return this.storage.getAllResources(normalizedAddress);
+          }
+          // Preserve any writable overlay values created while the upstream
+          // request was in flight; local state wins over the pinned snapshot.
+          const merged = {
+            ...resources,
+            ...this.storage.getAllResources(normalizedAddress),
+          };
+          this.storage.saveAllResources(normalizedAddress, merged);
+          logger.success(`Cached ${Object.keys(merged).length} resources`, 2);
+          return merged;
+        },
+      );
     }
 
     return resources;
@@ -214,70 +309,87 @@ export class ForkManager {
     if (!this.apiClient) {
       throw new Error('Fork not initialized. Call initialize() or load() first.');
     }
-    return this.apiClient.view(payload, extraHeaders);
+    return this.apiClient.view(
+      payload,
+      extraHeaders,
+      this.getMetadata().ledgerVersion
+    );
   }
 
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
-    this.storage.saveResource(normalizedAddress, resourceType, data);
+    await withFileLock(this.resourceLockKey(normalizedAddress), async () => {
+      this.storage.saveResource(normalizedAddress, resourceType, data);
+    });
     logger.success(`Updated resource ${resourceType} for ${normalizedAddress}`, 2);
   }
 
   /** Adds to the existing balance rather than replacing it. */
   async fundAccount(address: string, amount: number, coinType: string = '0x1::aptos_coin::AptosCoin'): Promise<void> {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      throw new RangeError('amount must be a non-negative safe integer');
+    }
     const normalizedAddress = normalizeAddress(address);
-    const resourceType = `0x1::coin::CoinStore<${coinType}>`;
+    return withFileLock(
+      `fork:${this.forkPath}:fund:${normalizedAddress}:${coinType}`,
+      async () => {
+        const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
-    let coinStore: CoinStore;
-    try {
-      const raw = await this.getResource(normalizedAddress, resourceType);
-      coinStore = assertCoinStore(raw);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (!msg.includes('not found')) {
-        throw error;
-      }
+        let coinStore: CoinStore;
+        try {
+          const raw = await this.getResource(normalizedAddress, resourceType);
+          coinStore = assertCoinStore(raw);
+        } catch (error) {
+          if (!(error instanceof ForkDataNotFoundError)) {
+            throw error;
+          }
 
-      coinStore = {
-        coin: { value: '0' },
-        deposit_events: {
-          counter: '0',
-          guid: {
-            id: {
-              addr: normalizedAddress,
-              creation_num: '0',
+          coinStore = {
+            coin: { value: '0' },
+            deposit_events: {
+              counter: '0',
+              guid: {
+                id: {
+                  addr: normalizedAddress,
+                  creation_num: '0',
+                },
+              },
             },
-          },
-        },
-        withdraw_events: {
-          counter: '0',
-          guid: {
-            id: {
-              addr: normalizedAddress,
-              creation_num: '1',
+            withdraw_events: {
+              counter: '0',
+              guid: {
+                id: {
+                  addr: normalizedAddress,
+                  creation_num: '1',
+                },
+              },
             },
-          },
-        },
-        frozen: false,
-      };
-    }
+            frozen: false,
+          };
+        }
 
-    const currentBalance = BigInt(coinStore.coin.value);
-    const newBalance = currentBalance + BigInt(amount);
-    coinStore.coin.value = newBalance.toString();
+        const currentBalance = BigInt(coinStore.coin.value);
+        const newBalance = currentBalance + BigInt(amount);
+        coinStore.coin.value = newBalance.toString();
 
-    await this.setResource(normalizedAddress, resourceType, coinStore);
+        await this.setResource(normalizedAddress, resourceType, coinStore);
 
-    let account = this.storage.getAccount(normalizedAddress);
-    if (!account) {
-      account = {
-        sequenceNumber: '0',
-        authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
-      };
-      this.storage.saveAccount(normalizedAddress, account);
-    }
+        let account = this.storage.getAccount(normalizedAddress);
+        if (!account) {
+          account = {
+            sequenceNumber: '0',
+            authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
+          };
+          await withFileLock(this.accountLockKey(), async () => {
+            if (!this.storage.getAccount(normalizedAddress)) {
+              this.storage.saveAccount(normalizedAddress, account!);
+            }
+          });
+        }
 
-    logger.success(`Funded ${normalizedAddress} with ${amount} coins`, 2);
+        logger.success(`Funded ${normalizedAddress} with ${amount} coins`, 2);
+      },
+    );
   }
 
   listAccounts(): string[] {
@@ -348,12 +460,19 @@ export class ForkManager {
     try {
       return await this.getAccount(normalizedAddress);
     } catch (error) {
+      if (!(error instanceof ForkDataNotFoundError)) {
+        throw error;
+      }
       const newAccount: AccountState = {
         sequenceNumber: '0',
         authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
       };
 
-      this.storage.saveAccount(normalizedAddress, newAccount);
+      await withFileLock(this.accountLockKey(), async () => {
+        if (!this.storage.getAccount(normalizedAddress)) {
+          this.storage.saveAccount(normalizedAddress, newAccount);
+        }
+      });
       logger.success(`Created new account ${normalizedAddress}`, 2);
 
       return newAccount;
