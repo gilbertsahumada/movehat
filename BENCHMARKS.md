@@ -6,7 +6,7 @@ Performance baseline for the fork system.
 
 - **Tool**: plain tsx script (`packages/movehat/bench/fork.bench.ts`) using `performance.now()`. Not `vitest bench` — the heavy lifecycle operations (`createLocal`, `createFork`) don't fit microbench iteration semantics (process spawn + RPC snapshot per iteration). The runViewFunction RPC suite is run as a tight loop against a long-running harness.
 - **Run**: `pnpm bench` from the repo root (cd's into `examples/counter-example` so the runtime can load a `movehat.config.ts`).
-- **Iterations**: `createLocal` × 2, `createFork` × 2, `runViewFunction` × 50.
+- **Iterations**: `createLocal` × 2, `createFork` cold × 1, the same fork cached × 2, `runViewFunction` × 50. Cold and cached fork samples are deliberately separate so their distributions are not mixed.
 - **Output**: wall-clock milliseconds. Each row reports n, avg, median, min, max.
 
 ## Hardware
@@ -26,7 +26,7 @@ CI variance is expected on Linux x86_64 GitHub Actions runners — Movement CLI 
 | Benchmark                              |  n  |    avg     |  median    |   min      |   max      |
 |----------------------------------------|-----|------------|------------|------------|------------|
 | Harness.createLocal cold-start         |  2  | 15133.2 ms | 15176.0 ms | 15090.3 ms | 15176.0 ms |
-| Harness.createFork hydrate (testnet)   |  2  |  2455.0 ms |  3478.4 ms |  1431.6 ms |  3478.4 ms |
+| Harness.createFork hydrate (testnet, historical mixed cold/warm baseline) |  2  |  2455.0 ms |  3478.4 ms |  1431.6 ms |  3478.4 ms |
 | runViewFunction RPC roundtrip (local)  | 50  |     3.0 ms |     2.6 ms |     1.6 ms |    15.9 ms |
 
 ## Where the time goes
@@ -39,12 +39,9 @@ Dominated by the external `movement node run-local-testnet` process startup — 
 
 ### `createFork` ≈ 2.5 s
 
-Wall-clock breaks down as roughly:
-- `getLedgerInfo` RPC: ~150-400 ms (single round-trip, depends on testnet latency).
-- Initial snapshot resource fetch: ~1-3 s (variance dominated by network).
-- Local storage init + metadata write: <50 ms.
+The cold path performs one `getLedgerInfo` RPC, initializes local metadata, starts the JSON server, and creates isolated test accounts. Resources remain lazy-loaded on first request. Cached runs reuse the pinned ledger metadata and reset only the writable overlay, so the revised benchmark reports them separately.
 
-The high variance (min 1.4 s, max 3.5 s) reflects testnet RPC latency, not Movehat code. Parallelizing the snapshot fetch was considered but inspection showed the current path issues a single `getAccountResources` call — there is no sequential loop to parallelize. The single RPC round-trip is already optimal.
+The historical row mixed one cold and one cached run, so its variance cannot be attributed solely to RPC latency. New runs avoid that methodological error and also delete the exact fork directory they create.
 
 ### `runViewFunction` ≈ 3 ms
 

@@ -9,7 +9,6 @@
 
 import { performance } from 'node:perf_hooks';
 import { existsSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Harness } from '../src/harness/index.js';
 
@@ -66,18 +65,34 @@ async function benchCreateLocal(): Promise<Sample> {
   );
 }
 
-async function benchCreateFork(): Promise<Sample> {
-  const forkDir = join(tmpdir(), `movehat-bench-fork-${Date.now()}`);
-  return measure(
-    'Harness.createFork hydrate (testnet)',
-    async () => {
-      const h = await Harness.createFork('testnet');
-      await h.cleanup();
-    },
-    2,
-  ).finally(() => {
+async function benchCreateFork(): Promise<Sample[]> {
+  const forkName = `bench-${process.pid}-${Date.now()}`;
+  const forkDir = join(process.cwd(), '.movehat', 'forks', forkName);
+  try {
+    const cold = await measure(
+      'Harness.createFork cold (testnet)',
+      async () => {
+        const h = await Harness.createFork({ network: 'testnet', name: forkName });
+        await h.cleanup();
+      },
+      1,
+    );
+    const warm = await measure(
+      'Harness.createFork cached (testnet)',
+      async () => {
+        const h = await Harness.createFork({
+          network: 'testnet',
+          name: forkName,
+          resetState: true,
+        });
+        await h.cleanup();
+      },
+      2,
+    );
+    return [cold, warm];
+  } finally {
     if (existsSync(forkDir)) rmSync(forkDir, { recursive: true, force: true });
-  });
+  }
 }
 
 async function benchRunViewFunction(): Promise<Sample> {
@@ -108,8 +123,8 @@ async function main() {
     samples.push(await benchCreateLocal());
   }
   if (SUITES.includes('fork')) {
-    console.log('Running: Harness.createFork hydrate (2 iterations) ...');
-    samples.push(await benchCreateFork());
+    console.log('Running: Harness.createFork cold + cached ...');
+    samples.push(...(await benchCreateFork()));
   }
   if (SUITES.includes('view')) {
     console.log('Running: runViewFunction RPC (50 iterations) ...');
