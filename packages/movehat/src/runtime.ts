@@ -2,7 +2,6 @@ import {
   Account,
   Aptos,
   AptosConfig,
-  Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
 import { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
@@ -50,7 +49,7 @@ export interface InitRuntimeOptions {
  *
  * Lower-level construction utility — loads `movehat.config.ts`, resolves
  * the active network, and builds a `MovehatRuntime` bound to it. Used
- * internally by {@link Harness.createLive} (see `harness/Harness.ts`).
+ * internally by `Harness.createLive` (see `harness/Harness.ts`).
  *
  * **External callers should prefer the `Harness.create*` factories**
  * (`Harness.createLocal` / `createFork` / `createLive`) for the Hardhat-
@@ -183,4 +182,3 @@ export async function initRuntime(
 
   return runtime;
 }
-

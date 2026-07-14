@@ -23,10 +23,15 @@ export {
 } from "../fork/test.js";
 export type { SnapshotOptions, ForkInfo } from "../fork/test.js";
 export { AccountManager } from "../core/AccountManager.js";
-export type { StoredAccount } from "../core/AccountManager.js";
+export type {
+  AccountManagerOptions,
+  SaveAccountPoolOptions,
+  StoredAccount,
+} from "../core/AccountManager.js";
 export { LocalNodeManager } from "../node/LocalNodeManager.js";
 export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.js";
 export { MoveliteManager, findMoveliteBinary } from "../node/MoveliteManager.js";
+export type { FindMoveliteBinaryOptions } from "../node/MoveliteManager.js";
 export type { NodeProvider } from "../node/NodeProvider.js";
 export { setupLocalTesting } from "./setupLocalTesting.js";
 export type { LocalTestingContext } from "./setupLocalTesting.js";

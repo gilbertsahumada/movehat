@@ -47,7 +47,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build movehat (TypeDoc prebuild needs dist/)
         run: pnpm build:movehat

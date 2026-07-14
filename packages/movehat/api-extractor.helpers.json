@@ -1,0 +1,10 @@
+{
+  "extends": "./api-extractor.json",
+  "mainEntryPointFilePath": "<projectFolder>/dist/helpers/index.d.ts",
+  "apiReport": {
+    "enabled": true,
+    "reportFileName": "movehat-helpers.api.md",
+    "reportFolder": "<projectFolder>/../../etc",
+    "reportTempFolder": "<projectFolder>/../../temp"
+  }
+}

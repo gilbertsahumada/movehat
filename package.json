@@ -32,18 +32,49 @@
     "dev:docs": "pnpm --filter docs dev",
     "docs:api": "pnpm --filter movehat docs:api",
     "bench": "pnpm --filter movehat bench",
+    "lint": "eslint packages/movehat/src --max-warnings 0",
+    "format:check": "prettier --check package.json packages/movehat/package.json packages/docs/package.json pnpm-workspace.yaml packages/movehat/src/utils/fileLock.ts",
+    "cycles": "madge --circular --extensions ts --exclude '(__tests__|templates)' packages/movehat/src",
+    "api:check": "pnpm build:movehat && api-extractor run --config packages/movehat/api-extractor.json && api-extractor run --config packages/movehat/api-extractor.helpers.json",
     "prepare": "husky"
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
     "@commitlint/cli": "^21.0.0",
     "@commitlint/config-conventional": "^21.0.0",
-    "husky": "^9.1.7"
+    "@eslint/js": "^10.0.1",
+    "@microsoft/api-extractor": "^7.58.9",
+    "eslint": "^10.7.0",
+    "husky": "^9.1.7",
+    "madge": "^8.0.0",
+    "prettier": "^3.9.5",
+    "typescript-eslint": "^8.64.0"
   },
   "pnpm": {
     "supportedArchitectures": {
-      "os": ["darwin", "linux"],
-      "cpu": ["x64", "arm64"]
+      "os": [
+        "darwin",
+        "linux"
+      ],
+      "cpu": [
+        "x64",
+        "arm64"
+      ]
+    },
+    "overrides": {
+      "rollup@>=4.0.0 <4.59.0": "4.62.2",
+      "picomatch@>=4.0.0 <4.0.4": "4.0.5",
+      "path-to-regexp@>=8.0.0 <8.4.0": "8.4.2",
+      "vite@>=7.0.0 <=7.3.4": "7.3.5",
+      "postcss@<8.5.10": "8.5.19",
+      "esbuild@>=0.27.3 <0.28.1": "0.28.1",
+      "js-yaml@>=4.0.0 <=4.1.1": "4.3.0",
+      "diff@>=6.0.0 <8.0.3": "8.0.3",
+      "minimatch@>=9.0.0 <9.0.7": "9.0.7",
+      "serialize-javascript@>=5.0.0 <7.0.5": "7.0.5",
+      "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
+      "markdown-it@<=14.1.1": "14.2.0",
+      "linkify-it@<=5.0.0": "5.0.1"
     }
   }
 }

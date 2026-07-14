@@ -15,6 +15,9 @@ const EXPECTED_RUNTIME_EXPORTS = [
   "ForkServer",
   "ModuleAlreadyDeployedError",
   "PostPublishError",
+  "NetworkConflictError",
+  "UnsafePathError",
+  "InvalidPersistedStateError",
   "initRuntime",
 ] as const;
 

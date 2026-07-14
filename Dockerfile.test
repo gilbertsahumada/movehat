@@ -19,24 +19,17 @@ RUN apt-get update && apt-get install -y \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Movement CLI
-# Using the official installation method
-RUN curl -fsSL https://raw.githubusercontent.com/movementlabsxyz/aptos-core/main/scripts/install_cli.py | python3 - \
-    || echo "Movement CLI install via script failed, trying alternative..."
-
-# Alternative: Manual download (if the script fails)
-# Uncomment and adjust version if needed:
-# RUN curl -L https://github.com/movementlabsxyz/aptos-core/releases/download/movement-cli-v0.1.0/movement-cli-linux-x86_64.tar.gz \
-#     | tar -xz -C /usr/local/bin/
-
-# Verify Movement CLI is installed (or create placeholder for testing)
-RUN movement --version 2>/dev/null || \
-    (echo '#!/bin/bash' > /usr/local/bin/movement && \
-     echo 'if [ "$1" = "--version" ]; then echo "movement-cli 0.1.0 (docker-mock)"; exit 0; fi' >> /usr/local/bin/movement && \
-     echo 'if [ "$1" = "move" ] && [ "$2" = "build" ]; then echo "Building..."; mkdir -p "$4/build"; exit 0; fi' >> /usr/local/bin/movement && \
-     echo 'if [ "$1" = "move" ] && [ "$2" = "test" ]; then echo "[ PASS ] test"; exit 0; fi' >> /usr/local/bin/movement && \
-     echo 'echo "Mock movement CLI - command: $@"; exit 0' >> /usr/local/bin/movement && \
-     chmod +x /usr/local/bin/movement)
+# Install the same verified Movement CLI artifact used in CI. A failed
+# download, checksum mismatch, or unusable binary must fail the image build;
+# tests are never allowed to pass against a mock CLI.
+ARG MOVEMENT_CLI_SHA256=f2bdf3fa82e6b49c83c91be0967640282e1759e66b237440709a8779a9f9c1b2
+RUN curl -fL -o /tmp/movement-cli.tar.gz \
+      https://github.com/movementlabsxyz/homebrew-movement-cli/releases/download/bypass-homebrew/movement-cli-l1-linux-x86_64.tar.gz \
+    && echo "${MOVEMENT_CLI_SHA256}  /tmp/movement-cli.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/movement-cli.tar.gz -C /usr/local/bin movement \
+    && chmod 0755 /usr/local/bin/movement \
+    && rm /tmp/movement-cli.tar.gz \
+    && movement --version
 
 # Install pnpm
 RUN npm install -g pnpm@9
@@ -49,7 +42,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/movehat/package.json ./packages/movehat/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the project
 COPY . .

@@ -20,6 +20,7 @@ packages/docs/content/docs/api/reference/
 # Test artifacts
 *.tgz
 /tmp/
+/temp/
 .movehat/
 
 # Move build artifacts (leak from Docker bind-mount when movement CLI runs inside container)
@@ -68,4 +69,5 @@ pnpm-debug.log*
 !NOTICE.md
 !CODE_OF_CONDUCT.md
 !.github/**/*.md
+!etc/*.md
 *.pdf

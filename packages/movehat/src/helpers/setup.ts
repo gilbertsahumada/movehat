@@ -2,7 +2,6 @@ import {
   Account,
   Aptos,
   AptosConfig,
-  Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
 import { loadUserConfig, resolveNetworkConfig } from "../core/config.js";
@@ -53,5 +52,4 @@ export function createTestAccount(): Account {
     // Throwaway instance — see setupTestEnvironment for rationale.
     return new AccountManager().createAccount();
 }
-
 
