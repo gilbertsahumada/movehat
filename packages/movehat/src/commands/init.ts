@@ -26,6 +26,13 @@ export interface ProjectNames {
   sanitized: boolean;
 }
 
+export interface InitOptions {
+  /** Overwrite template-owned files when the destination already exists. */
+  force?: boolean;
+  /** Test hook; normal callers should let Movehat detect the terminal. */
+  interactive?: boolean;
+}
+
 /**
  * Derive filesystem, npm, and Move identifier names from a single user input.
  *
@@ -81,12 +88,22 @@ export function resolveProjectNames(input: string): ProjectNames {
  * // Interactive prompt
  * await initCommand();
  */
-export default async function initCommand(projectName?: string) {
+export default async function initCommand(
+  projectName?: string,
+  options: InitOptions = {}
+) {
   // Show banner only on init command
   printMovehatBanner();
 
   // if name is not given
   if (!projectName) {
+    const interactive =
+      options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    if (!interactive) {
+      throw new Error(
+        "Project name is required in non-interactive mode: movehat init <project-name>"
+      );
+    }
     const response = await prompts({
       type: 'text',
       name: 'projectName',
@@ -128,7 +145,39 @@ export default async function initCommand(projectName?: string) {
   logger.newline();
 
   try {
+    const destinationExists = await fs
+      .stat(projectPath)
+      .then(() => true)
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      });
+
+    if (destinationExists && !options.force) {
+      const interactive =
+        options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+      if (!interactive) {
+        throw new Error(
+          `Destination already exists: ${projectPath}. Re-run with --force to overwrite template files.`
+        );
+      }
+
+      const response = await prompts({
+        type: "confirm",
+        name: "overwrite",
+        message: `Destination '${dirName}' already exists. Overwrite template files?`,
+        initial: false,
+      });
+      if (!response.overwrite) {
+        logger.warning("Project initialization cancelled; no files were changed.");
+        return;
+      }
+    }
+
     const templatesDir = path.join(__dirname, "..", "templates");
+    const packageManifest = JSON.parse(
+      await fs.readFile(path.join(__dirname, "..", "..", "package.json"), "utf-8")
+    ) as { version: string };
     const steps = createSpinnerChain();
 
     // Step 1: Create project structure
@@ -138,7 +187,7 @@ export default async function initCommand(projectName?: string) {
       await copyFile(
         path.join(templatesDir, "package.json"),
         path.join(projectPath, "package.json"),
-        { projectName: npmName }
+        { projectName: npmName, movehatVersion: packageManifest.version }
       );
 
       await copyFile(

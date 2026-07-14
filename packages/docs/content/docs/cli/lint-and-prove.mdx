@@ -1,0 +1,32 @@
+---
+title: Lint and prove
+description: Run Movement CLI static checks from Movehat
+icon: ShieldCheck
+---
+
+Movehat exposes the Movement CLI's lint and prover workflows without invoking
+a shell. The configured `moveDir` is passed as a single `--package-dir`
+argument, so paths containing spaces or shell metacharacters remain safe.
+
+## Lint
+
+```bash
+movehat lint
+```
+
+Runs `movement move lint` for the configured Move package and forwards its
+exit status.
+
+## Move Prover
+
+```bash
+movehat prove
+```
+
+Runs `movement move prove` for the configured Move package. Prover failures
+are real command failures; Movehat never converts an unavailable tool or a
+non-zero result into a successful check.
+
+These checks complement tests in the same way linting and invariant tooling
+complement a Hardhat or Foundry suite: they add static guarantees without
+changing contract behavior.

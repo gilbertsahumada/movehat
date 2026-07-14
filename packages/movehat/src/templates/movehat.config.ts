@@ -13,16 +13,15 @@ dotenv.config();
 
 export default {
   // Default network to use when no --network flag is provided
-  // "testnet" = Movement testnet (public, auto-generates test accounts)
+  // "testnet" = Movement testnet (public, requires an explicit account)
   // "mainnet" = Movement mainnet (requires PRIVATE_KEY in .env)
   // "local" = Fork server running on localhost:8080
   defaultNetwork: "testnet",
 
   // Network configurations
   networks: {
-    // Movement Testnet - Public test network (recommended for development)
-    // Auto-generates test accounts - no local setup required
-    // Perfect for running tests with transaction simulation
+    // Movement Testnet - Public test network. A PRIVATE_KEY is required for
+    // transactions; Movehat never falls back to a deterministic local key.
     testnet: {
       url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",

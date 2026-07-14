@@ -10,7 +10,9 @@ icon: CheckCheck
 movehat test [options]
 ```
 
-Run tests with an interactive menu or flags. If no flags are provided, shows an interactive menu.
+Run tests with an interactive menu or flags. With no flags, Movehat shows the
+menu in a terminal and runs `--all` automatically when stdin/stdout are not a
+TTY, so CI never waits for a prompt.
 
 ## Options
 
@@ -20,6 +22,7 @@ Run tests with an interactive menu or flags. If no flags are provided, shows an 
 | `--ts` | Run only TypeScript integration tests (starts local node) |
 | `--all` | Run all tests (Move + TypeScript) |
 | `--watch` | Run TypeScript tests in watch mode (implies `--ts`) |
+| `--coverage` | Run Move tests with coverage, then print the Movement CLI summary |
 | `--filter <pattern>` | Filter Move tests by pattern |
 
 > Shorthand commands like `movehat test:move` forward additional flags to the underlying runner. For example, `movehat test:move --ignore-warnings` is valid and forwards `--ignore-warnings` to the Move test runner.
@@ -49,6 +52,9 @@ movehat test --ts
 
 # Run all tests
 movehat test --all
+
+# Run Move coverage and print its summary
+movehat test --coverage
 
 # Watch mode for TypeScript tests
 movehat test --watch

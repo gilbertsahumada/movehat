@@ -5,7 +5,7 @@ A Move smart contract project built with Movehat.
 ## Prerequisites
 
 **Required:**
-- **Node.js v18+** - [Download](https://nodejs.org/)
+- **Node.js v20+** - [Download](https://nodejs.org/)
 - **Movement CLI** - **REQUIRED** for compiling contracts
 
   Install: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
@@ -24,15 +24,16 @@ npm install
 
 ### 2. Configure environment
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Local tests do not need credentials. For a public-network deployment, copy
+`.env.example` to `.env` and add your private key locally:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` without committing it:
 ```
-PRIVATE_KEY=your_private_key_here
+PRIVATE_KEY=<your private key>
 ```
 
 ### 3. Compile contracts
@@ -52,7 +53,8 @@ npm run compile
 npm test
 ```
 
-When you run `npm test`, you'll see an **interactive menu**:
+In a terminal, `npm test` shows an interactive menu. In CI or another
+non-interactive environment it runs all tests automatically.
 
 ```
 ? What tests do you want to run?
@@ -92,7 +94,7 @@ npx movehat run scripts/deploy-counter.ts
 ## Project Structure
 
 ```
-{{PROJECT_NAME}}/
+{{projectName}}/
 ├── move/                   # Move smart contracts
 │   ├── sources/
 │   │   └── Counter.move
@@ -108,7 +110,10 @@ npx movehat run scripts/deploy-counter.ts
 ## Available Commands
 
 - `npm run compile` - Compile Move contracts (auto-detects addresses)
+- `npm run lint` - Lint Move contracts with the Movement CLI
+- `npm run prove` - Run the Move Prover
 - `npm test` - Run integration tests
+- `npm run test:coverage` - Run Move tests and print a coverage summary
 - `npm run test:watch` - Run tests in watch mode
 - `npx movehat run scripts/deploy-counter.ts` - Deploy and initialize counter
 

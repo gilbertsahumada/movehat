@@ -377,6 +377,27 @@ counter = "0xcafe"
     expect(args[namedIdx + 1]).toContain('counter=0xabc');
   });
 
+  it('passes multiple named addresses as distinct comma-delimited mappings', async () => {
+    loadUserConfigMock.mockResolvedValueOnce({
+      moveDir: '/proj/move',
+      namedAddresses: {},
+    });
+    vol.fromJSON({
+      '/proj/move/Move.toml':
+        '[package]\nname="x"\n[addresses]\none = "_"\ntwo = "_"\n[dev-addresses]\n',
+      '/proj/move/sources/one.move': 'module one::lib {}',
+      '/proj/move/sources/two.move': 'module two::lib {}',
+    });
+    runCliMock.mockResolvedValueOnce({ exitCode: 0, stdout: '', stderr: '' });
+
+    await compileCommand();
+
+    const args = runCliMock.mock.calls[0]![0].args;
+    const mappings = args[args.indexOf('--named-addresses') + 1].split(',');
+    expect(mappings).toContain('one=0xcafe');
+    expect(mappings).toContain('two=0xbeef');
+  });
+
   it('rejects an invalid named-address key', async () => {
     loadUserConfigMock.mockResolvedValueOnce({
       moveDir: '/proj/move',

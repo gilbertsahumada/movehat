@@ -4,6 +4,7 @@ import prompts from "prompts";
 import { runMoveTests } from "../helpers/move-tests.js";
 import { logger, colors, symbols } from "../ui/index.js";
 import { runCli } from "../utils/runCli.js";
+import coverageCommand from "./coverage.js";
 
 interface TestOptions {
   move?: boolean;
@@ -11,6 +12,9 @@ interface TestOptions {
   all?: boolean;
   watch?: boolean;
   filter?: string;
+  coverage?: boolean;
+  /** Test hook; normal callers should let Movehat detect the terminal. */
+  interactive?: boolean;
   // Legacy flags (for backward compatibility)
   moveOnly?: boolean;
   tsOnly?: boolean;
@@ -23,10 +27,19 @@ export default async function testCommand(options: TestOptions = {}) {
   if (options.moveOnly) options.move = true;
   if (options.tsOnly) options.ts = true;
 
+  if (options.coverage && options.watch) {
+    throw new Error("--coverage cannot be combined with --watch");
+  }
+  if (options.coverage && options.ts && !options.all) {
+    throw new Error("--coverage applies to Move tests; use --all to include TypeScript tests");
+  }
+
   // Determine test type from flags
   let testType: TestType | undefined;
 
-  if (options.all) {
+  if (options.coverage && !options.all && !options.ts) {
+    testType = "move";
+  } else if (options.all) {
     testType = "all";
   } else if (options.move && options.ts) {
     testType = "all";
@@ -38,7 +51,9 @@ export default async function testCommand(options: TestOptions = {}) {
 
   // If no flags provided, show interactive menu
   if (!testType) {
-    testType = await showTestMenu();
+    const interactive =
+      options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    testType = interactive ? await showTestMenu() : "all";
     if (!testType) {
       // User cancelled
       process.exit(0);
@@ -48,13 +63,14 @@ export default async function testCommand(options: TestOptions = {}) {
   // Execute based on test type
   switch (testType) {
     case "move":
-      await runMoveTestsOnly(options.filter);
+      if (options.coverage) await coverageCommand(options.filter);
+      else await runMoveTestsOnly(options.filter);
       break;
     case "ts":
       await runTypeScriptTestsOnly(options.watch);
       break;
     case "all":
-      await runAllTests(options.filter);
+      await runAllTests(options.filter, options.coverage);
       break;
   }
 }
@@ -107,7 +123,8 @@ async function runMoveTestsOnly(filter?: string): Promise<void> {
     });
   } catch (error) {
     logger.newline();
-    logger.error("Move tests failed");
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`Move tests failed: ${message}`);
     process.exit(1);
   }
 }
@@ -142,7 +159,7 @@ async function runTypeScriptTestsOnly(watch: boolean = false): Promise<void> {
 /**
  * Run all tests (Move + TypeScript)
  */
-async function runAllTests(filter?: string): Promise<void> {
+async function runAllTests(filter?: string, coverage = false): Promise<void> {
   logger.newline();
   logger.phase("Running All Tests");
 
@@ -152,13 +169,18 @@ async function runAllTests(filter?: string): Promise<void> {
   logger.newline();
 
   try {
-    await runMoveTests({
-      filter,
-      skipIfMissing: true, // Gracefully skip if no Move directory
-    });
+    if (coverage) {
+      await coverageCommand(filter);
+    } else {
+      await runMoveTests({
+        filter,
+        skipIfMissing: true, // Gracefully skip if no Move directory
+      });
+    }
   } catch (error) {
     logger.newline();
-    logger.error("Move tests failed");
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`Move tests failed: ${message}`);
     logger.divider();
     process.exit(1);
   }
@@ -207,15 +229,13 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
 
   const args = watch ? ["--watch"] : [];
 
-  // Watch mode: Mocha never exits. We fire-and-forget runCli so it owns the
-  // terminal until the user Ctrl+Cs the parent (which kills the child via
-  // inherited stdio). Attach .catch so a spawn-time failure doesn't become
-  // an unhandled rejection.
+  // Watch mode is awaited so Commander keeps the action alive and signals
+  // propagate through the inherited terminal without orphaning Mocha.
   /* c8 ignore start -- watch mode launches a long-running mocha process and
      never returns; not testable as a unit. Behaviour is covered by the
      integration suite and by manual smoke. */
   if (watch) {
-    runCli(
+    const result = await runCli(
       {
         command: mochaPath,
         args,
@@ -223,13 +243,10 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
         inheritStdio: true,
       },
       { throwOnNonZeroExit: false }
-    ).catch((error) => {
-      logger.error(`Mocha watch crashed: ${(error as Error).message}`);
-      process.exit(1);
-    });
-
-    logger.plain(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
-    logger.newline();
+    );
+    if (result.exitCode !== 0 && !result.signal) {
+      throw new Error(`Mocha watch exited with code ${result.exitCode}`);
+    }
     return;
   }
   /* c8 ignore stop */

@@ -8,6 +8,8 @@ import testMoveCommand from './commands/test-move.js';
 import compileCommand from './commands/compile.js';
 import initCommand from './commands/init.js';
 import runCommand from './commands/run.js';
+import lintCommand from './commands/lint.js';
+import proveCommand from './commands/prove.js';
 import updateCommand from './commands/update.js';
 import forkCreateCommand from './commands/fork/create.js';
 import forkViewResourceCommand from './commands/fork/view-resource.js';
@@ -78,19 +80,30 @@ program
 program
     .command('init [project-name]')
     .description('Initialize a new Move project in the current directory')
-    .action((projectName) => {
-        initCommand(projectName);
+    .option('--force', 'Overwrite template files in an existing destination')
+    .action(async (projectName, options) => {
+        await initCommand(projectName, { force: options.force });
     });
 
 program
     .command('compile')
     .description('Compile Move smart contracts (auto-detects named addresses and updates Move.toml)')
-    .action(compileCommand);
+    .action(async () => compileCommand());
+
+program
+    .command('lint')
+    .description('Lint Move smart contracts with the Movement CLI')
+    .action(async () => lintCommand());
+
+program
+    .command('prove')
+    .description('Run the Move Prover with the Movement CLI')
+    .action(async () => proveCommand());
 
 program
     .command('run <script>')
     .description('Run a TypeScript/JavaScript script (e.g., deployment script)')
-    .action(runCommand);
+    .action(async (script) => runCommand(script));
 
 program
     .command('test')
@@ -99,16 +112,17 @@ program
     .option('--ts', 'Run only TypeScript integration tests (starts local node)')
     .option('--all', 'Run all tests (Move + TypeScript)')
     .option('--watch', 'Run TypeScript tests in watch mode (implies --ts)')
+    .option('--coverage', 'Collect Move coverage and print the coverage summary')
     .option('--filter <pattern>', 'Filter Move tests by name pattern')
     // Legacy flags for backward compatibility
     .option('--move-only', 'Alias for --move (deprecated)')
     .option('--ts-only', 'Alias for --ts (deprecated)')
-    .action((options) => {
+    .action(async (options) => {
         // --watch implies --ts
         if (options.watch && !options.ts && !options.all) {
             options.ts = true;
         }
-        testCommand(options);
+        await testCommand(options);
     });
 
 program
@@ -116,18 +130,18 @@ program
     .description('Run Move unit tests')
     .option('--filter <pattern>', 'Filter tests by name pattern')
     .option('--ignore-warnings', 'Ignore compilation warnings')
-    .action((options) => testMoveCommand(options));
+    .action(async (options) => testMoveCommand(options));
 
 program
     .command('test:ts')
     .description('Run TypeScript integration tests')
     .option('--watch', 'Run tests in watch mode')
-    .action((options) => testCommand({ tsOnly: true, watch: options.watch }));
+    .action(async (options) => testCommand({ tsOnly: true, watch: options.watch }));
 
 program
     .command('update')
     .description('Check for updates and upgrade to the latest version')
-    .action(() => updateCommand());
+    .action(async () => updateCommand());
 
 // Fork commands
 const fork = program
@@ -139,7 +153,7 @@ fork
     .description('Create a new fork from a network')
     .option('-n, --name <name>', 'Name for the fork')
     .option('-p, --path <path>', 'Custom path for the fork')
-    .action((options) => forkCreateCommand(options));
+    .action(async (options) => forkCreateCommand(options));
 
 fork
     .command('view-resource')
@@ -147,7 +161,7 @@ fork
     .option('-f, --fork <path>', 'Path to the fork')
     .requiredOption('-a, --account <address>', 'Account address')
     .requiredOption('-r, --resource <type>', 'Resource type')
-    .action((options) => forkViewResourceCommand(options));
+    .action(async (options) => forkViewResourceCommand(options));
 
 fork
     .command('fund')
@@ -156,12 +170,12 @@ fork
     .requiredOption('-a, --account <address>', 'Account address')
     .requiredOption('--amount <amount>', 'Amount to fund')
     .option('--coin-type <type>', 'Coin type', '0x1::aptos_coin::AptosCoin')
-    .action((options) => forkFundCommand(options));
+    .action(async (options) => forkFundCommand(options));
 
 fork
     .command('list')
     .description('List all available forks')
-    .action(() => forkListCommand());
+    .action(async () => forkListCommand());
 
 fork
     .command('serve')
@@ -169,6 +183,12 @@ fork
     .option('-f, --fork <path>', 'Path to the fork')
     .option('-p, --port <port>', 'Port to listen on (default: 8080)', parsePort, 8080)
     .option('--host <host>', 'Interface to bind (default: 127.0.0.1; use 0.0.0.0 to expose to LAN)', '127.0.0.1')
-    .action((options) => forkServeCommand(options));
+    .action(async (options) => forkServeCommand(options));
 
-program.parse(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`movehat: ${message}`);
+  process.exitCode = 1;
+}

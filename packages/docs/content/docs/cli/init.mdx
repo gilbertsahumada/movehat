@@ -7,10 +7,14 @@ icon: Sparkles
 ## Usage
 
 ```bash
-movehat init [project-name]
+movehat init [project-name] [--force]
 ```
 
 Initialize a new Movehat project with the standard project structure.
+Movehat does not overwrite an existing destination silently. In a terminal it
+asks first; in CI and other non-interactive environments you must pass
+`--force`. That flag overwrites only template-owned files and preserves other
+files already in the directory.
 
 ## Examples
 
@@ -18,8 +22,11 @@ Initialize a new Movehat project with the standard project structure.
 # Create a new project in a new directory
 movehat init my-project
 
-# Initialize in the current directory
+# Prompt for a project name
 movehat init
+
+# Explicitly refresh template files in an existing destination
+movehat init my-project --force
 ```
 
 ## Generated Structure
@@ -47,4 +54,7 @@ my-project/
 - **deploy-counter.ts** — Deployment script using `Harness.createLive` + `deployCodeObject`
 - **movehat.config.ts** — Network configuration (testnet, mainnet, local)
 - **package.json** — Dependencies including `movehat`
-- **.env.example** — Environment variable template
+- **.env.example** — Secret-free environment variable template
+
+The generated package requires Node.js 20 or newer and pins the installed
+Movehat version instead of depending on the moving `latest` tag.

@@ -6,6 +6,7 @@ import { join } from "node:path";
 const runMoveTestsMock = vi.fn();
 const runCliMock = vi.fn();
 const promptsMock = vi.fn();
+const coverageCommandMock = vi.fn();
 
 vi.mock("../../helpers/move-tests.js", () => ({
   runMoveTests: runMoveTestsMock,
@@ -17,6 +18,10 @@ vi.mock("../../utils/runCli.js", () => ({
 
 vi.mock("prompts", () => ({
   default: promptsMock,
+}));
+
+vi.mock("../coverage.js", () => ({
+  default: coverageCommandMock,
 }));
 
 const { default: testCommand } = await import("../test.js");
@@ -92,6 +97,19 @@ describe("testCommand — flag dispatch", () => {
     expect(runMoveTestsMock.mock.calls[0]![0].skipIfMissing).toBe(true);
   });
 
+  it("--coverage uses the Movement coverage runner", async () => {
+    coverageCommandMock.mockResolvedValueOnce(undefined);
+    await testCommand({ coverage: true, filter: "counter" });
+    expect(coverageCommandMock).toHaveBeenCalledWith("counter");
+    expect(runMoveTestsMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects coverage in watch mode", async () => {
+    await expect(testCommand({ coverage: true, watch: true })).rejects.toThrow(
+      "--coverage cannot be combined with --watch"
+    );
+  });
+
   it("Move-only path exits 1 when runMoveTests throws", async () => {
     runMoveTestsMock.mockRejectedValueOnce(new Error("compile failed"));
     await testCommand({ move: true });
@@ -130,11 +148,11 @@ describe("testCommand — interactive menu", () => {
     vi.restoreAllMocks();
   });
 
-  it("falls back to interactive prompt when no flags are passed; cancellation exits 0", async () => {
+  it("falls back to interactive prompt in a TTY; cancellation exits 0", async () => {
     // Ctrl+C — prompt returns {}.
     promptsMock.mockResolvedValueOnce({});
 
-    await testCommand();
+    await testCommand({ interactive: true });
 
     expect(promptsMock).toHaveBeenCalledTimes(1);
     expect(exitSpy).toHaveBeenCalledWith(0);
@@ -144,9 +162,21 @@ describe("testCommand — interactive menu", () => {
     promptsMock.mockResolvedValueOnce({ testType: "move" });
     runMoveTestsMock.mockResolvedValueOnce(undefined);
 
-    await testCommand();
+    await testCommand({ interactive: true });
 
     expect(runMoveTestsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs all tests without prompting in non-interactive environments", async () => {
+    runMoveTestsMock.mockResolvedValueOnce(undefined);
+
+    await testCommand({ interactive: false });
+
+    expect(promptsMock).not.toHaveBeenCalled();
+    expect(runMoveTestsMock).toHaveBeenCalledWith({
+      filter: undefined,
+      skipIfMissing: true,
+    });
   });
 });
 

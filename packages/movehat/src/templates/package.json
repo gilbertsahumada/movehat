@@ -2,18 +2,24 @@
   "name": "{{projectName}}",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
+    "compile": "movehat compile",
+    "lint": "movehat lint",
+    "prove": "movehat prove",
     "test": "movehat test",
+    "test:coverage": "movehat test --coverage",
     "test:move": "movehat test:move",
     "test:ts": "movehat test:ts",
     "test:watch": "movehat test:ts --watch",
+    "typecheck": "tsc --noEmit",
     "deploy": "movehat run scripts/deploy-counter.ts"
   },
   "dependencies": {
-    "movehat": "latest",
-    "@aptos-labs/ts-sdk": "^5.1.5",
-    "dotenv": "^17.2.3",
-    "got": "^11.8.6"
+    "movehat": "{{movehatVersion}}",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

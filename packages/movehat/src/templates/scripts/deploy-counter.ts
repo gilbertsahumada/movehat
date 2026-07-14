@@ -6,8 +6,9 @@ async function main() {
   // Hardhat-style Harness — the primary public API.
   // createLive binds to a real running network (testnet / mainnet / a
   // custom one defined in movehat.config.ts). No local process spawned.
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
-  const harness = await Harness.createLive(network);
+  // Network selection is centralized in Movehat: explicit API argument,
+  // --network/MH_CLI_NETWORK, MH_DEFAULT_NETWORK, then defaultNetwork.
+  const harness = await Harness.createLive();
   try {
     console.log(`✅ Runtime initialized on ${harness.runtime.network.name}`);
     console.log(`   Account: ${harness.runtime.account.accountAddress.toString()}`);

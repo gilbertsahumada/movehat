@@ -99,8 +99,6 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   }
 
   let content = fs.readFileSync(moveTomlPath, "utf-8");
-  const addedAddresses: string[] = [];
-
   // Parse existing addresses from [addresses] section
   const existingAddresses = new Set<string>();
   const addressesMatch = content.match(/\[addresses\]([\s\S]*?)(?=\[|$)/);
@@ -271,11 +269,26 @@ export default async function compileCommand() {
     // Merge user-configured addresses with auto-detected ones
     const namedAddresses = { ...(userConfig.namedAddresses ?? {}) };
     const autoAssignedAddresses: string[] = [];
+    const usedCompileAddresses = new Set(
+      Object.values(namedAddresses).map((value) => value.toLowerCase())
+    );
+    let compileAddressIndex = 0;
 
     // For any detected address not in config, use a dev address
     for (const addr of detectedAddresses) {
       if (!namedAddresses[addr]) {
-        namedAddresses[addr] = "0xcafe"; // Dev address for compilation
+        while (
+          DEV_ADDRESSES[compileAddressIndex] &&
+          usedCompileAddresses.has(DEV_ADDRESSES[compileAddressIndex]!.toLowerCase())
+        ) {
+          compileAddressIndex++;
+        }
+        const compileAddress =
+          DEV_ADDRESSES[compileAddressIndex] ??
+          `0x${(0x1000 + compileAddressIndex).toString(16)}`;
+        namedAddresses[addr] = compileAddress;
+        usedCompileAddresses.add(compileAddress.toLowerCase());
+        compileAddressIndex++;
         autoAssignedAddresses.push(addr);
       }
     }
@@ -320,7 +333,7 @@ export default async function compileCommand() {
       logger.kv('Configured addresses', Object.keys(namedAddrs).join(", "), 2);
     }
     if (autoAssignedAddresses.length > 0) {
-      logger.kv('Auto-assigned (0xcafe)', autoAssignedAddresses.join(", "), 2);
+      logger.kv('Auto-assigned dev addresses', autoAssignedAddresses.join(", "), 2);
     }
     logger.newline();
 
