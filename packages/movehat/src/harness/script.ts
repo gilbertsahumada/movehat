@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { extname } from "path";
+import { extname, resolve } from "path";
 import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
@@ -61,13 +61,17 @@ export async function runMoveScript(
         `Expected '.move' (source — CLI auto-compiles) or '.mv' (pre-compiled bytecode).`
     );
   }
-  if (!existsSync(options.scriptPath)) {
+  const absoluteScriptPath = resolve(options.scriptPath);
+  if (!existsSync(absoluteScriptPath)) {
     throw new Error(
       `Harness.runMoveScript: script not found at '${options.scriptPath}'.`
     );
   }
 
-  const safeScriptPath = validatePathSafety(options.scriptPath, "script path");
+  const safeScriptPath = validatePathSafety(absoluteScriptPath, "script path");
+  const safePackageDir = options.packageDir
+    ? validatePathSafety(resolve(options.packageDir), "package directory")
+    : undefined;
 
   logger.step(
     `Running Move script '${options.scriptPath}' on ${config.network}...`
@@ -127,6 +131,7 @@ export async function runMoveScript(
             ...typeArgsFragment,
             ...argsFragment,
           ],
+          ...(safePackageDir !== undefined ? { cwd: safePackageDir } : {}),
           timeoutMs: 120000,
         },
         { adapter: options.adapter }

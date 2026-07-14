@@ -1,9 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   escapeShellArg,
+  validatePathSafety,
   validateAndEscapePath,
   validateAndEscapeProfile,
 } from '../shell.js';
+
+describe('validatePathSafety for argv-based spawn', () => {
+  it('accepts ordinary filename characters that have meaning only to a shell', () => {
+    for (const path of [
+      '/Work (Client)/move project',
+      '/tmp/project$1/[contracts]',
+      '/tmp/proyecto-ñ/{draft};safe',
+    ]) {
+      expect(validatePathSafety(path)).toBe(path);
+    }
+  });
+
+  it('rejects NUL bytes and empty paths', () => {
+    expect(() => validatePathSafety('/tmp/bad\0path')).toThrow('NUL');
+    expect(() => validatePathSafety('')).toThrow('non-empty');
+  });
+});
 
 describe('escapeShellArg', () => {
   it('should wrap simple strings in single quotes', () => {

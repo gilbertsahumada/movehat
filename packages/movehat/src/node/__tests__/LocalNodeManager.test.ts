@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { mkdtempSync, rmSync, existsSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join, parse } from "node:path";
 
 import { LocalNodeManager } from "../LocalNodeManager.js";
+import { UnsafePathError } from "../../errors.js";
 import type {
   ChildProcessAdapter,
   SpawnInput,
@@ -96,6 +108,12 @@ function stubFetchAlwaysOk() {
   return fn;
 }
 
+function markOwned(directory: string): void {
+  writeFileSync(join(directory, ".movehat-local-node"), "movehat-managed-local-node\n", {
+    mode: 0o600,
+  });
+}
+
 describe("LocalNodeManager — start / stop / lifecycle", () => {
   let tmpDir: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -161,7 +179,7 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const args = calls[0]?.args ?? [];
     expect(args.slice(0, 2)).toEqual(["node", "run-localnet"]);
     expect(args).toContain("--test-dir");
-    expect(args).toContain(tmpDir);
+    expect(args).toContain(realpathSync(tmpDir));
     expect(args).toContain("--faucet-port");
     expect(args).toContain("8081");
     expect(args).toContain("--assume-yes");
@@ -203,7 +221,8 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const planted = join(tmpDir, "stale-file.txt");
     // Create a stale file to prove the cleanup actually removes it.
     mkdirSync(tmpDir, { recursive: true });
-    require("node:fs").writeFileSync(planted, "stale");
+    markOwned(tmpDir);
+    writeFileSync(planted, "stale");
     expect(existsSync(planted)).toBe(true);
 
     const mgr = new LocalNodeManager({
@@ -289,6 +308,125 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const mgr = new LocalNodeManager({ adapter, testDir: missing });
     // Should not throw.
     await mgr.clean();
+  });
+
+  it.each([
+    ["filesystem root", parse(process.cwd()).root],
+    ["current working directory", process.cwd()],
+    ["home directory", homedir()],
+  ])("rejects the protected %s before spawning", async (_label, protectedPath) => {
+    const { adapter, calls } = buildFakeAdapter();
+    const mgr = new LocalNodeManager({
+      adapter,
+      testDir: protectedPath,
+      forceRestart: true,
+      silent: true,
+    });
+    await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects a non-empty directory without an ownership marker", async () => {
+    const { adapter, calls } = buildFakeAdapter();
+    writeFileSync(join(tmpDir, "user-data.txt"), "do not delete");
+    const mgr = new LocalNodeManager({
+      adapter,
+      testDir: tmpDir,
+      forceRestart: true,
+      silent: true,
+    });
+    await expect(mgr.start()).rejects.toThrow(/without .movehat-local-node/);
+    expect(existsSync(join(tmpDir, "user-data.txt"))).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("preserves an unmarked legacy default directory during force restart", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), "movehat-legacy-project-"));
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(projectDir);
+      const legacyDir = join(projectDir, ".movehat", "local-node");
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(join(legacyDir, "user-data.txt"), "preserve me");
+      const { adapter } = buildFakeAdapter();
+      stubFetchAlwaysOk();
+
+      const mgr = new LocalNodeManager({
+        adapter,
+        forceRestart: true,
+        silent: true,
+      });
+      await mgr.start();
+
+      const backupName = readdirSync(join(projectDir, ".movehat")).find((name) =>
+        name.startsWith("local-node.legacy-backup-"),
+      );
+      expect(backupName).toBeDefined();
+      expect(
+        existsSync(join(projectDir, ".movehat", backupName!, "user-data.txt")),
+      ).toBe(true);
+      expect(existsSync(join(legacyDir, ".movehat-local-node"))).toBe(true);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a symlinked data directory", async () => {
+    const { adapter, calls } = buildFakeAdapter();
+    const target = mkdtempSync(join(tmpdir(), "movehat-localnode-target-"));
+    const link = join(tmpDir, "linked-node");
+    symlinkSync(target, link, "dir");
+    try {
+      const mgr = new LocalNodeManager({ adapter, testDir: link, silent: true });
+      await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+      expect(calls).toHaveLength(0);
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a symlinked component below the project directory", async () => {
+    const { adapter, calls } = buildFakeAdapter();
+    const target = mkdtempSync(join(tmpdir(), "movehat-localnode-target-"));
+    const link = join(process.cwd(), ".movehat-test-link");
+    symlinkSync(target, link, "dir");
+    try {
+      const mgr = new LocalNodeManager({
+        adapter,
+        testDir: join(link, "local-node"),
+        silent: true,
+      });
+      await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+      expect(calls).toHaveLength(0);
+    } finally {
+      unlinkSync(link);
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  it("sets private permissions on the managed directory and marker", async () => {
+    const { adapter } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, silent: true });
+    await mgr.start();
+
+    expect(statSync(tmpDir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(tmpDir, ".movehat-local-node")).mode & 0o777).toBe(
+      0o600
+    );
+  });
+
+  it("clean refuses a directory whose ownership marker was removed", async () => {
+    const { adapter } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, silent: true });
+    await mgr.start();
+    await mgr.stop();
+    unlinkSync(join(tmpDir, ".movehat-local-node"));
+
+    await expect(mgr.clean()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(existsSync(tmpDir)).toBe(true);
   });
 });
 

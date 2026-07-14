@@ -114,6 +114,27 @@ describe("Harness.runMoveScript", () => {
     }
   });
 
+  it("honors packageDir as the CLI working directory", async () => {
+    const packageDir = join(fixture.tmpCwd, "Work (Client)");
+    const scriptPath = join(packageDir, "scripts", "init.move");
+    mkdirSync(join(packageDir, "scripts"), { recursive: true });
+    writeFileSync(scriptPath, "// dummy move script\n");
+    const { adapter, calls } = makeAdapter({
+      exitCode: 0,
+      stdout: successStdout(),
+      stderr: "",
+    });
+
+    const harness = await Harness.createLive("testnet");
+    try {
+      await harness.runMoveScript({ scriptPath, packageDir, adapter });
+      expect(calls[0]?.cwd).toBe(packageDir);
+      expect(calls[0]?.args).toContain(scriptPath);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
   it("unsupported extension throws synchronously before any CLI call", async () => {
     const scriptPath = join(fixture.tmpCwd, "notes.txt");
     writeFileSync(scriptPath, "not a script");

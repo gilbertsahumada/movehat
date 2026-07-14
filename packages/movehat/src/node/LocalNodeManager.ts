@@ -1,5 +1,17 @@
-import { existsSync, rmSync } from "fs";
-import { join } from "path";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
+import { homedir } from "os";
+import { dirname, join, parse, relative, resolve, sep } from "path";
 import { Account } from "@aptos-labs/ts-sdk";
 import {
   defaultChildProcessAdapter,
@@ -9,6 +21,7 @@ import {
 import { resolveMovementBinary, sanitizeMovementEnv } from "../utils/movementCli.js";
 import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 import { withTimedSpinner, withSpinner } from "../ui/spinner.js";
+import { UnsafePathError } from "../errors.js";
 
 /**
  * Substrings that always surface from a node subprocess regardless of
@@ -41,6 +54,180 @@ export interface LocalNodeOptions {
 }
 
 const MOVEMENT_API_PORT = 8080;
+const NODE_OWNERSHIP_MARKER = ".movehat-local-node";
+const NODE_OWNERSHIP_MARKER_CONTENT = "movehat-managed-local-node\n";
+const PRIVATE_DIR_MODE = 0o700;
+const PRIVATE_FILE_MODE = 0o600;
+
+function isSameOrChild(pathname: string, parent: string): boolean {
+  return pathname === parent || pathname.startsWith(`${parent}${sep}`);
+}
+
+/** Resolve symlinks in the nearest existing ancestor of a potential path. */
+function canonicalizePotentialPath(pathname: string): string {
+  const absolute = resolve(pathname);
+  if (existsSync(absolute)) return realpathSync(absolute);
+
+  let ancestor = dirname(absolute);
+  while (!existsSync(ancestor)) {
+    const parent = dirname(ancestor);
+    if (parent === ancestor) break;
+    ancestor = parent;
+  }
+  return resolve(realpathSync(ancestor), relative(ancestor, absolute));
+}
+
+function assertNoSymlinkBelowBase(pathname: string, base: string): void {
+  if (!isSameOrChild(pathname, base)) return;
+  let cursor = base;
+  const suffix = relative(base, pathname);
+  if (!suffix) return;
+  for (const component of suffix.split(sep)) {
+    cursor = join(cursor, component);
+    if (!existsSync(cursor)) return;
+    if (lstatSync(cursor).isSymbolicLink()) {
+      throw new UnsafePathError(
+        `Refusing local-node path with a symlinked component: ${cursor}`,
+        pathname
+      );
+    }
+  }
+}
+
+function assertSafeNodeDirectory(pathname: string): string {
+  const absolute = resolve(pathname);
+  if (existsSync(absolute) && lstatSync(absolute).isSymbolicLink()) {
+    throw new UnsafePathError(
+      `Refusing to use symlinked local-node directory: ${absolute}`,
+      absolute
+    );
+  }
+
+  // Project- and home-relative paths are user-controlled. Reject symlinks in
+  // any existing component so `.movehat -> /somewhere/else` cannot redirect a
+  // future recursive cleanup. System aliases outside those roots (notably
+  // macOS `/var -> /private/var`) are canonicalized below instead.
+  const lexicalCwd = resolve(process.cwd());
+  const lexicalHome = resolve(homedir());
+  assertNoSymlinkBelowBase(absolute, lexicalCwd);
+  assertNoSymlinkBelowBase(absolute, lexicalHome);
+
+  const canonical = canonicalizePotentialPath(absolute);
+  const root = parse(canonical).root;
+  const cwd = realpathSync(process.cwd());
+  const home = realpathSync(homedir());
+  if (
+    canonical === root ||
+    canonical === home ||
+    canonical === cwd ||
+    isSameOrChild(cwd, canonical)
+  ) {
+    throw new UnsafePathError(
+      `Refusing unsafe local-node directory: ${canonical}. ` +
+        `Choose a dedicated child directory owned by Movehat.`,
+      canonical
+    );
+  }
+
+  if (existsSync(canonical) && !lstatSync(canonical).isDirectory()) {
+    throw new UnsafePathError(
+      `Local-node path is not a directory: ${canonical}`,
+      canonical
+    );
+  }
+  return canonical;
+}
+
+function writeOwnershipMarker(directory: string): void {
+  mkdirSync(directory, { recursive: true, mode: PRIVATE_DIR_MODE });
+  chmodSync(directory, PRIVATE_DIR_MODE);
+  const marker = join(directory, NODE_OWNERSHIP_MARKER);
+  if (existsSync(marker)) {
+    const markerStat = lstatSync(marker);
+    if (markerStat.isSymbolicLink() || !markerStat.isFile()) {
+      throw new UnsafePathError(
+        `Invalid local-node ownership marker at ${marker}`,
+        directory
+      );
+    }
+  }
+  writeFileSync(marker, NODE_OWNERSHIP_MARKER_CONTENT, {
+    encoding: "utf8",
+    mode: PRIVATE_FILE_MODE,
+  });
+  chmodSync(marker, PRIVATE_FILE_MODE);
+}
+
+function ensureManagedNodeDirectory(
+  pathname: string,
+  allowClaimEmpty = true
+): string {
+  const directory = assertSafeNodeDirectory(pathname);
+  if (!existsSync(directory)) {
+    writeOwnershipMarker(directory);
+    return directory;
+  }
+
+  const marker = join(directory, NODE_OWNERSHIP_MARKER);
+  if (!existsSync(marker)) {
+    if (!allowClaimEmpty || readdirSync(directory).length > 0) {
+      throw new UnsafePathError(
+        `Refusing local-node directory without ${NODE_OWNERSHIP_MARKER} ` +
+          `ownership marker: ${directory}`,
+        directory
+      );
+    }
+    writeOwnershipMarker(directory);
+    return directory;
+  }
+
+  const markerStat = lstatSync(marker);
+  if (
+    markerStat.isSymbolicLink() ||
+    !markerStat.isFile() ||
+    readFileSync(marker, "utf8") !== NODE_OWNERSHIP_MARKER_CONTENT
+  ) {
+    throw new UnsafePathError(
+      `Invalid local-node ownership marker at ${marker}`,
+      directory
+    );
+  }
+
+  chmodSync(directory, PRIVATE_DIR_MODE);
+  chmodSync(marker, PRIVATE_FILE_MODE);
+  return directory;
+}
+
+function removeManagedNodeDirectory(pathname: string): void {
+  const directory = ensureManagedNodeDirectory(pathname, false);
+  rmSync(directory, { recursive: true, force: true });
+}
+
+/**
+ * Preserve state created by Movehat versions that predate ownership markers.
+ * Only the conventional project-local directory is eligible, and only when a
+ * force restart would otherwise delete it. Unknown contents are moved aside,
+ * never deleted or silently claimed.
+ */
+function preserveLegacyDefaultDirectory(pathname: string, forceRestart: boolean): void {
+  if (!forceRestart || !existsSync(pathname)) return;
+  const directory = assertSafeNodeDirectory(pathname);
+  const defaultDirectory = resolve(process.cwd(), ".movehat", "local-node");
+  const marker = join(directory, NODE_OWNERSHIP_MARKER);
+  if (
+    directory !== canonicalizePotentialPath(defaultDirectory) ||
+    existsSync(marker) ||
+    readdirSync(directory).length === 0
+  ) {
+    return;
+  }
+
+  const backup = `${directory}.legacy-backup-${Date.now()}-${process.pid}`;
+  renameSync(directory, backup);
+  logger.warning(
+    `Preserved unmarked local-node state at ${backup}; starting with a new managed directory.`,
+  );
+}
 
 export interface LocalNodeInfo {
   rpcUrl: string;
@@ -115,10 +302,20 @@ export class LocalNodeManager {
       logger.kv("Ready port", String(this.options.readyPort), 2);
       logger.newline();
 
+      // Claim only a new/empty directory, or verify a marker written by a
+      // previous Movehat run. This happens before either Movehat or the child
+      // process can recursively alter the configured path.
+      preserveLegacyDefaultDirectory(
+        this.options.testDir,
+        this.options.forceRestart,
+      );
+      this.options.testDir = ensureManagedNodeDirectory(this.options.testDir);
+
       // Clean state if force restart
       if (this.options.forceRestart && existsSync(this.options.testDir)) {
         logger.step("Cleaning previous node state...");
-        rmSync(this.options.testDir, { recursive: true, force: true });
+        removeManagedNodeDirectory(this.options.testDir);
+        writeOwnershipMarker(this.options.testDir);
       }
 
       // Build command arguments
@@ -203,6 +400,11 @@ export class LocalNodeManager {
       await withTimedSpinner("Waiting for node to be ready", () =>
         this.waitForReady(60000)
       );
+
+      // `movement --force-restart` may recreate the test directory. Restore
+      // the ownership marker and private permissions while this manager still
+      // has provenance for the path.
+      writeOwnershipMarker(this.options.testDir);
 
       logger.newline();
 
@@ -379,7 +581,7 @@ export class LocalNodeManager {
 
     if (existsSync(this.options.testDir)) {
       logger.step(`Cleaning node data at ${this.options.testDir}...`);
-      rmSync(this.options.testDir, { recursive: true, force: true });
+      removeManagedNodeDirectory(this.options.testDir);
       logger.success("Node data cleaned");
     }
   }

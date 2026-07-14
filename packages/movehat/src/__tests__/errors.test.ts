@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ModuleAlreadyDeployedError } from '../errors.js';
+import {
+  ModuleAlreadyDeployedError,
+  NetworkConflictError,
+  UnsafePathError,
+} from '../errors.js';
 
 describe('ModuleAlreadyDeployedError', () => {
   it('should create error with all properties', () => {
@@ -80,5 +84,23 @@ describe('ModuleAlreadyDeployedError', () => {
         expect(e.moduleName).toBe('module');
       }
     }
+  });
+});
+
+describe('security errors', () => {
+  it('exposes both network selectors on NetworkConflictError', () => {
+    const error = new NetworkConflictError('mainnet', 'testnet');
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe('NetworkConflictError');
+    expect(error.apiNetwork).toBe('mainnet');
+    expect(error.cliNetwork).toBe('testnet');
+    expect(error.message).toMatch(/Remove one selector or make them match/);
+  });
+
+  it('exposes the rejected path on UnsafePathError', () => {
+    const error = new UnsafePathError('unsafe path', '/');
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe('UnsafePathError');
+    expect(error.path).toBe('/');
   });
 });

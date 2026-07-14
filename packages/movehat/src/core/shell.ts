@@ -29,13 +29,13 @@ export function validatePathSafety(path: string, name: string = "path"): string 
     throw new Error(`Invalid ${name}: must be a non-empty string`);
   }
 
-  // Check for obvious command injection attempts.
-  const dangerousChars = /[;&|`$(){}[\]<>]/;
-  if (dangerousChars.test(path)) {
+  // `spawn(command, argv)` does not invoke a shell, so characters such as
+  // spaces, `$`, parentheses and semicolons are ordinary filename bytes.
+  // Only NUL is invalid at the OS process/filesystem boundary.
+  if (path.includes("\0")) {
     throw new Error(
       `Invalid ${name}: "${path}"\n` +
-      `Path contains potentially dangerous characters.\n` +
-      `Allowed characters: letters, numbers, ., -, _, /, \\, spaces`
+      `Path contains a NUL byte.`
     );
   }
 
@@ -52,7 +52,13 @@ export function validatePathSafety(path: string, name: string = "path"): string 
  * @returns The escaped path safe for shell execution
  */
 export function validateAndEscapePath(path: string, name: string = "path"): string {
-  return escapeShellArg(validatePathSafety(path, name));
+  const validated = validatePathSafety(path, name);
+  // Defense for the legacy shell-string helper. Production execution uses
+  // argv-based spawn and must call validatePathSafety directly.
+  if (/[;&|`$(){}[\]<>]/.test(validated)) {
+    throw new Error(`Invalid ${name}: path contains potentially dangerous characters`);
+  }
+  return escapeShellArg(validated);
 }
 
 /**

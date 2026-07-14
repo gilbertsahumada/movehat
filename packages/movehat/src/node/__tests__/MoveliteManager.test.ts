@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PassThrough } from "node:stream";
-import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -675,12 +682,60 @@ describe("findMoveliteBinary — MOVELITE_PATH override", () => {
   it("returns the env path when it points at an existing file", () => {
     const bin = join(tmpDir, "movelite");
     writeFileSync(bin, "#!/bin/sh\n");
+    chmodSync(bin, 0o755);
     process.env.MOVELITE_PATH = bin;
-    expect(findMoveliteBinary()).toBe(bin);
+    expect(findMoveliteBinary()).toBe(realpathSync(bin));
   });
 
   it("returns null when the env path does not exist", () => {
     process.env.MOVELITE_PATH = join(tmpDir, "nope");
     expect(findMoveliteBinary()).toBeNull();
+  });
+
+  it("rejects a relative MOVELITE_PATH", () => {
+    process.env.MOVELITE_PATH = "./movelite";
+    expect(() => findMoveliteBinary()).toThrow(/must be an absolute path/);
+  });
+
+  it("rejects a non-executable override", () => {
+    const bin = join(tmpDir, "movelite");
+    writeFileSync(bin, "#!/bin/sh\n", { mode: 0o600 });
+    process.env.MOVELITE_PATH = bin;
+    expect(() => findMoveliteBinary()).toThrow(/regular executable file/);
+  });
+
+  it("resolves an executable from PATH without a shell", () => {
+    delete process.env.MOVELITE_PATH;
+    const projectRoot = join(tmpDir, "project");
+    const binDir = join(tmpDir, "trusted-bin");
+    mkdirSync(projectRoot);
+    mkdirSync(binDir);
+    const bin = join(binDir, "movelite");
+    writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
+
+    expect(
+      findMoveliteBinary({
+        env: { PATH: binDir },
+        projectRoot,
+        includePackage: false,
+      })
+    ).toBe(realpathSync(bin));
+  });
+
+  it("rejects a PATH binary controlled by the project", () => {
+    delete process.env.MOVELITE_PATH;
+    const projectRoot = join(tmpDir, "project");
+    const binDir = join(projectRoot, "node_modules", ".bin");
+    mkdirSync(binDir, { recursive: true });
+    const bin = join(binDir, "movelite");
+    writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
+
+    expect(() =>
+      findMoveliteBinary({
+        env: { PATH: binDir },
+        projectRoot,
+        includePackage: false,
+      })
+    ).toThrow(/project-controlled path|untrusted node_modules/);
   });
 });

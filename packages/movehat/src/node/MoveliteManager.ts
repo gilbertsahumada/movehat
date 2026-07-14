@@ -1,6 +1,5 @@
-import { execSync } from "child_process";
-import { existsSync } from "fs";
-import { join } from "path";
+import { accessSync, constants, existsSync, realpathSync, statSync } from "fs";
+import { delimiter, isAbsolute, join, resolve, sep } from "path";
 import { createRequire } from "module";
 import type { Account } from "@aptos-labs/ts-sdk";
 import { CRITICAL_NODE_OUTPUT, type LocalNodeInfo } from "./LocalNodeManager.js";
@@ -8,8 +7,10 @@ import type { NodeProvider } from "./NodeProvider.js";
 import {
   defaultChildProcessAdapter,
   type ChildProcessAdapter,
+  type ChildProcessSignal,
   type SpawnedProcess,
 } from "../utils/childProcessAdapter.js";
+import { sanitizeMovementEnv } from "../utils/movementCli.js";
 import { cleanupCallbacks, ensureSignalHandler } from "../core/movementProfile.js";
 import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 
@@ -60,6 +61,9 @@ export class MoveliteManager implements NodeProvider {
     const spawned = this.adapter.spawn({
       command: binary,
       args: ["start", "--port", String(this.port), "--no-auth"],
+      ...(this.adapter === defaultChildProcessAdapter
+        ? { env: sanitizeMovementEnv() }
+        : {}),
       stdio: "pipe",
     });
     this.spawned = spawned;
@@ -157,7 +161,7 @@ export class MoveliteManager implements NodeProvider {
   private async waitForReady(spawned: SpawnedProcess): Promise<void> {
     const url = `http://127.0.0.1:${this.port}/v1`;
 
-    let exitInfo: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+    let exitInfo: { code: number | null; signal: ChildProcessSignal | null } | null = null;
     void spawned.exited.then((info) => {
       exitInfo = info;
     });
@@ -190,7 +194,7 @@ export class MoveliteManager implements NodeProvider {
 
   private buildBootFailure(exitInfo: {
     code: number | null;
-    signal: NodeJS.Signals | null;
+    signal: ChildProcessSignal | null;
   }): Error {
     let reason: string;
     if (exitInfo.code === null && exitInfo.signal === null) {
@@ -275,11 +279,69 @@ export class MoveliteManager implements NodeProvider {
   }
 }
 
-export function findMoveliteBinary(): string | null {
-  if (process.env.MOVELITE_PATH) {
-    return existsSync(process.env.MOVELITE_PATH)
-      ? process.env.MOVELITE_PATH
-      : null;
+export interface FindMoveliteBinaryOptions {
+  /** Environment to inspect. Defaults to `process.env`. */
+  env?: Record<string, string | undefined>;
+  /** Project tree whose binaries must not be trusted. Defaults to cwd. */
+  projectRoot?: string;
+  /** Test/internal escape hatch for isolating PATH resolution. */
+  includePackage?: boolean;
+}
+
+function executableFile(pathname: string): string | null {
+  try {
+    const absolute = realpathSync(pathname);
+    if (!statSync(absolute).isFile()) return null;
+    accessSync(absolute, constants.X_OK);
+    return absolute;
+  } catch {
+    return null;
+  }
+}
+
+function assertExternalMovelitePath(pathname: string, projectRoot: string): string {
+  const executable = executableFile(pathname);
+  if (!executable) {
+    throw new Error(`movelite path is not a regular executable file: ${pathname}`);
+  }
+
+  const project = realpathSync(projectRoot);
+  if (executable === project || executable.startsWith(`${project}${sep}`)) {
+    throw new Error(
+      `Refusing to run movelite from project-controlled path: ${executable}`
+    );
+  }
+  if (executable.split(sep).includes("node_modules")) {
+    throw new Error(`Refusing to run movelite from untrusted node_modules: ${executable}`);
+  }
+  return executable;
+}
+
+function findMoveliteOnPath(
+  env: Record<string, string | undefined>,
+  projectRoot: string
+): string | null {
+  for (const directory of (env.PATH ?? "").split(delimiter)) {
+    if (!directory) continue;
+    const candidate = resolve(directory, "movelite");
+    if (!existsSync(candidate)) continue;
+    return assertExternalMovelitePath(candidate, projectRoot);
+  }
+  return null;
+}
+
+export function findMoveliteBinary(
+  options: FindMoveliteBinaryOptions = {}
+): string | null {
+  const env = options.env ?? process.env;
+  const projectRoot = options.projectRoot ?? process.cwd();
+
+  if (env.MOVELITE_PATH) {
+    if (!isAbsolute(env.MOVELITE_PATH)) {
+      throw new Error(`MOVELITE_PATH must be an absolute path, got: ${env.MOVELITE_PATH}`);
+    }
+    if (!existsSync(env.MOVELITE_PATH)) return null;
+    return assertExternalMovelitePath(env.MOVELITE_PATH, projectRoot);
   }
 
   const platforms: Record<string, string> = {
@@ -291,7 +353,7 @@ export function findMoveliteBinary(): string | null {
 
   const key = `${process.platform}-${process.arch}`;
   const pkg = platforms[key];
-  if (pkg) {
+  if (pkg && options.includePackage !== false) {
     try {
       // Resolve through the `movelite` shim (movehat's direct dependency),
       // then resolve the platform package from movelite's own context. The
@@ -302,18 +364,12 @@ export function findMoveliteBinary(): string | null {
       const moveliteReq = createRequire(movelitePkg);
       const pkgPath = moveliteReq.resolve(`${pkg}/package.json`);
       const binPath = join(pkgPath, "..", "bin", "movelite");
-      if (existsSync(binPath)) return binPath;
+      const executable = executableFile(binPath);
+      if (executable) return executable;
     } catch {
       // package not installed
     }
   }
 
-  try {
-    const found = execSync("which movelite", { encoding: "utf-8" }).trim();
-    if (found && existsSync(found)) return found;
-  } catch {
-    // not in PATH
-  }
-
-  return null;
+  return findMoveliteOnPath(env, projectRoot);
 }

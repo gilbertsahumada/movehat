@@ -79,3 +79,44 @@ export class CliExecutionError extends Error {
     }
   }
 }
+
+/**
+ * Thrown before runtime construction when two explicit network selectors
+ * disagree. `MH_CLI_NETWORK` is set by the `--network` CLI flag, so silently
+ * letting an API argument override it could submit a transaction to a network
+ * different from the one shown in the command invocation.
+ */
+export class NetworkConflictError extends Error {
+  constructor(
+    public readonly apiNetwork: string,
+    public readonly cliNetwork: string
+  ) {
+    super(
+      `Conflicting network selection: API requested '${apiNetwork}' but ` +
+        `--network selected '${cliNetwork}'. Remove one selector or make them match.`
+    );
+    this.name = "NetworkConflictError";
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, NetworkConflictError);
+    }
+  }
+}
+
+/**
+ * Thrown before a recursive filesystem operation targets a path that Movehat
+ * cannot prove it owns.
+ */
+export class UnsafePathError extends Error {
+  constructor(
+    message: string,
+    public readonly path: string
+  ) {
+    super(message);
+    this.name = "UnsafePathError";
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, UnsafePathError);
+    }
+  }
+}

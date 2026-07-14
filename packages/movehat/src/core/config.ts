@@ -4,6 +4,7 @@ import { existsSync, statSync } from "fs";
 import { Account, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 import { logger } from "../ui/index.js";
+import { NetworkConflictError } from "../errors.js";
 
 interface ConfigCacheEntry {
   mtimeMs: number;
@@ -29,21 +30,13 @@ const configCache = new Map<string, ConfigCacheEntry>();
 // settles so a later edit (new mtime) can re-trigger a cold load.
 const inFlightLoads = new Map<string, Promise<MovehatUserConfig>>();
 
-// Hostnames recognized as safe targets for the deterministic test key
-// auto-injection. Any URL whose hostname is not in this set causes the
-// test-key path to be skipped even if the network NAME is 'testnet' or
-// 'local' (#40 — name-only gating was spoofable when users named a
-// production-pointing network 'testnet').
-const TEST_ENDPOINT_HOSTS = new Set([
-  "testnet.movementnetwork.xyz",
-  "localhost",
-  "127.0.0.1",
-  "::1",
-]);
+// Deterministic credentials are safe only for a process-local backend. Public
+// testnets also hold real assets and must therefore use explicit credentials.
+const LOCAL_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function isKnownTestEndpoint(url: string): boolean {
   try {
-    return TEST_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
+    return LOCAL_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
   } catch {
     return false;
   }
@@ -178,28 +171,47 @@ export function _resetConfigCache(): void {
   inFlightLoads.clear();
 }
 
+export interface ResolvedNetworkEndpoint {
+  network: string;
+  networkConfig: MovehatUserConfig["networks"][string];
+}
+
 /**
- * Resolve configuration for a specific network
- * Merges global settings with network-specific settings
+ * Resolve only the selected network and RPC-facing configuration.
+ *
+ * Read-only commands such as `fork create` must not resolve signing accounts:
+ * doing so would unnecessarily require `PRIVATE_KEY` and could inject local
+ * development credentials into an operation that never signs a transaction.
+ * This function is the canonical selection path for both read-only and signed
+ * operations, so their precedence and conflict behavior cannot drift.
  */
-export async function resolveNetworkConfig(
+export function resolveNetworkEndpoint(
   userConfig: MovehatUserConfig,
-  networkName?: string
-): Promise<MovehatConfig> {
-  // Determine which network to use
-  // Default to "testnet" for testing with simulation
+  networkName?: string,
+): ResolvedNetworkEndpoint {
+  const cliNetwork = process.env.MH_CLI_NETWORK;
+  const legacyNetwork = process.env.MOVEHAT_NETWORK;
+
+  if (networkName && cliNetwork && networkName !== cliNetwork) {
+    throw new NetworkConflictError(networkName, cliNetwork);
+  }
+
+  if (cliNetwork && legacyNetwork && cliNetwork !== legacyNetwork) {
+    logger.warning(
+      `Ignoring legacy MOVEHAT_NETWORK='${legacyNetwork}' because ` +
+        `--network selected '${cliNetwork}'.`,
+    );
+  }
+
   const selectedNetwork =
     networkName ||
-    process.env.MH_CLI_NETWORK ||
+    cliNetwork ||
+    legacyNetwork ||
     process.env.MH_DEFAULT_NETWORK ||
     userConfig.defaultNetwork ||
     "testnet";
 
-  // Check if network exists in config
   let networkConfig = userConfig.networks[selectedNetwork];
-
-  // Special case: Auto-generate config for testnet (public test network)
-  // This provides a better dev experience - no local setup required
   if (!networkConfig && selectedNetwork === "testnet") {
     networkConfig = {
       url: "https://testnet.movementnetwork.xyz/v1",
@@ -207,8 +219,13 @@ export async function resolveNetworkConfig(
     };
     logger.info("testnet not found in config - using default Movement testnet configuration");
   }
-
-  // Special case: Auto-generate config for local fork server
+  if (!networkConfig && selectedNetwork === "mainnet") {
+    networkConfig = {
+      url: "https://mainnet.movementnetwork.xyz/v1",
+      chainId: "mainnet",
+    };
+    logger.info("mainnet not found in config - using default Movement mainnet configuration");
+  }
   if (!networkConfig && selectedNetwork === "local") {
     networkConfig = {
       url: "http://localhost:8080/v1",
@@ -220,9 +237,25 @@ export async function resolveNetworkConfig(
   if (!networkConfig) {
     const availableNetworks = Object.keys(userConfig.networks).join(", ");
     throw new Error(
-      `Network '${selectedNetwork}' not found in configuration.\nAvailable networks: ${availableNetworks}, testnet (auto-generated), local (auto-generated)`
+      `Network '${selectedNetwork}' not found in configuration.\nAvailable networks: ${availableNetworks}, testnet/mainnet/local (auto-generated)`,
     );
   }
+
+  return { network: selectedNetwork, networkConfig };
+}
+
+/**
+ * Resolve configuration for a specific network
+ * Merges global settings with network-specific settings
+ */
+export async function resolveNetworkConfig(
+  userConfig: MovehatUserConfig,
+  networkName?: string
+): Promise<MovehatConfig> {
+  const { network: selectedNetwork, networkConfig } = resolveNetworkEndpoint(
+    userConfig,
+    networkName,
+  );
 
   // Get accounts using Hardhat-style resolution:
   // 1. Network-specific accounts (if defined)
@@ -247,14 +280,12 @@ export async function resolveNetworkConfig(
     accounts = [process.env.PRIVATE_KEY];
   }
 
-  // 4. Validate we have at least one account (unless using testnet/local
-  //    AND the URL is a recognized test endpoint — name alone is not enough
-  //    per #40, since a user can name a network 'testnet' but point it at
-  //    a production RPC and would otherwise inherit the deterministic test
-  //    key with a production endpoint).
+  // 4. Validate we have at least one account. Only local/movelite backends on
+  //    loopback may receive the deterministic development key. A public
+  //    testnet requires explicit credentials just like mainnet.
   if (accounts.length === 0 || !accounts[0]) {
     const isTestNetworkName =
-      selectedNetwork === "testnet" || selectedNetwork === "local";
+      selectedNetwork === "local" || selectedNetwork === "movelite";
     const isTestEndpoint =
       isTestNetworkName && isKnownTestEndpoint(networkConfig.url);
 
@@ -264,7 +295,7 @@ export async function resolveNetworkConfig(
       // through to the standard "no accounts" throw below so the user gets
       // actionable guidance.
       logger.warning(
-        `Network '${selectedNetwork}' uses a name reserved for testnet/local ` +
+        `Network '${selectedNetwork}' uses a name reserved for local development ` +
           `but '${sanitizeUrlForLog(networkConfig.url)}' is not a recognized test endpoint. ` +
           `Skipping auto-injection of the deterministic test key to protect ` +
           `against accidental production use. Set PRIVATE_KEY explicitly, ` +
@@ -282,13 +313,13 @@ export async function resolveNetworkConfig(
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
       accounts = [testPrivateKey];
       logger.newline();
-      logger.warning("[TESTNET] Using auto-generated test account (safe for testing only)");
-      logger.warning("[TESTNET] For mainnet, set PRIVATE_KEY in .env");
+      logger.warning("[LOCAL] Using a deterministic development account");
+      logger.warning("[LOCAL] Public networks require explicit credentials");
       logger.newline();
     } else {
-      // For any other network (mainnet, or testnet/local with a non-test
-      // URL), REQUIRE explicit configuration. This prevents accidentally
-      // using the test key on production networks.
+      // For any public network, or a local/movelite name with a remote URL,
+      // REQUIRE explicit configuration. This prevents accidentally using the
+      // deterministic key beyond the local process boundary.
       throw new Error(
         `Network '${selectedNetwork}' has no accounts configured.\n` +
         `\n` +
@@ -299,8 +330,8 @@ export async function resolveNetworkConfig(
         `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
         `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config\n` +
         `\n` +
-        `For testing without configuration, use:\n` +
-        `  movehat <command> --network testnet (auto-generates safe test accounts)`
+        `For testing without public-network credentials, use a local node via:\n` +
+        `  movehat test --ts`
       );
     }
   }
