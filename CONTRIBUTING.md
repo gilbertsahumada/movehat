@@ -141,6 +141,33 @@ Set on the push command for the run only:
 
 For one-off legitimate bypasses (e.g., recovering from a corrupted state mid-rebase), document the reason in the commit message and post a follow-up PR to address whatever the hook would have caught.
 
+## Reproducible quality gates
+
+Install with the committed lockfile and run the same deterministic checks used
+for pull requests to `develop` and `main`:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm quality
+pnpm build:docs
+pnpm --filter movehat run check-pack-contents
+pnpm audit --prod --audit-level critical
+pnpm test
+```
+
+`pnpm api:check` (included by `pnpm quality`) never approves or rewrites a
+public API report. When an API change is intentional, run `pnpm api:update`,
+review the changes under `etc/`, and commit those reports with the source
+change. `pnpm format:check` currently covers the workspace manifests and the
+shared lint/format configuration; source formatting remains review-owned until
+the existing tree can be migrated without a repository-wide diff.
+
+External Movement CLI and public-testnet checks are advisory because they rely
+on services outside this repository. CI runs them for `main` and manual
+dispatches, not as required checks for PRs to `develop`. The Docker test image
+accepts only the pinned linux/amd64 CLI archive and verifies both archive and
+extracted-binary SHA256 values; it never substitutes a mock executable.
+
 ## Project Architecture
 
 ### Workspace Structure

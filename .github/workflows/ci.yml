@@ -1,16 +1,14 @@
 name: CI
 
 on:
-  # Runs only on the merge to main and on PRs targeting main.
-  # Sub-PRs to develop don't get CI — the batch develop→main PR is
-  # the validation gate. Maintainers running `pnpm test`,
-  # `pnpm check:example`, and Tier-2 smoke before merging sub-PRs to
-  # develop is the operational equivalent (see CLAUDE.md §6 / §8).
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Opt the pinned JS actions into the Node 24 runtime ahead of GitHub's
 # 2026-06-16 forced switch (the actions still run on Node 20 otherwise and
@@ -41,13 +39,24 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint and formatting gates
+        run: |
+          pnpm lint
+          pnpm format:check
+
+      - name: Reject circular dependencies
+        run: pnpm cycles
 
       - name: TypeScript type check
         run: cd packages/movehat && pnpm tsc --noEmit
 
       - name: Build
         run: pnpm build:movehat
+
+      - name: Verify reviewed public API surface
+        run: pnpm api:check
 
       - name: Check npm package contents
         run: pnpm --filter movehat run check-pack-contents
@@ -58,6 +67,33 @@ jobs:
           name: build-artifacts
           path: packages/movehat/dist/
           retention-days: 1
+
+  docs:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d  # v3.0.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package and documentation
+        run: |
+          pnpm build:movehat
+          pnpm build:docs
 
   # Unit tests with coverage
   unit-tests:
@@ -81,7 +117,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Run unit tests with coverage
         run: pnpm test:coverage
@@ -136,7 +172,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Download build artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
@@ -155,10 +191,12 @@ jobs:
 
   # E2E tests + integration suite
   e2e-tests:
-    name: E2E Tests
+    name: Public Testnet & External CLI (advisory)
     runs-on: ubuntu-latest
     needs: [build, unit-tests]
     timeout-minutes: 15
+    continue-on-error: true
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.base_ref == 'main'
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -175,7 +213,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Download build artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
@@ -307,7 +345,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Check package.json
         # Validation logic lives in packages/movehat/scripts/check-package-json.js
@@ -343,7 +381,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Audit dependencies
         # `pnpm audit` operates workspace-wide and cannot scope to a

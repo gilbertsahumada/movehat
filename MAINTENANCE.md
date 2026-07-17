@@ -14,6 +14,27 @@ Movehat follows three release rhythms:
 
 **Per-milestone batch merges**: feature work lands on the `develop` branch via sub-PRs. Each sub-PR that closes an issue updates `CHANGELOG.md` `[Unreleased]` in the same PR. When a milestone closes, a single `develop → main` batch PR ships everything together, followed by a release PR that bumps the version and renames `[Unreleased]` → `[X.Y.Z] - DATE` (mechanical, no prose writing). The `publish.yml` workflow gates the npm push on a matching `CHANGELOG.md` section.
 
+## CI and dependency policy
+
+Pull requests to both `develop` and `main` run reproducible gates from the
+committed lockfile: lint, manifest/config formatting, cycle detection, reviewed
+API reports, TypeScript/build, docs build, package contents, the full unit suite,
+and `pnpm audit --prod --audit-level critical`. The production critical audit is
+the blocking dependency-security contract; do not weaken it or replace it with
+an unscoped audit.
+
+The complete workspace audit includes development tools and the docs site. It
+runs weekly and on manual dispatch as an informational job. It can become a
+blocking gate only after accepted advisory IDs, rationale, owner, and expiry are
+recorded in a versioned allowlist. Dependency upgrades and pnpm overrides must
+stay limited to a demonstrated advisory or compatibility need; frozen install
+must continue to pass after every change.
+
+Checks that need a public testnet, a moving upstream download location, or other
+external infrastructure run only on `main` or manual dispatch and are
+non-blocking. A failure still requires triage, but an upstream outage cannot
+prevent an unrelated deterministic PR from landing on `develop`.
+
 ## Issue triage SLA
 
 Maintainers commit to the following response times:

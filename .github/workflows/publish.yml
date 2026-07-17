@@ -39,12 +39,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
-      - name: Upgrade npm to >= 11.5.1 for Trusted Publishers
+      - name: Install the audited npm release used for publishing
         # OIDC + provenance only ship in npm >= 11.5.1; Node 20 bundles ~10.x.
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.5.1
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level critical

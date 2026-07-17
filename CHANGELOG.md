@@ -68,6 +68,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   typed, non-retryable unknown-outcome error carrying the transaction hash.
   Closes #374.
 
+### Internal
+
+- Added reproducible quality gates for lint, manifest/config formatting,
+  dependency cycles, reviewed API reports, docs builds, packed npm contents,
+  frozen installs, and production-critical audits. PRs to `develop` now run
+  deterministic checks; public-testnet and external CLI checks remain
+  advisory on `main` or manual dispatch. The Docker test image verifies both
+  the pinned Movement CLI archive and extracted binary and can no longer fall
+  back to a mock executable. Closes #377. Tracks #371.
+
+### Security
+
+- Updated Next.js within major 15, Vitest/coverage within major 4, and
+  `js-yaml` within major 4 to address documented advisories without broad
+  dependency overrides. The full workspace audit is scheduled and
+  informational until accepted advisories have a versioned allowlist.
+
 ## [0.6.0] - 2026-07-12
 
 ### Changed
