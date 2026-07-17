@@ -249,6 +249,7 @@ describe("testCommand — TypeScript path with tests/ + node_modules", () => {
     runCliUntilInterruptedMock.mockResolvedValueOnce({
       exitCode: -1,
       signal: "SIGINT",
+      interruptedByParent: "SIGINT",
       stdout: "",
       stderr: "",
     });
@@ -260,5 +261,18 @@ describe("testCommand — TypeScript path with tests/ + node_modules", () => {
       { throwOnNonZeroExit: false }
     );
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails watch mode when only the child receives a signal", async () => {
+    runCliUntilInterruptedMock.mockResolvedValueOnce({
+      exitCode: -1,
+      signal: "SIGTERM",
+      stdout: "",
+      stderr: "",
+    });
+
+    await testCommand({ ts: true, watch: true });
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

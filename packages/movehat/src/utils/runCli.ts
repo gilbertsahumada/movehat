@@ -21,7 +21,7 @@ export interface RunCliOptions {
 
 export interface InterruptSignalProcess {
   exitCode: string | number | null | undefined;
-  once(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+  on(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
   removeListener(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
 }
 
@@ -93,21 +93,28 @@ export async function runCliUntilInterrupted(
   const controller = new AbortController();
   let receivedSignal: "SIGINT" | "SIGTERM" | undefined;
   const onSigint = () => {
-    receivedSignal = "SIGINT";
+    receivedSignal ??= "SIGINT";
     controller.abort();
   };
   const onSigterm = () => {
-    receivedSignal = "SIGTERM";
+    receivedSignal ??= "SIGTERM";
     controller.abort();
   };
 
-  signalProcess.once("SIGINT", onSigint);
-  signalProcess.once("SIGTERM", onSigterm);
+  // Keep both listeners installed until the child has closed. Removing a
+  // one-shot listener after the first signal would restore Node's default
+  // behaviour, letting a second Ctrl+C kill Movehat before child cleanup.
+  signalProcess.on("SIGINT", onSigint);
+  signalProcess.on("SIGTERM", onSigterm);
   try {
     const signal = input.signal
       ? AbortSignal.any([input.signal, controller.signal])
       : controller.signal;
-    return await runCli({ ...input, signal }, options);
+    const result = await runCli({ ...input, signal }, options);
+    if (receivedSignal) {
+      result.interruptedByParent = receivedSignal;
+    }
+    return result;
   } finally {
     signalProcess.removeListener("SIGINT", onSigint);
     signalProcess.removeListener("SIGTERM", onSigterm);

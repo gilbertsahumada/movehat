@@ -71,11 +71,25 @@ describe("Movement CLI quality commands", () => {
     runCliUntilInterruptedMock.mockResolvedValueOnce({
       exitCode: -1,
       signal: "SIGTERM",
+      interruptedByParent: "SIGINT",
       stdout: "",
       stderr: "",
     });
 
     await expect(proveCommand()).resolves.toBeUndefined();
+  });
+
+  it("rejects a prover terminated by a child-only signal", async () => {
+    runCliUntilInterruptedMock.mockResolvedValueOnce({
+      exitCode: -1,
+      signal: "SIGKILL",
+      stdout: "",
+      stderr: "",
+    });
+
+    await expect(proveCommand()).rejects.toThrow(
+      "movement move prove terminated by SIGKILL"
+    );
   });
 
   it("runs covered tests before the coverage summary and forwards filters", async () => {

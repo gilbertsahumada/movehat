@@ -248,7 +248,10 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
       },
       { throwOnNonZeroExit: false }
     );
-    if (result.exitCode !== 0 && !result.signal) {
+    if (result.signal && !result.interruptedByParent) {
+      throw new Error(`Mocha watch terminated by ${result.signal}`);
+    }
+    if (result.exitCode !== 0 && !result.interruptedByParent) {
       throw new Error(`Mocha watch exited with code ${result.exitCode}`);
     }
     return;

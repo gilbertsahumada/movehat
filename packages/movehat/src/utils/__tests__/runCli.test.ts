@@ -312,6 +312,56 @@ describe('runCliUntilInterrupted', () => {
 
     expect(childClosed).toBe(true);
     expect(result.signal).toBe('SIGTERM');
+    expect(result.interruptedByParent).toBe('SIGINT');
+    expect(signalProcess.exitCode).toBe(130);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
+  });
+
+  it('keeps intercepting repeated signals until the child has closed', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    let finishShutdown!: () => void;
+    let abortEvents = 0;
+    const adapter: ChildProcessAdapter = {
+      run(input) {
+        return new Promise((resolve) => {
+          input.signal?.addEventListener('abort', () => {
+            abortEvents += 1;
+            finishShutdown = () =>
+              resolve({ exitCode: -1, stdout: '', stderr: '', signal: 'SIGTERM' });
+          });
+        });
+      },
+      spawn() {
+        throw new Error('spawn not used');
+      },
+    };
+
+    let settled = false;
+    const pending = runCliUntilInterrupted(
+      { command: 'mocha', args: ['--watch'], timeoutMs: Infinity },
+      { adapter, throwOnNonZeroExit: false },
+      signalProcess
+    ).finally(() => {
+      settled = true;
+    });
+
+    signalProcess.emit('SIGINT');
+    signalProcess.emit('SIGINT');
+    signalProcess.emit('SIGTERM');
+    await Promise.resolve();
+
+    expect(abortEvents).toBe(1);
+    expect(settled).toBe(false);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(1);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(1);
+
+    finishShutdown();
+    const result = await pending;
+
+    expect(result.interruptedByParent).toBe('SIGINT');
     expect(signalProcess.exitCode).toBe(130);
     expect(signalProcess.listenerCount('SIGINT')).toBe(0);
     expect(signalProcess.listenerCount('SIGTERM')).toBe(0);

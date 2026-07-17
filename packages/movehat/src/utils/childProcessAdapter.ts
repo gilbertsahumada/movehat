@@ -69,6 +69,12 @@ export interface RunResult {
    * during shutdown). `undefined` for normal exits.
    */
   signal?: NodeJS.Signals;
+  /**
+   * Set by `runCliUntilInterrupted` when Movehat received the signal and
+   * forwarded shutdown to the child. A child-only signal leaves this unset,
+   * allowing callers to distinguish user cancellation from a crashed tool.
+   */
+  interruptedByParent?: "SIGINT" | "SIGTERM";
 }
 
 /**

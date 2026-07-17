@@ -40,10 +40,10 @@ export async function runMovementMoveCommand(
     ? runCliUntilInterrupted(input, { throwOnNonZeroExit: false })
     : runCli(input, { throwOnNonZeroExit: false }));
 
+  // Long-running tools are attached to the terminal. A parent interrupt is
+  // an expected user action; runCliUntilInterrupted already recorded 130/143.
+  if (timeoutMs === Infinity && result.interruptedByParent) return;
   if (result.signal) {
-    // Long-running tools are attached to the terminal. An interrupt is an
-    // expected user action; runCliUntilInterrupted already recorded 130/143.
-    if (timeoutMs === Infinity) return;
     throw new Error(`movement move ${verb} terminated by ${result.signal}`);
   }
   if (result.exitCode !== 0) {
