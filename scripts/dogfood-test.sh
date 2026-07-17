@@ -108,8 +108,18 @@ print(f"OK — reset() entry fn + test_reset Move test injected ({len(new_src)} 
 PYEOF
 log "Counter.move extended with reset() + test_reset()"
 
-step "6/9 — Install project dependencies"
-npm install 2>&1 | grep -vE "^npm (warn|notice)" | head -30 || true
+step "6/9 — Install project dependencies from candidate tarball"
+# Installing the generated manifest first would query npm for the exact
+# candidate version before it has been published. Installing the tarball as
+# the first operation proves the release artifact without that registry race.
+npm install --no-save "${TARBALL_PATH}" 2>&1 | grep -vE "^npm (warn|notice)" | head -30
+INSTALLED_VERSION=$(node -p "require('./node_modules/movehat/package.json').version")
+PACKED_VERSION=$(node -p "require('${SOURCE_PKG}/package.json').version")
+test "${INSTALLED_VERSION}" = "${PACKED_VERSION}" || \
+  fail "Installed movehat ${INSTALLED_VERSION}, expected candidate ${PACKED_VERSION}"
+SCAFFOLD_PIN=$(node -p "require('./package.json').dependencies.movehat")
+test "${SCAFFOLD_PIN}" = "${PACKED_VERSION}" || \
+  fail "Candidate install rewrote exact pin ${PACKED_VERSION} to ${SCAFFOLD_PIN}"
 
 step "7/9 — Compile Move modules"
 # Debug: dump the file state movehat compile will see (helps diagnose
