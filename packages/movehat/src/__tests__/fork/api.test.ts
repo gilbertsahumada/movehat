@@ -17,16 +17,16 @@ import { EventEmitter } from "node:events";
  *      is added (back-compat for unauthenticated public endpoints).
  */
 
-const httpsGet = vi.fn();
-const httpGet = vi.fn();
+const httpsRequest = vi.fn();
+const httpRequest = vi.fn();
 
 vi.mock("https", () => ({
-  default: { get: httpsGet },
-  get: httpsGet,
+  default: { request: httpsRequest },
+  request: httpsRequest,
 }));
 vi.mock("http", () => ({
-  default: { get: httpGet },
-  get: httpGet,
+  default: { request: httpRequest },
+  request: httpRequest,
 }));
 
 /**
@@ -51,21 +51,22 @@ function makeFakeResponse(body: string, statusCode = 200): IncomingMessage {
  * Returns the captured options for assertion.
  */
 function setupGetCapture(): {
-  captured: { url?: string; options?: { headers?: Record<string, string> } };
+  captured: { url?: string; options?: { headers?: Record<string, string> }; endCalls: number };
 } {
   const captured: {
     url?: string;
     options?: { headers?: Record<string, string> };
-  } = {};
+    endCalls: number;
+  } = { endCalls: 0 };
 
   const handler = (
-    url: string,
+    url: URL | string,
     options:
       | { headers?: Record<string, string> }
       | ((res: IncomingMessage) => void),
     cb?: (res: IncomingMessage) => void
   ): ClientRequest => {
-    captured.url = url;
+    captured.url = String(url);
     // Distinguish (url, callback) vs (url, options, callback) overloads.
     let callback: ((res: IncomingMessage) => void) | undefined;
     if (typeof options === "function") {
@@ -76,7 +77,8 @@ function setupGetCapture(): {
     }
 
     const fakeReq = new EventEmitter() as unknown as ClientRequest;
-    (fakeReq as unknown as { end: () => void }).end = () => {};
+    (fakeReq as unknown as { end: () => void }).end = () => { captured.endCalls += 1; };
+    (fakeReq as unknown as { write: (data: string) => void }).write = () => {};
     // F3: api.ts now installs a setTimeout on the request and may call
     // destroy() on overflow / timeout. Stub both so this happy-path
     // capture mock still satisfies the new contract.
@@ -99,16 +101,16 @@ function setupGetCapture(): {
     return fakeReq;
   };
 
-  httpsGet.mockImplementation(handler);
-  httpGet.mockImplementation(handler);
+  httpsRequest.mockImplementation(handler);
+  httpRequest.mockImplementation(handler);
 
   return { captured };
 }
 
 describe("MovementApiClient — Authorization header (apiKey wiring)", () => {
   beforeEach(() => {
-    httpsGet.mockReset();
-    httpGet.mockReset();
+    httpsRequest.mockReset();
+    httpRequest.mockReset();
   });
 
   afterEach(() => {
@@ -131,7 +133,8 @@ describe("MovementApiClient — Authorization header (apiKey wiring)", () => {
     expect(captured.options?.headers).toEqual({
       Authorization: "Bearer secret-key-123",
     });
-    expect(httpsGet).toHaveBeenCalledTimes(1);
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    expect(captured.endCalls).toBe(1);
   });
 
   it("omits the Authorization header when constructed without an apiKey (back-compat)", async () => {
@@ -144,8 +147,44 @@ describe("MovementApiClient — Authorization header (apiKey wiring)", () => {
 
     expect(captured.url).toBe("https://testnet.example.com/v1/");
     if (captured.options !== undefined) {
-      expect(captured.options.headers).toBeUndefined();
+      expect(captured.options.headers).not.toHaveProperty("Authorization");
     }
-    expect(httpsGet).toHaveBeenCalledTimes(1);
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    expect(captured.endCalls).toBe(1);
+  });
+
+  it("rejects unsupported protocols and URL-embedded credentials", async () => {
+    const { MovementApiClient } = await import("../../fork/api.js");
+    expect(() => new MovementApiClient("file:///tmp/node")).toThrow(/protocol/i);
+    expect(() => new MovementApiClient("https://user:secret@example.com/v1")).toThrow(
+      /credentials/i
+    );
+  });
+
+  it("keeps upstream error bodies private while preserving a safe error_code", async () => {
+    httpsRequest.mockImplementation(
+      (_url: URL, _options: unknown, callback: (res: IncomingMessage) => void) => {
+        const req = new EventEmitter() as unknown as ClientRequest;
+        (req as unknown as { end(): void }).end = () => {};
+        (req as unknown as { write(data: string): void }).write = () => {};
+        (req as unknown as { setTimeout(ms: number, cb?: () => void): void }).setTimeout = () => {};
+        (req as unknown as { destroy(): void }).destroy = () => {};
+        callback(makeFakeResponse(
+          JSON.stringify({ message: "private upstream details", error_code: "version_pruned" }),
+          410
+        ));
+        return req;
+      }
+    );
+    const { MovementApiClient } = await import("../../fork/api.js");
+    const { MovementApiError } = await import("../../fork/errors.js");
+
+    const error = await new MovementApiClient("https://example.com/v1")
+      .getLedgerInfo()
+      .catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(MovementApiError);
+    expect((error as Error).message).not.toContain("private upstream details");
+    expect((error as InstanceType<typeof MovementApiError>).upstreamErrorCode).toBe("version_pruned");
   });
 });
