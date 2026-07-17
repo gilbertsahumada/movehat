@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { describe, it, expect } from 'vitest';
 import { CliExecutionError } from '../../errors.js';
 import type {
@@ -5,7 +6,7 @@ import type {
   RunInput,
   RunResult,
 } from '../childProcessAdapter.js';
-import { redactSecrets, runCli } from '../runCli.js';
+import { redactSecrets, runCli, runCliUntilInterrupted } from '../runCli.js';
 
 function makeAdapter(result: RunResult, capture?: { last?: RunInput }): ChildProcessAdapter {
   return {
@@ -278,5 +279,41 @@ describe('runCli', () => {
     expect(result.exitCode).toBe(-1);
     expect(result.signal).toBe('SIGTERM');
     expect(elapsed).toBeLessThan(500);
+  });
+});
+
+describe('runCliUntilInterrupted', () => {
+  it('forwards SIGINT, awaits child shutdown, and records a clean shell status', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    let childClosed = false;
+    const adapter: ChildProcessAdapter = {
+      run(input) {
+        return new Promise((resolve) => {
+          input.signal?.addEventListener('abort', () => {
+            childClosed = true;
+            resolve({ exitCode: -1, stdout: '', stderr: '', signal: 'SIGTERM' });
+          });
+        });
+      },
+      spawn() {
+        throw new Error('spawn not used');
+      },
+    };
+
+    const pending = runCliUntilInterrupted(
+      { command: 'mocha', args: ['--watch'], timeoutMs: Infinity },
+      { adapter, throwOnNonZeroExit: false },
+      signalProcess
+    );
+    signalProcess.emit('SIGINT');
+    const result = await pending;
+
+    expect(childClosed).toBe(true);
+    expect(result.signal).toBe('SIGTERM');
+    expect(signalProcess.exitCode).toBe(130);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
   });
 });

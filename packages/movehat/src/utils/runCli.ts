@@ -19,6 +19,12 @@ export interface RunCliOptions {
   throwOnNonZeroExit?: boolean | undefined;
 }
 
+export interface InterruptSignalProcess {
+  exitCode: string | number | null | undefined;
+  once(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+  removeListener(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+}
+
 /**
  * Spawns a CLI command through the injectable adapter, redacts well-known
  * secret shapes from stdout and stderr before returning, and throws
@@ -71,4 +77,42 @@ export async function runCli(
   }
 
   return result;
+}
+
+/**
+ * Run an attached child until it exits, forwarding parent termination signals
+ * through an AbortSignal so a signal aimed only at Movehat cannot orphan the
+ * child. The parent exits naturally with the conventional shell status after
+ * the child has closed, which keeps Ctrl+C output free of stack traces.
+ */
+export async function runCliUntilInterrupted(
+  input: RunInput,
+  options: RunCliOptions = {},
+  signalProcess: InterruptSignalProcess = process
+): Promise<RunResult> {
+  const controller = new AbortController();
+  let receivedSignal: "SIGINT" | "SIGTERM" | undefined;
+  const onSigint = () => {
+    receivedSignal = "SIGINT";
+    controller.abort();
+  };
+  const onSigterm = () => {
+    receivedSignal = "SIGTERM";
+    controller.abort();
+  };
+
+  signalProcess.once("SIGINT", onSigint);
+  signalProcess.once("SIGTERM", onSigterm);
+  try {
+    const signal = input.signal
+      ? AbortSignal.any([input.signal, controller.signal])
+      : controller.signal;
+    return await runCli({ ...input, signal }, options);
+  } finally {
+    signalProcess.removeListener("SIGINT", onSigint);
+    signalProcess.removeListener("SIGTERM", onSigterm);
+    if (receivedSignal && signalProcess.exitCode == null) {
+      signalProcess.exitCode = receivedSignal === "SIGINT" ? 130 : 143;
+    }
+  }
 }

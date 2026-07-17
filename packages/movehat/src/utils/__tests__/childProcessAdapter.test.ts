@@ -260,6 +260,35 @@ describe('defaultChildProcessAdapter.run with inheritStdio', () => {
     ).rejects.toThrow(/timed out after 50ms/);
   });
 
+  it('does not schedule a runtime timer when timeoutMs is Infinity', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const result = await defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'process.exit(0)'],
+        inheritStdio: true,
+        timeoutMs: Infinity,
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(
+        setTimeoutSpy.mock.calls.some((args) => args[1] === Infinity)
+      ).toBe(false);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it.each([0, -1, Number.NaN])('rejects invalid timeoutMs %s before spawning', async (timeoutMs) => {
+    await expect(
+      defaultChildProcessAdapter.run({
+        command: NODE,
+        args: ['-e', 'process.exit(0)'],
+        timeoutMs,
+      })
+    ).rejects.toThrow('timeoutMs must be a positive number or Infinity');
+  });
+
   it('uses a longer default timeout when inheritStdio is true (short child completes naturally)', async () => {
     // We can't wait 30 minutes to prove the inherited-stdio timeout, but
     // we can prove that a short child still completes via the natural exit
