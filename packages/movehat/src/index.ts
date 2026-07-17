@@ -30,7 +30,10 @@ export {
   PostPublishError,
   NetworkConflictError,
   UnsafePathError,
+  TransactionOutcomeUnknownError,
 } from "./errors.js";
+export { InvalidPersistedStateError } from "./core/deployments.js";
+export type { DeploymentInfo } from "./core/deployments.js";
 
 export { Harness, HarnessDisposedError } from "./harness/index.js";
 export type { HarnessMode } from "./harness/index.js";

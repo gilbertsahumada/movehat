@@ -25,7 +25,7 @@ import type { DeploymentInfo } from './core/deployments.js';
 
 /**
  * Thrown when the on-chain publish succeeded but a subsequent local
- * step (saveDeployment, profile cleanup, etc.) failed.
+ * persistence step (`saveDeployment`) failed.
  *
  * Distinct from `CliExecutionError`: by the time this error fires, the
  * module IS deployed on-chain. Callers that want to recover can read
@@ -48,6 +48,28 @@ export class PostPublishError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, PostPublishError);
     }
+  }
+}
+
+/**
+ * The transaction was submitted (or a CLI reported success), but Movehat
+ * could not prove its final on-chain outcome. Retrying automatically may
+ * duplicate a successful transaction.
+ */
+export class TransactionOutcomeUnknownError extends Error {
+  public readonly stdoutPreview: string | undefined;
+
+  constructor(
+    message: string,
+    public readonly operation: string,
+    public readonly txHash?: string,
+    stdoutPreview?: string,
+    public readonly cause?: Error
+  ) {
+    super(message);
+    this.name = 'TransactionOutcomeUnknownError';
+    this.stdoutPreview = stdoutPreview ? redactSecrets(stdoutPreview).slice(0, 1000) : undefined;
+    if (Error.captureStackTrace) Error.captureStackTrace(this, TransactionOutcomeUnknownError);
   }
 }
 

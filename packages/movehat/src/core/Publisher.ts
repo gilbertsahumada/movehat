@@ -1,16 +1,20 @@
 import { Account, Aptos, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
 import {
   saveDeployment,
   loadDeployment,
   DeploymentInfo,
+  assertDeploymentEnvironment,
+  fingerprintRpcUrl,
+  tryHashBuildArtifacts,
+  sanitizeRpcUrl,
   validateSafeName,
 } from "./deployments.js";
 import { validatePathSafety } from "./shell.js";
-import { CliExecutionError, ModuleAlreadyDeployedError, PostPublishError } from "../errors.js";
+import { CliExecutionError, ModuleAlreadyDeployedError, PostPublishError, TransactionOutcomeUnknownError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { logger, isVerbose } from "../ui/index.js";
 import { withSpinner } from "../ui/spinner.js";
@@ -23,7 +27,10 @@ import {
   cleanupCallbacks,
 } from "./movementProfile.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
+import { redactSecrets } from "../utils/redact.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
+import { withFileLocks } from "../utils/fileLock.js";
+import { isHexAddress } from "../utils/address.js";
 
 /** @internal */
 export interface PublisherDeps {
@@ -78,8 +85,17 @@ export class Publisher {
     // compiled for the other deploy's address. Locking from the
     // already-deployed check through saveDeployment also closes the
     // check-then-publish TOCTOU for same-module deploys.
-    return withKeyedLock(resolve(safeDir), () =>
-      this.deployLocked(input, dir, safeDir),
+    const chainIdentity = config.networkConfig.chainId ?? config.network;
+    const canonicalDir = realpathSync(safeDir);
+    return withKeyedLock(canonicalDir, () =>
+      withFileLocks(
+        [
+          `package:${canonicalDir}`,
+          `deployment:${chainIdentity}:${moduleName}`,
+        ],
+        () => this.deployLocked(input, dir, safeDir),
+        { timeoutMs: 360_000, onWait: (message) => logger.info(message) },
+      ),
     );
   }
 
@@ -93,7 +109,18 @@ export class Publisher {
     const forceRedeploy =
       input.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
 
-    const existingDeployment = loadDeployment(config.network, moduleName);
+    const existingDeployment = loadDeployment(config.network, moduleName, {
+      quarantineCorrupt: forceRedeploy,
+    });
+    if (existingDeployment) {
+      assertDeploymentEnvironment(existingDeployment, {
+        ...(config.networkConfig.chainId !== undefined
+          ? { chainId: config.networkConfig.chainId }
+          : {}),
+        rpc: config.rpc,
+        allowRpcMismatch: forceRedeploy,
+      });
+    }
     if (existingDeployment && !forceRedeploy) {
       // Build detailed error message with all deployment info
       const errorDetails = [
@@ -136,7 +163,17 @@ export class Publisher {
       logger.info(`Redeploying module "${moduleName}" on ${config.network}...`);
     }
 
+    logger.section("Transaction preflight");
+    logger.kv("Operation", forceRedeploy ? "redeploy" : "publish", 2);
+    logger.kv("Network", config.network, 2);
+    logger.kv("Chain ID", config.networkConfig.chainId ?? "unknown", 2);
+    logger.kv("RPC", sanitizeRpcUrl(config.rpc), 2);
+    logger.kv("Signer", account.accountAddress.toString(), 2);
+    logger.kv("Module", moduleName, 2);
+    logger.newline();
+
     logger.step(`Publishing module "${moduleName}" from ${dir}...`);
+    const rpcFingerprint = fingerprintRpcUrl(config.rpc);
 
     try {
       // Get the deployer address to use for named addresses
@@ -145,7 +182,8 @@ export class Publisher {
       // Detect named addresses from Move files
       const detectedAddresses = extractNamedAddresses(dir);
 
-      // Build named addresses argument - use deployer address for all detected addresses.
+      // Build named addresses argument. Explicit runtime configuration wins;
+      // unresolved names retain the legacy deployer-address default.
       // Stored as a pre-split args fragment so the spawn path never has to parse
       // shell tokens; an empty fragment becomes a no-op via spread.
       const namedAddrArgs: string[] =
@@ -153,7 +191,15 @@ export class Publisher {
           ? [
               "--named-addresses",
               Array.from(detectedAddresses)
-                .map((name) => `${name}=${deployerAddress}`)
+                .map((name) => {
+                  const address = config.namedAddresses[name] ?? deployerAddress;
+                  if (!isHexAddress(address)) {
+                    throw new Error(
+                      `Named address '${name}' must be a 1-64 digit hexadecimal address`,
+                    );
+                  }
+                  return `${name}=${address}`;
+                })
                 .join(","),
             ]
           : [];
@@ -204,6 +250,9 @@ export class Publisher {
       // can distinguish a genuine publish failure from a local
       // bookkeeping failure (and avoid a wasteful redeploy).
 
+      const artifactHash = tryHashBuildArtifacts(safeDir, (error) => {
+        logger.warning(`Module is on-chain, but build artifacts could not be inspected: ${error.message}`);
+      });
       const deployment: DeploymentInfo = {
         address: account.accountAddress.toString(),
         moduleName,
@@ -211,6 +260,13 @@ export class Publisher {
         deployer: account.accountAddress.toString(),
         timestamp: Date.now(),
         txHash,
+        schemaVersion: 2,
+        ...(config.networkConfig.chainId !== undefined
+          ? { chainId: config.networkConfig.chainId }
+          : {}),
+        rpcFingerprint,
+        ...(artifactHash !== undefined ? { artifactHash } : {}),
+        kind: "publish",
       };
 
       try {
@@ -241,6 +297,12 @@ export class Publisher {
           `   To recover, manually write the deployment to ` +
           `deployments/${error.deployment.network}/${error.deployment.moduleName}.json.`
         );
+        throw error;
+      }
+      if (error instanceof TransactionOutcomeUnknownError) {
+        logger.warning(error.message);
+        if (error.txHash) logger.warning(`   Transaction: ${error.txHash}`);
+        logger.warning("   Do not retry automatically; inspect the transaction on-chain first.");
         throw error;
       }
       if (error instanceof CliExecutionError) {
@@ -284,8 +346,8 @@ export class Publisher {
     // leaving the user's file mutated if the process died before the
     // restore step.
 
-    let publishOut = "";
-    let publishErr = "";
+    let publishOut: string;
+    let publishErr: string;
 
     // Pass the private key to Movement CLI via a 0o600 temp file
     // (`--private-key-file <path>`) and the on-chain address via
@@ -432,7 +494,19 @@ export class Publisher {
         transaction: tx,
         senderAuthenticator: senderAuth,
       });
-      await aptos.waitForTransaction({ transactionHash: committed.hash });
+      try {
+        await aptos.waitForTransaction({ transactionHash: committed.hash });
+      } catch (error) {
+        const cause = error instanceof Error ? error : new Error(String(error));
+        const redactedCause = new Error(redactSecrets(cause.message));
+        throw new TransactionOutcomeUnknownError(
+          `Transaction ${committed.hash} was submitted, but its final status could not be confirmed: ${redactedCause.message}`,
+          "publish",
+          committed.hash,
+          undefined,
+          redactedCause
+        );
+      }
       return committed.hash;
     });
   }

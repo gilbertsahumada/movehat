@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signing credentials, while read-only public forks remain credential-free.
   Network-precedence examples include CLI, environment, and config selectors.
   Closes #384. Tracks #371.
+- Cross-process publish locks now share a per-user namespace, reclaim dead
+  owners immediately, preserve live owners, and clean up on signals. Deployment
+  identity prefers chain ID, while `--redeploy` can quarantine corrupt records
+  and bypass only legacy RPC mismatches. Artifact inspection after an on-chain
+  success is best-effort; only persistence failure raises `PostPublishError`.
+  Submitted transactions whose final status cannot be confirmed now raise a
+  typed, non-retryable unknown-outcome error carrying the transaction hash.
+  Closes #374.
 
 ## [0.6.0] - 2026-07-12
 
