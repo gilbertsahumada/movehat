@@ -63,7 +63,7 @@ export class ForkManager {
    * Optional API key sent as `Authorization: Bearer <key>` on every
    * outgoing Movement API request. Not persisted to disk via
    * {@link ForkMetadata} (keys stay in process memory). For the
-   * load-then-set pattern, call {@link setApiKey} after `load()`.
+   * load-then-set pattern, call `setApiKey()` after `load()`.
    */
   private apiKey?: string;
 
@@ -178,7 +178,7 @@ export class ForkManager {
   /**
    * Load an existing fork. The API key is NOT persisted to disk —
    * callers needing authenticated upstream reads after `load()` must
-   * call {@link setApiKey} explicitly.
+   * call `setApiKey()` explicitly.
    */
   load(): void {
     if (!this.storage.exists()) {

@@ -32,18 +32,37 @@
     "dev:docs": "pnpm --filter docs dev",
     "docs:api": "pnpm --filter movehat docs:api",
     "bench": "pnpm --filter movehat bench",
+    "lint": "eslint packages/movehat/src --max-warnings 0",
+    "format:check": "prettier --check package.json packages/movehat/package.json packages/docs/package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json",
+    "format:write": "prettier --write package.json packages/movehat/package.json packages/docs/package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json",
+    "cycles": "madge --circular --extensions ts --exclude '(__tests__|templates)' packages/movehat/src",
+    "api:update": "pnpm build:movehat && api-extractor run --local --config packages/movehat/api-extractor.json && api-extractor run --local --config packages/movehat/api-extractor.helpers.json",
+    "api:check": "pnpm build:movehat && api-extractor run --config packages/movehat/api-extractor.json && api-extractor run --config packages/movehat/api-extractor.helpers.json",
+    "quality": "pnpm lint && pnpm format:check && pnpm cycles && pnpm api:check",
     "prepare": "husky"
   },
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
     "@commitlint/cli": "^21.0.0",
     "@commitlint/config-conventional": "^21.0.0",
-    "husky": "^9.1.7"
+    "@eslint/js": "^10.0.1",
+    "@microsoft/api-extractor": "^7.58.9",
+    "eslint": "^10.7.0",
+    "husky": "^9.1.7",
+    "madge": "^8.0.0",
+    "prettier": "^3.9.5",
+    "typescript-eslint": "^8.64.0"
   },
   "pnpm": {
     "supportedArchitectures": {
-      "os": ["darwin", "linux"],
-      "cpu": ["x64", "arm64"]
+      "os": [
+        "darwin",
+        "linux"
+      ],
+      "cpu": [
+        "x64",
+        "arm64"
+      ]
     }
   }
 }

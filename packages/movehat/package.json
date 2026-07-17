@@ -64,7 +64,7 @@
     "commander": "^14.0.2",
     "dotenv": "^17.2.3",
     "figures": "^6.1.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.0",
     "ora": "^9.0.0",
     "picocolors": "^1.1.1",
     "prompts": "^2.4.2",
@@ -77,11 +77,11 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
     "@types/prompts": "^2.4.9",
-    "@vitest/coverage-v8": "^4.0.16",
+    "@vitest/coverage-v8": "^4.1.10",
     "memfs": "^4.51.1",
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.1.10"
   }
 }

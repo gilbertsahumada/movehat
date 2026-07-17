@@ -2,7 +2,6 @@ import {
   Account,
   Aptos,
   AptosConfig,
-  Ed25519PrivateKey,
   Network,
 } from "@aptos-labs/ts-sdk";
 import { MovehatRuntime, NetworkInfo } from "./types/runtime.js";

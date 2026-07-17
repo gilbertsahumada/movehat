@@ -37,7 +37,7 @@ export class ForkServer {
    * @param host Interface to bind. Defaults to `127.0.0.1` so cached fork
    *   state (which may include sensitive resources) is not exposed on the LAN.
    *   Pass `'0.0.0.0'` only if you intentionally need to expose the server.
-   * @param options Optional CORS allowlist (see {@link ForkServerOptions}).
+   * @param options Optional CORS allowlist (see `ForkServerOptions`).
    */
   constructor(
     forkPath: string,
