@@ -7,10 +7,16 @@ icon: Sparkles
 ## Usage
 
 ```bash
-movehat init [project-name]
+movehat init [project-name] [--force]
 ```
 
 Initialize a new Movehat project with the standard project structure.
+
+In a terminal, omitting the project name opens a prompt. In CI or another
+non-interactive shell, provide the name explicitly. If the destination already
+exists, Movehat asks before replacing template-owned files; non-interactive
+runs fail safely unless `--force` is present. User files that are not part of
+the template are preserved.
 
 ## Examples
 
@@ -18,8 +24,11 @@ Initialize a new Movehat project with the standard project structure.
 # Create a new project in a new directory
 movehat init my-project
 
-# Initialize in the current directory
+# Prompt for the project name in an interactive terminal
 movehat init
+
+# Explicitly refresh template files in an existing destination
+movehat init my-project --force
 ```
 
 ## Generated Structure

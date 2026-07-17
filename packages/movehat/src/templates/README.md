@@ -83,6 +83,7 @@ When you run `npm test`, you'll see an **interactive menu**:
 - `npm run test:ts` or `movehat test --ts` - Only TypeScript integration tests
 - `movehat test --all` - Both Move + TypeScript tests
 - `npm run test:watch` or `movehat test --watch` - TypeScript tests in watch mode
+- `npm run test:coverage` or `movehat test --coverage` - Move coverage summary
 
 ### 5. Deploy (optional)
 
@@ -116,6 +117,8 @@ then `defaultNetwork` from `movehat.config.ts`.
 ## Available Commands
 
 - `npm run compile` - Compile Move contracts (auto-detects addresses)
+- `npm run lint` - Lint Move contracts
+- `npm run prove` - Run the Move Prover (runs until it finishes or you interrupt it)
 - `npm test` - Run integration tests
 - `npm run test:watch` - Run tests in watch mode
 - `npx movehat run scripts/deploy-counter.ts` - Deploy locally and initialize counter

@@ -1,4 +1,4 @@
 {
   "title": "CLI Reference",
-  "pages": ["global-flags", "init", "compile", "test", "run", "fork"]
+  "pages": ["global-flags", "init", "compile", "lint-and-prove", "test", "run", "fork"]
 }

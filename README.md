@@ -189,6 +189,9 @@ Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [
 |---|---|---|
 | `movehat init [name]` | Scaffold a new Movehat project | [/docs/cli/init](https://movehat.org/docs/cli/init) |
 | `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://movehat.org/docs/cli/compile) |
+| `movehat lint` | Lint the configured Move package | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
+| `movehat prove` | Run the Move Prover without an artificial timeout | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
+| `movehat test --coverage` | Run Move tests and print their coverage summary | [/docs/cli/test](https://movehat.org/docs/cli/test) |
 | `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
 | `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://movehat.org/docs/cli/run) |
 | `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://movehat.org/docs/cli/fork) |

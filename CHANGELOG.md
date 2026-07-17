@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   public forks still need no signing key; an RPC API key is independent from a
   signing account. Closes #373. Tracks #371.
 
+### Added
+
+- Added `movehat lint`, `movehat prove`, and Move coverage through
+  `movehat test --coverage`, with matching scaffold and example scripts.
+
 ### Changed
 
 - `movehat init` now pins the exact installed Movehat version and generates a
@@ -33,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supports explicit relative/absolute paths, package installs, local or global
   npm bins, and safe fallback to Movement node. Local-node state is protected
   by ownership markers with conservative migration of recognized 0.6 layouts.
+- CLI actions are awaited, non-interactive `movehat test` runs all suites, and
+  `movehat init` requires an explicit project name and `--force` before it can
+  overwrite template files in automation.
+- Intentional long-running commands can opt out of process timeouts explicitly:
+  the prover and TypeScript watch mode run until completion or Ctrl+C, while
+  compile, lint, coverage, and normal test commands retain finite limits.
 
 ### Fixed
 

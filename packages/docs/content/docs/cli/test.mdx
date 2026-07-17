@@ -10,7 +10,9 @@ icon: CheckCheck
 movehat test [options]
 ```
 
-Run tests with an interactive menu or flags. If no flags are provided, shows an interactive menu.
+Run tests with an interactive menu or flags. If no flags are provided, a TTY
+shows the menu while a non-interactive process runs all tests, making the
+default safe for CI.
 
 ## Options
 
@@ -20,6 +22,7 @@ Run tests with an interactive menu or flags. If no flags are provided, shows an 
 | `--ts` | Run only TypeScript integration tests (starts local node) |
 | `--all` | Run all tests (Move + TypeScript) |
 | `--watch` | Run TypeScript tests in watch mode (implies `--ts`) |
+| `--coverage` | Run Move tests with coverage and print the summary |
 | `--filter <pattern>` | Filter Move tests by pattern |
 
 > Shorthand commands like `movehat test:move` forward additional flags to the underlying runner. For example, `movehat test:move --ignore-warnings` is valid and forwards `--ignore-warnings` to the Move test runner.
@@ -53,6 +56,9 @@ movehat test --all
 # Watch mode for TypeScript tests
 movehat test --watch
 
+# Run Move tests and print their coverage summary
+movehat test --coverage
+
 # Filter Move tests by pattern
 movehat test --move --filter test_increment
 ```
@@ -75,6 +81,10 @@ movehat test:ts
 # Watch mode
 movehat test:ts --watch
 ```
+
+Watch mode has no artificial runtime limit and remains attached to the
+terminal until Mocha exits or you press Ctrl+C. Normal Move and TypeScript test
+runs retain finite safety timeouts.
 
 ## Test Output Example
 
