@@ -38,6 +38,11 @@ vi.mock("../api.js", () => ({
 
 // Static import after the mock declaration — vi hoists vi.mock calls.
 import { ForkManager } from "../manager.js";
+import {
+  ForkAlreadyExistsError,
+  ForkSnapshotPrunedError,
+  MovementApiError,
+} from "../errors.js";
 
 const TEST_NODE_URL = "https://testnet.movementnetwork.xyz/v1";
 const TEST_ADDR = "0x" + "a".repeat(64);
@@ -107,6 +112,21 @@ describe("ForkManager — initialize / load", () => {
     await mgr.initialize(TEST_NODE_URL, "bardock-testnet");
 
     expect(mgr.getMetadata().network).toBe("bardock-testnet");
+  });
+
+  it("preflights before refusing or overwriting an existing fork", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL, "original");
+
+    fakeApi.getLedgerInfo.mockRejectedValueOnce(new Error("replacement RPC unavailable"));
+    await expect(
+      mgr.initialize("https://replacement.example/v1", "replacement", undefined, { overwrite: true })
+    ).rejects.toThrow("replacement RPC unavailable");
+    expect(mgr.getMetadata().network).toBe("original");
+
+    fakeApi.getLedgerInfo.mockResolvedValueOnce(ledgerInfoFixture());
+    await expect(mgr.initialize(TEST_NODE_URL)).rejects.toBeInstanceOf(ForkAlreadyExistsError);
   });
 
   it("load throws when the fork directory doesn't exist", () => {
@@ -194,6 +214,7 @@ describe("ForkManager — account + resource fetch", () => {
     expect(state.sequenceNumber).toBe("7");
     expect(state.authenticationKey).toBe("0xabc");
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+    expect(fakeApi.getAccount).toHaveBeenCalledWith(TEST_ADDR, "100");
   });
 
   it("getAccount returns the cached state on second call (no extra API hit)", async () => {
@@ -228,7 +249,9 @@ describe("ForkManager — account + resource fetch", () => {
   });
 
   it("getResource rethrows a clean 'not found' for upstream 404 errors", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await expect(
       mgr.getResource(TEST_ADDR, "0x1::missing::Resource")
     ).rejects.toThrow(/Resource .* not found for account/);
@@ -241,6 +264,17 @@ describe("ForkManager — account + resource fetch", () => {
     ).rejects.toThrow(/connection refused/);
   });
 
+  it("distinguishes a pruned pinned snapshot from missing data", async () => {
+    fakeApi.getAccountResource.mockRejectedValue(new MovementApiError(
+      "gone",
+      "http_error",
+      { statusCode: 410, upstreamErrorCode: "version_pruned" }
+    ));
+    await expect(
+      mgr.getResource(TEST_ADDR, "0x1::missing::Resource")
+    ).rejects.toBeInstanceOf(ForkSnapshotPrunedError);
+  });
+
   it("getAllResources fetches the whole list once, caches, and returns by type", async () => {
     fakeApi.getAccountResources.mockResolvedValue([
       { type: "0x1::a::A", data: { x: 1 } },
@@ -250,6 +284,7 @@ describe("ForkManager — account + resource fetch", () => {
     const first = await mgr.getAllResources(TEST_ADDR);
     expect(Object.keys(first).sort()).toEqual(["0x1::a::A", "0x1::b::B"]);
     expect(first["0x1::a::A"]).toEqual({ x: 1 });
+    expect(fakeApi.getAccountResources).toHaveBeenCalledWith(TEST_ADDR, "100");
 
     // Second call should hit cache (API call count stays at 1).
     await mgr.getAllResources(TEST_ADDR);
@@ -282,7 +317,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundAccount creates a fresh CoinStore when none exists upstream", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     await mgr.fundAccount(TEST_ADDR, 1_000);
 
@@ -295,7 +332,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundAccount adds to existing balance on a second call (accumulates)", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await mgr.fundAccount(TEST_ADDR, 1_000);
     await mgr.fundAccount(TEST_ADDR, 500);
 
@@ -309,7 +348,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("fundMultipleAccounts funds every address in the list", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     const addrs = [
       "0x" + "1".repeat(64),
@@ -335,7 +376,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   });
 
   it("listAccounts returns the cached account list", async () => {
-    fakeApi.getAccountResource.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccountResource.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
     await mgr.fundAccount(TEST_ADDR, 100);
     const list = mgr.listAccounts();
     expect(list.length).toBeGreaterThan(0);
@@ -357,7 +400,9 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   it("getOrCreateAccount synthesizes a minimal account when the upstream lookup fails", async () => {
     // Force the storage cache miss AND the API throw, exercising the
     // catch arm that creates the account locally.
-    fakeApi.getAccount.mockRejectedValue(new Error("HTTP 404: not found"));
+    fakeApi.getAccount.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
 
     const result = await mgr.getOrCreateAccount(TEST_ADDR);
     expect(result.sequenceNumber).toBe("0");

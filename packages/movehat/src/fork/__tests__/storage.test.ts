@@ -275,6 +275,35 @@ describe('ForkStorage', () => {
       expect(vol.existsSync(`${forkPath}/resources/0x1.json`)).toBe(false);
       expect(vol.existsSync(`${forkPath}/resources/0x2.json`)).toBe(false);
     });
+
+    it('migrates legacy resource files offline, including an empty snapshot', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: '{}',
+        [`${forkPath}/resources/0x2.json`]: JSON.stringify({ '0x1::a::A': { value: 1 } }),
+      });
+      const storage = new ForkStorage(forkPath);
+
+      storage.migrateLegacyResourceCache();
+
+      expect(storage.hasAllResources('0x1')).toBe(true);
+      expect(storage.hasAllResources('0x2')).toBe(true);
+      expect(storage.getAllResources('0x1')).toEqual({});
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
+
+    it('resumes an interrupted legacy migration idempotently', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: '{}',
+        [`${forkPath}/cache/0x1.all-resources`]: 'complete\n',
+      });
+      const storage = new ForkStorage(forkPath);
+
+      expect(() => {
+        storage.migrateLegacyResourceCache();
+        storage.migrateLegacyResourceCache();
+      }).not.toThrow();
+      expect(storage.hasAllResources('0x1')).toBe(true);
+    });
   });
 
   describe('address sanitization', () => {
