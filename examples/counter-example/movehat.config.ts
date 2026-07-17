@@ -3,7 +3,7 @@ dotenv.config();
 
 export default {
   // Default network to use when no --network flag is provided
-  defaultNetwork: "testnet",
+  defaultNetwork: "local",
 
   // Network configurations
   networks: {

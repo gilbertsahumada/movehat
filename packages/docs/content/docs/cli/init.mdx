@@ -44,7 +44,7 @@ my-project/
 
 - **Counter.move** — A sample Move smart contract with increment/decrement functions and Move unit tests
 - **Counter.test.ts** — TypeScript integration test file using `Harness.createLocal`
-- **deploy-counter.ts** — Deployment script using `Harness.createLive` + `deployCodeObject`
-- **movehat.config.ts** — Network configuration (testnet, mainnet, local)
-- **package.json** — Dependencies including `movehat`
+- **deploy-counter.ts** — Local-by-default deployment script; public networks use `Harness.createLive`
+- **movehat.config.ts** — Network configuration with `local` as the safe default
+- **package.json** — Dependencies including the exact installed `movehat` version
 - **.env.example** — Environment variable template

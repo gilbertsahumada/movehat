@@ -11,7 +11,7 @@ hello_blockchain = "0xcafe"
 
 [dependencies.AptosFramework]
 git = "https://github.com/movementlabsxyz/aptos-core.git"
-rev = "movement"
+rev = "8c50fc069db7df39e2cd05263a75981f9487f838"
 subdir = "aptos-move/framework/aptos-framework"
 
 [dev-dependencies]

@@ -27,6 +27,23 @@ export interface ProjectNames {
 }
 
 /**
+ * Return the exact package version embedded in generated projects.
+ *
+ * Keeping this as a pure helper makes the release-candidate and prerelease
+ * cases testable without rewriting the package manifest on disk.
+ */
+export function resolveTemplateMovehatVersion(version: string): string {
+  if (
+    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(
+      version
+    )
+  ) {
+    throw new Error(`Invalid Movehat package version: ${version}`);
+  }
+  return version;
+}
+
+/**
  * Derive filesystem, npm, and Move identifier names from a single user input.
  *
  * Move identifiers must match `[a-zA-Z_][a-zA-Z0-9_]*`. npm package names are
@@ -129,6 +146,12 @@ export default async function initCommand(projectName?: string) {
 
   try {
     const templatesDir = path.join(__dirname, "..", "templates");
+    const packageManifest = JSON.parse(
+      await fs.readFile(path.join(__dirname, "..", "..", "package.json"), "utf-8")
+    ) as { version?: unknown };
+    const movehatVersion = resolveTemplateMovehatVersion(
+      String(packageManifest.version ?? "")
+    );
     const steps = createSpinnerChain();
 
     // Step 1: Create project structure
@@ -138,7 +161,7 @@ export default async function initCommand(projectName?: string) {
       await copyFile(
         path.join(templatesDir, "package.json"),
         path.join(projectPath, "package.json"),
-        { projectName: npmName }
+        { projectName: npmName, movehatVersion }
       );
 
       await copyFile(

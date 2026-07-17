@@ -14,7 +14,12 @@ vi.mock("../../helpers/banner.js", () => ({
 }));
 
 const initModule = await import("../init.js");
-const { default: initCommand, resolveProjectNames, InvalidProjectNameError } = initModule;
+const {
+  default: initCommand,
+  resolveProjectNames,
+  resolveTemplateMovehatVersion,
+  InvalidProjectNameError,
+} = initModule;
 
 /**
  * Strategy: real tmpdir + real fs ops (matches §6.1's example-as-canonical
@@ -52,6 +57,24 @@ describe("resolveProjectNames", () => {
     "rejects %j as an invalid project name",
     (input) => {
       expect(() => resolveProjectNames(input)).toThrow(InvalidProjectNameError);
+    }
+  );
+});
+
+describe("resolveTemplateMovehatVersion", () => {
+  it.each(["0.7.0", "0.7.0-rc.1", "1.0.0-beta.2", "1.0.0+build.7"])(
+    "keeps the installed version exact for %s",
+    (version) => {
+      expect(resolveTemplateMovehatVersion(version)).toBe(version);
+    }
+  );
+
+  it.each(["latest", "^0.7.0", "v0.7.0", "0.7"])(
+    "rejects a non-exact package version %s",
+    (version) => {
+      expect(() => resolveTemplateMovehatVersion(version)).toThrow(
+        "Invalid Movehat package version"
+      );
     }
   );
 });
@@ -113,6 +136,32 @@ describe("initCommand", () => {
     expect(moveToml).toContain('name = "my_test_project"');
     expect(moveToml).not.toContain("{{movePackageName}}");
     expect(moveToml).not.toContain("{{projectName}}");
+    const pkg = JSON.parse(
+      readFileSync(join(target, "package.json"), "utf-8")
+    ) as { dependencies: Record<string, string> };
+    const installedVersion = await import("../../../package.json", {
+      with: { type: "json" },
+    }).then((module) => module.default.version);
+    expect(pkg.dependencies.movehat).toBe(installedVersion);
+    expect(pkg.dependencies.movehat).not.toContain("{{movehatVersion}}");
+    const config = readFileSync(join(target, "movehat.config.ts"), "utf-8");
+    expect(config).toContain('defaultNetwork: "local"');
+    const deployScript = readFileSync(
+      join(target, "scripts", "deploy-counter.ts"),
+      "utf-8"
+    );
+    const networkResolution = deployScript.slice(
+      deployScript.indexOf("const network ="),
+      deployScript.indexOf("const harness =")
+    );
+    expect(networkResolution.indexOf("MH_CLI_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MOVEHAT_NETWORK")
+    );
+    expect(networkResolution.indexOf("MOVEHAT_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MH_DEFAULT_NETWORK")
+    );
+    expect(deployScript).toContain('network === "local" || network === "movelite"');
+    expect(deployScript).toContain("Harness.createLive(network)");
   });
 
   it("substitutes {{projectName}} placeholders inside template files", async () => {

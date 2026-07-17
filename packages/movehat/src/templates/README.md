@@ -5,7 +5,7 @@ A Move smart contract project built with Movehat.
 ## Prerequisites
 
 **Required:**
-- **Node.js v18+** - [Download](https://nodejs.org/)
+- **Node.js v20+** - [Download](https://nodejs.org/)
 - **Movement CLI** - **REQUIRED** for compiling contracts
 
   Install: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
@@ -22,9 +22,10 @@ A Move smart contract project built with Movehat.
 npm install
 ```
 
-### 2. Configure environment
+### 2. Configure environment (public networks only)
 
-Copy `.env.example` to `.env` and fill in your credentials:
+The default workflow is local and needs no credentials. To deploy to a public
+network, copy `.env.example` to `.env` and add your key:
 
 ```bash
 cp .env.example .env
@@ -32,7 +33,7 @@ cp .env.example .env
 
 Edit `.env`:
 ```
-PRIVATE_KEY=your_private_key_here
+PRIVATE_KEY=<your private key>
 ```
 
 ### 3. Compile contracts
@@ -86,13 +87,20 @@ When you run `npm test`, you'll see an **interactive menu**:
 ### 5. Deploy (optional)
 
 ```bash
+# Safe default: local chain (movelite when available)
 npx movehat run scripts/deploy-counter.ts
+
+# Explicit public-network opt-in
+npx movehat run scripts/deploy-counter.ts --network testnet
 ```
+
+Network precedence is `--network`, `MOVEHAT_NETWORK`, `MH_DEFAULT_NETWORK`,
+then `defaultNetwork` from `movehat.config.ts`.
 
 ## Project Structure
 
 ```
-{{PROJECT_NAME}}/
+{{projectName}}/
 ├── move/                   # Move smart contracts
 │   ├── sources/
 │   │   └── Counter.move
@@ -110,7 +118,7 @@ npx movehat run scripts/deploy-counter.ts
 - `npm run compile` - Compile Move contracts (auto-detects addresses)
 - `npm test` - Run integration tests
 - `npm run test:watch` - Run tests in watch mode
-- `npx movehat run scripts/deploy-counter.ts` - Deploy and initialize counter
+- `npx movehat run scripts/deploy-counter.ts` - Deploy locally and initialize counter
 
 ## How Named Addresses Work
 

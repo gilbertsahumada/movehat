@@ -1,4 +1,5 @@
 import { Harness } from "movehat";
+import config from "../movehat.config.js";
 
 /**
  * Canonical example of `harness.deployCodeObject` against a Move
@@ -16,17 +17,33 @@ import { Harness } from "movehat";
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
 
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
-  const harness = await Harness.createLive(network);
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK ??
+    config.defaultNetwork ??
+    "local";
+  const isLocal = network === "local" || network === "movelite";
+  const harness = isLocal
+    ? await Harness.createLocal({
+        ...(network === "movelite" ? { useMovelite: true } : {}),
+        autoDeploy: ["counter"],
+      })
+    : await Harness.createLive(network);
   try {
     console.log(`✅ Runtime initialized on ${harness.runtime.network.name}`);
     console.log(`   Account: ${harness.runtime.account.accountAddress.toString()}`);
     console.log(`   RPC: ${harness.runtime.network.rpc}\n`);
 
-    const deployment = await harness.deployCodeObject({
-      moduleName: "counter",
-      addressName: "hello_blockchain",
-    });
+    const deployment = isLocal
+      ? harness.runtime.getDeployment("counter")
+      : await harness.deployCodeObject({
+          moduleName: "counter",
+          addressName: "hello_blockchain",
+        });
+    if (!deployment) {
+      throw new Error("Local counter deployment record was not created");
+    }
 
     console.log(`\n✅ Module deployed at: ${deployment.address}::counter`);
     if (deployment.txHash) {
