@@ -79,3 +79,30 @@ export class CliExecutionError extends Error {
     }
   }
 }
+
+/** Raised when an API network selector disagrees with the CLI flag. */
+export class NetworkConflictError extends Error {
+  constructor(
+    public readonly apiNetwork: string,
+    public readonly cliNetwork: string
+  ) {
+    super(
+      `Conflicting network selection: API requested '${apiNetwork}' but ` +
+        `--network selected '${cliNetwork}'. Remove one selector or make them match.`
+    );
+    this.name = "NetworkConflictError";
+    Error.captureStackTrace?.(this, NetworkConflictError);
+  }
+}
+
+/** Raised before a recursive operation targets a path Movehat cannot prove it owns. */
+export class UnsafePathError extends Error {
+  constructor(
+    message: string,
+    public readonly path: string
+  ) {
+    super(message);
+    this.name = "UnsafePathError";
+    Error.captureStackTrace?.(this, UnsafePathError);
+  }
+}

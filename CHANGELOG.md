@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an explicit public/custom network. Release, E2E, and dogfood gates install
   the candidate tarball before dependency resolution, so normal and
   prerelease versions are testable before publication. Closes #372.
+- Public testnet now requires explicit signing credentials, while deterministic
+  development credentials remain limited to loopback local/movelite networks.
+  Mainnet must be declared explicitly. Network selector conflicts are typed,
+  read-only fork creation no longer resolves accounts, and Movelite discovery
+  supports explicit relative/absolute paths, package installs, local or global
+  npm bins, and safe fallback to Movement node. Local-node state is protected
+  by ownership markers with conservative migration of recognized 0.6 layouts.
+  Closes #373. Tracks #371.
 
 ## [0.6.0] - 2026-07-12
 

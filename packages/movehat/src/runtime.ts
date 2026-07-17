@@ -7,7 +7,11 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { MovehatRuntime, NetworkInfo } from "./types/runtime.js";
 import { MovehatUserConfig } from "./types/config.js";
-import { loadUserConfig, resolveNetworkConfig } from "./core/config.js";
+import {
+  loadUserConfig,
+  resolveNetworkConfig,
+  resolveNetworkConfigForSwitch,
+} from "./core/config.js";
 import { getContract, MoveContract } from "./core/contract.js";
 import {
   loadDeployment,
@@ -62,6 +66,13 @@ export interface InitRuntimeOptions {
 export async function initRuntime(
   options: InitRuntimeOptions = {}
 ): Promise<MovehatRuntime> {
+  return initializeRuntime(options, false);
+}
+
+async function initializeRuntime(
+  options: InitRuntimeOptions,
+  switchingNetwork: boolean
+): Promise<MovehatRuntime> {
   // Load user config from movehat.config.ts
   const userConfig = await loadUserConfig();
 
@@ -71,7 +82,9 @@ export async function initRuntime(
     : userConfig;
 
   // Resolve configuration for selected network
-  const config = await resolveNetworkConfig(mergedUserConfig, options.network);
+  const config = switchingNetwork && options.network
+    ? await resolveNetworkConfigForSwitch(mergedUserConfig, options.network)
+    : await resolveNetworkConfig(mergedUserConfig, options.network);
 
   // Setup Movement TypeScript SDK client
   // Movement Network uses custom chain IDs, so we need to use Network.CUSTOM
@@ -159,7 +172,7 @@ export async function initRuntime(
   };
 
   const switchNetwork = async (networkName: string): Promise<MovehatRuntime> => {
-    return initRuntime({ ...options, network: networkName });
+    return initializeRuntime({ ...options, network: networkName }, true);
   };
 
   // Build runtime object
@@ -183,4 +196,3 @@ export async function initRuntime(
 
   return runtime;
 }
-

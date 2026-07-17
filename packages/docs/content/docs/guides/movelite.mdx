@@ -138,3 +138,11 @@ movelite is built for the fast local-test loop. Prefer the full Movement node
 (`useMovelite: false`) when you need behaviour that depends on the complete node
 — for example reproducing a node-specific edge case before shipping. For the
 day-to-day write-test-run cycle, movelite is the faster default.
+
+### Binary discovery
+
+Movelite discovery checks `MOVELITE_PATH` first (relative paths resolve from the
+project), then Movehat's optional platform package, then `PATH`. Local
+`node_modules/.bin` and global npm installations are supported. An invalid
+explicit `MOVELITE_PATH` is a configuration error; unavailable automatic
+candidates fall back to Movement node.

@@ -25,7 +25,12 @@ export { ForkServer } from "./fork/server.js";
 export type { ForkMetadata, AccountState, LedgerInfo, AccountData, AccountResource } from "./types/fork.js";
 
 // Export custom errors
-export { ModuleAlreadyDeployedError, PostPublishError } from "./errors.js";
+export {
+  ModuleAlreadyDeployedError,
+  PostPublishError,
+  NetworkConflictError,
+  UnsafePathError,
+} from "./errors.js";
 
 export { Harness, HarnessDisposedError } from "./harness/index.js";
 export type { HarnessMode } from "./harness/index.js";

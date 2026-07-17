@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { mkdtempSync, rmSync, existsSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join, parse } from "node:path";
 
 import { LocalNodeManager } from "../LocalNodeManager.js";
+import { UnsafePathError } from "../../errors.js";
 import type {
   ChildProcessAdapter,
   SpawnInput,
@@ -96,6 +107,12 @@ function stubFetchAlwaysOk() {
   return fn;
 }
 
+function markOwned(directory: string): void {
+  writeFileSync(join(directory, ".movehat-local-node"), "movehat-managed-local-node\n", {
+    mode: 0o600,
+  });
+}
+
 describe("LocalNodeManager — start / stop / lifecycle", () => {
   let tmpDir: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -161,7 +178,7 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const args = calls[0]?.args ?? [];
     expect(args.slice(0, 2)).toEqual(["node", "run-localnet"]);
     expect(args).toContain("--test-dir");
-    expect(args).toContain(tmpDir);
+    expect(args).toContain(realpathSync(tmpDir));
     expect(args).toContain("--faucet-port");
     expect(args).toContain("8081");
     expect(args).toContain("--assume-yes");
@@ -203,7 +220,8 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const planted = join(tmpDir, "stale-file.txt");
     // Create a stale file to prove the cleanup actually removes it.
     mkdirSync(tmpDir, { recursive: true });
-    require("node:fs").writeFileSync(planted, "stale");
+    markOwned(tmpDir);
+    writeFileSync(planted, "stale");
     expect(existsSync(planted)).toBe(true);
 
     const mgr = new LocalNodeManager({
@@ -289,6 +307,87 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     const mgr = new LocalNodeManager({ adapter, testDir: missing });
     // Should not throw.
     await mgr.clean();
+  });
+
+  it.each([
+    ["filesystem root", parse(process.cwd()).root],
+    ["cwd", process.cwd()],
+    ["home", homedir()],
+  ])("rejects protected %s paths", async (_label, protectedPath) => {
+    const { adapter, calls } = buildFakeAdapter();
+    const mgr = new LocalNodeManager({
+      adapter,
+      testDir: protectedPath,
+      forceRestart: true,
+      silent: true,
+    });
+    await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects unknown non-empty directories without deleting them", async () => {
+    const { adapter, calls } = buildFakeAdapter();
+    writeFileSync(join(tmpDir, "user-data.txt"), "keep");
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, forceRestart: true });
+    await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(existsSync(join(tmpDir, "user-data.txt"))).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("adopts a recognized 0.6 directory in place before start or clean", async () => {
+    mkdirSync(join(tmpDir, "0"));
+    writeFileSync(join(tmpDir, "mint.key"), "key");
+    writeFileSync(join(tmpDir, "waypoint.txt"), "waypoint");
+    const { adapter } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, silent: true });
+    await mgr.start();
+    expect(existsSync(join(tmpDir, ".movehat-local-node"))).toBe(true);
+    await mgr.stop();
+    await mgr.clean();
+    expect(existsSync(tmpDir)).toBe(false);
+
+    mkdirSync(tmpDir);
+    mkdirSync(join(tmpDir, "0"));
+    writeFileSync(join(tmpDir, "mint.key"), "key");
+    writeFileSync(join(tmpDir, "waypoint.txt"), "waypoint");
+    await new LocalNodeManager({ adapter, testDir: tmpDir }).clean();
+    expect(existsSync(tmpDir)).toBe(false);
+  });
+
+  it("never adopts or deletes a two-sentinel directory containing user data", async () => {
+    mkdirSync(join(tmpDir, "0"));
+    writeFileSync(join(tmpDir, "waypoint.txt"), "waypoint");
+    writeFileSync(join(tmpDir, "user-wallet.txt"), "keep me");
+    const { adapter, calls } = buildFakeAdapter();
+    const mgr = new LocalNodeManager({ adapter, testDir: tmpDir, forceRestart: true });
+
+    await expect(mgr.start()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(existsSync(join(tmpDir, "user-wallet.txt"))).toBe(true);
+    expect(existsSync(join(tmpDir, ".movehat-local-node"))).toBe(false);
+    expect(calls).toHaveLength(0);
+    await expect(mgr.clean()).rejects.toBeInstanceOf(UnsafePathError);
+    expect(existsSync(join(tmpDir, "user-wallet.txt"))).toBe(true);
+  });
+
+  it("rejects symlinked node directories", async () => {
+    const target = mkdtempSync(join(tmpdir(), "movehat-node-target-"));
+    const link = join(tmpDir, "linked");
+    symlinkSync(target, link, "dir");
+    const { adapter } = buildFakeAdapter();
+    await expect(
+      new LocalNodeManager({ adapter, testDir: link }).start()
+    ).rejects.toBeInstanceOf(UnsafePathError);
+    unlinkSync(link);
+    rmSync(target, { recursive: true, force: true });
+  });
+
+  it("uses private permissions for managed state", async () => {
+    const { adapter } = buildFakeAdapter();
+    stubFetchAlwaysOk();
+    await new LocalNodeManager({ adapter, testDir: tmpDir, silent: true }).start();
+    expect(statSync(tmpDir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(tmpDir, ".movehat-local-node")).mode & 0o777).toBe(0o600);
   });
 });
 

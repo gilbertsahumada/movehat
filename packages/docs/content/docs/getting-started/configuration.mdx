@@ -87,16 +87,16 @@ PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
 ```
 
 **Security notes:**
-- The `PRIVATE_KEY` is only required for real deployments to testnet/mainnet and running deployment scripts
+- Public testnet and mainnet transactions require an explicit `PRIVATE_KEY`
 - Tests automatically use safe, auto-generated test accounts (no configuration needed)
 
 ## Network Options
 
 | Network | Description |
 |---------|-------------|
-| `testnet` | Movement testnet; select explicitly for live transactions |
-| `mainnet` | Movement mainnet, requires `PRIVATE_KEY` in `.env` |
-| `local` (default) | Self-contained local chain; no credentials required |
+| `testnet` | Movement testnet; built-in RPC, select explicitly and configure credentials for transactions |
+| `mainnet` | Movement mainnet; explicit config and credentials required |
+| `local` (default) | Self-contained loopback chain; deterministic local account allowed |
 
 ## Using Multiple Accounts
 

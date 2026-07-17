@@ -8,7 +8,7 @@ const forkManagerInitialize = vi.fn();
 const forkManagerGetMetadata = vi.fn();
 const ForkManagerCtor = vi.fn();
 const loadUserConfigMock = vi.fn();
-const resolveNetworkConfigMock = vi.fn();
+const resolveNetworkEndpointMock = vi.fn();
 
 vi.mock("prompts", () => ({ default: promptsMock }));
 
@@ -24,7 +24,7 @@ vi.mock("../../../fork/manager.js", () => ({
 
 vi.mock("../../../core/config.js", () => ({
   loadUserConfig: loadUserConfigMock,
-  resolveNetworkConfig: resolveNetworkConfigMock,
+  resolveNetworkEndpoint: resolveNetworkEndpointMock,
 }));
 
 const { default: forkCreateCommand, validateForkName } = await import("../create.js");
@@ -52,15 +52,8 @@ describe("forkCreateCommand", () => {
       defaultNetwork: "testnet",
       networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } },
     });
-    resolveNetworkConfigMock.mockReset().mockResolvedValue({
+    resolveNetworkEndpointMock.mockReset().mockReturnValue({
       network: "testnet",
-      rpc: "https://testnet.movementnetwork.xyz/v1",
-      privateKey: "0x" + "1".repeat(64),
-      allAccounts: [],
-      profile: "default",
-      moveDir: "./move",
-      account: "",
-      namedAddresses: {},
       networkConfig: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
     });
 

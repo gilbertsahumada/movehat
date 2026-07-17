@@ -15,14 +15,14 @@ export default {
   // Default network to use when no --network flag is provided
   // "local" = self-contained local chain (movelite when available,
   // otherwise Movement node); no credentials required
-  // "testnet" = Movement testnet (public, requires an explicit account)
+  // "testnet" = Movement testnet (public, requires PRIVATE_KEY in .env)
   // "mainnet" = Movement mainnet (requires PRIVATE_KEY in .env)
   defaultNetwork: "local",
 
   // Network configurations
   networks: {
-    // Movement Testnet - Public test network. Set PRIVATE_KEY before
-    // selecting this network; the default workflow never contacts it.
+  // Movement Testnet - Public test network. Set PRIVATE_KEY before
+  // selecting this network; the default workflow never contacts it.
     testnet: {
       url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
