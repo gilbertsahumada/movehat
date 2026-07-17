@@ -75,9 +75,6 @@ cleanup() {
         echo ""
         echo -e "${YELLOW}Test directory preserved:${NC} $TEST_DIR"
     fi
-    
-    # Uninstall global package
-    npm uninstall -g movehat 2>/dev/null || true
 }
 
 trap cleanup EXIT

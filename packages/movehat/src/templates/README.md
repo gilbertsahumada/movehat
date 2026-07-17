@@ -32,7 +32,7 @@ cp .env.example .env
 ```
 
 Edit `.env`:
-```
+```env
 PRIVATE_KEY=<your private key>
 ```
 
@@ -55,7 +55,7 @@ npm test
 
 When you run `npm test`, you'll see an **interactive menu**:
 
-```
+```text
 ? What tests do you want to run?
 ❯ Move unit tests (fast, no node required)
   TypeScript integration tests (starts local node)
@@ -99,7 +99,7 @@ then `defaultNetwork` from `movehat.config.ts`.
 
 ## Project Structure
 
-```
+```text
 {{projectName}}/
 ├── move/                   # Move smart contracts
 │   ├── sources/

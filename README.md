@@ -144,7 +144,10 @@ async function main() {
     ?? "local";
   const isLocal = network === "local" || network === "movelite";
   const harness = isLocal
-    ? await Harness.createLocal({ autoDeploy: ["counter"] })
+    ? await Harness.createLocal({
+        ...(network === "movelite" ? { useMovelite: true } : {}),
+        autoDeploy: ["counter"],
+      })
     : await Harness.createLive(network);
   try {
     const deployment = isLocal
