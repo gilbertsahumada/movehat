@@ -3,6 +3,7 @@ import { URL } from 'url';
 import { ForkManager } from './manager.js';
 import { logger } from '../ui/index.js';
 import { redactSecrets } from '../utils/redact.js';
+import { ForkDataNotFoundError, ForkSnapshotPrunedError } from './errors.js';
 
 export interface ForkServerOptions {
   /**
@@ -101,6 +102,14 @@ export class ForkServer {
     this.sendJSON(res, 403, {
       message: 'Origin is not allowed to access this fork server',
       error_code: 'cors_origin_forbidden',
+      vm_error_code: null
+    });
+  }
+
+  private sendSnapshotPruned(res: http.ServerResponse): void {
+    this.sendJSON(res, 410, {
+      message: 'The pinned fork snapshot is no longer available upstream',
+      error_code: 'fork_snapshot_pruned',
       vm_error_code: null
     });
   }
@@ -371,9 +380,10 @@ export class ForkServer {
         authentication_key: account.authenticationKey
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Account not found: ${address}`);
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -396,9 +406,10 @@ export class ForkServer {
         data: resource
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Resource not found: ${resourceType}`, 'resource_not_found');
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -423,9 +434,10 @@ export class ForkServer {
 
       this.sendJSON(res, 200, resourcesArray);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Account not found: ${address}`);
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -449,6 +461,16 @@ export class ForkServer {
     res: http.ServerResponse
   ): Promise<void> {
     const MAX_VIEW_BODY_BYTES = 1 * 1024 * 1024; // 1 MiB
+
+    const accept = req.headers.accept;
+    if (typeof accept === 'string' && accept.toLowerCase().includes('application/x-bcs')) {
+      this.sendJSON(res, 406, {
+        message: 'BCS view responses are not supported by the JSON fork server',
+        error_code: 'unsupported_response_format',
+        vm_error_code: null
+      });
+      return;
+    }
 
     let body: string;
     try {

@@ -22,6 +22,14 @@ export { ForkManager } from "./fork/manager.js";
 export { MovementApiClient } from "./fork/api.js";
 export { ForkStorage } from "./fork/storage.js";
 export { ForkServer } from "./fork/server.js";
+export {
+  MovementApiError,
+  ForkDataNotFoundError,
+  ForkSnapshotPrunedError,
+  ForkAlreadyExistsError,
+} from "./fork/errors.js";
+export type { MovementApiErrorCode } from "./fork/errors.js";
+export type { ForkInitializeOptions } from "./fork/manager.js";
 export type { ForkMetadata, AccountState, LedgerInfo, AccountData, AccountResource } from "./types/fork.js";
 
 // Export custom errors
@@ -44,4 +52,5 @@ export type {
   RunViewFunctionOptions,
   RunMoveScriptOptions,
   MoveScriptResult,
+  CreateForkOptions,
 } from "./types/harness.js";

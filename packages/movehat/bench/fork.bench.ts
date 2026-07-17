@@ -9,7 +9,6 @@
 
 import { performance } from 'node:perf_hooks';
 import { existsSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Harness } from '../src/harness/index.js';
 
@@ -67,12 +66,23 @@ async function benchCreateLocal(): Promise<Sample> {
 }
 
 async function benchCreateFork(): Promise<Sample> {
-  const forkDir = join(tmpdir(), `movehat-bench-fork-${Date.now()}`);
+  const forkName = `movehat-bench-fork-${Date.now()}`;
+  const forkDir = join(process.cwd(), '.movehat', 'forks', forkName);
   return measure(
-    'Harness.createFork hydrate (testnet)',
+    'Harness.createFork cached read (testnet)',
     async () => {
-      const h = await Harness.createFork('testnet');
-      await h.cleanup();
+      const h = await Harness.createFork({
+        network: 'testnet',
+        name: forkName,
+        resetState: false,
+      });
+      try {
+        // The first iteration hydrates this pinned read; the second measures
+        // an actual warm-cache access rather than setup alone.
+        await h.forkManager?.getAllResources('0x1');
+      } finally {
+        await h.cleanup();
+      }
     },
     2,
   ).finally(() => {
@@ -108,7 +118,7 @@ async function main() {
     samples.push(await benchCreateLocal());
   }
   if (SUITES.includes('fork')) {
-    console.log('Running: Harness.createFork hydrate (2 iterations) ...');
+    console.log('Running: Harness.createFork cached read (2 iterations) ...');
     samples.push(await benchCreateFork());
   }
   if (SUITES.includes('view')) {

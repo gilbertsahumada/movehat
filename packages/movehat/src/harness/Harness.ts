@@ -11,6 +11,7 @@ import type {
   RunViewFunctionOptions,
   RunMoveScriptOptions,
   MoveScriptResult,
+  CreateForkOptions,
 } from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
 import { initRuntime } from "../runtime.js";
@@ -137,17 +138,35 @@ export class Harness {
    *   Ignored when a fork already exists on disk (the saved metadata's
    *   nodeUrl is reused).
    */
-  static async createFork(
+  static createFork(
     network: string,
     apiKey?: string,
     rpcUrl?: string
+  ): Promise<Harness>;
+  static createFork(options?: CreateForkOptions): Promise<Harness>;
+  static async createFork(
+    networkOrOptions: string | CreateForkOptions = {},
+    apiKey?: string,
+    rpcUrl?: string
   ): Promise<Harness> {
+    const options: CreateForkOptions = typeof networkOrOptions === "string"
+      ? {
+          network: networkOrOptions,
+          ...(apiKey === undefined ? {} : { apiKey }),
+          ...(rpcUrl === undefined ? {} : { rpcUrl }),
+        }
+      : networkOrOptions;
     const setupOpts: import("../types/config.js").LocalTestOptions = {
       mode: "fork",
-      forkNetwork: network,
+      forkNetwork: options.network ?? "testnet",
     };
-    if (apiKey !== undefined) setupOpts.forkApiKey = apiKey;
-    if (rpcUrl !== undefined) setupOpts.forkRpcUrl = rpcUrl;
+    if (options.apiKey !== undefined) setupOpts.forkApiKey = options.apiKey;
+    if (options.rpcUrl !== undefined) setupOpts.forkRpcUrl = options.rpcUrl;
+    if (options.name !== undefined) setupOpts.forkName = options.name;
+    if (options.port !== undefined) setupOpts.forkPort = options.port;
+    if (options.resetState !== undefined) setupOpts.forkResetState = options.resetState;
+    if (options.overwrite !== undefined) setupOpts.forkOverwrite = options.overwrite;
+    if (options.accountLabels !== undefined) setupOpts.accountLabels = options.accountLabels;
     const ctx = await setupLocalTesting(setupOpts);
 
     // Wrap getContract so contracts obtained in fork mode reject .call()
