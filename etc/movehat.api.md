@@ -19,7 +19,6 @@ export interface AccountData {
 
 // @public
 export class AccountManager {
-    // Warning: (ae-forgotten-export) The symbol "AccountManagerOptions" needs to be exported by the entry point index.d.ts
     constructor(options?: AccountManagerOptions);
     clearPool(): void;
     // (undocumented)
@@ -69,8 +68,6 @@ export class AccountManager {
     saveAccountPool(): void;
     // (undocumented)
     saveAccountPool(poolPath: string): void;
-    // Warning: (ae-forgotten-export) The symbol "SaveAccountPoolOptions" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     saveAccountPool(options: SaveAccountPoolOptions): void;
     // (undocumented)
@@ -83,6 +80,11 @@ export class AccountManager {
     static saveAccountPool(options: SaveAccountPoolOptions): void;
     // (undocumented)
     static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
+}
+
+// @public (undocumented)
+export interface AccountManagerOptions {
+    poolPath?: string | undefined;
 }
 
 // @public (undocumented)
@@ -108,17 +110,17 @@ export function assertTransactionSuccess(result: TransactionResult): void;
 
 // @public
 export interface ChildProcessAdapter {
-    // Warning: (ae-forgotten-export) The symbol "RunInput" needs to be exported by the entry point index.d.ts
-    // Warning: (ae-forgotten-export) The symbol "RunResult" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     run(input: RunInput): Promise<RunResult>;
-    // Warning: (ae-forgotten-export) The symbol "SpawnInput" needs to be exported by the entry point index.d.ts
-    // Warning: (ae-forgotten-export) The symbol "SpawnedProcess" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     spawn(input: SpawnInput): SpawnedProcess;
 }
+
+// @public
+export type ChildProcessEnvironment = Record<string, string | undefined>;
+
+// @public
+export type ChildProcessSignal = "SIGABRT" | "SIGALRM" | "SIGBUS" | "SIGCHLD" | "SIGCONT" | "SIGFPE" | "SIGHUP" | "SIGILL" | "SIGINT" | "SIGIO" | "SIGIOT" | "SIGKILL" | "SIGPIPE" | "SIGPOLL" | "SIGPROF" | "SIGPWR" | "SIGQUIT" | "SIGSEGV" | "SIGSTKFLT" | "SIGSTOP" | "SIGSYS" | "SIGTERM" | "SIGTRAP" | "SIGTSTP" | "SIGTTIN" | "SIGTTOU" | "SIGUNUSED" | "SIGURG" | "SIGUSR1" | "SIGUSR2" | "SIGVTALRM" | "SIGWINCH" | "SIGXCPU" | "SIGXFSZ" | "SIGBREAK" | "SIGLOST" | "SIGINFO";
 
 // @public
 export type CodeObjectInfo = DeploymentInfo;
@@ -225,10 +227,14 @@ export interface ForkMetadata {
 
 // @public
 export class ForkServer {
-    // Warning: (ae-forgotten-export) The symbol "ForkServerOptions" needs to be exported by the entry point index.d.ts
     constructor(forkPath: string, port?: number, host?: string, options?: ForkServerOptions);
     start(): Promise<void>;
     stop(): Promise<void>;
+}
+
+// @public (undocumented)
+export interface ForkServerOptions {
+    corsAllowOrigins?: readonly string[];
 }
 
 // @public
@@ -304,8 +310,6 @@ export interface InitRuntimeOptions {
     // (undocumented)
     accountIndex?: number;
     accountManager?: AccountManager;
-    // Warning: (ae-forgotten-export) The symbol "MovehatUserConfig" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     configOverride?: Partial<MovehatUserConfig>;
     // (undocumented)
@@ -529,6 +533,20 @@ export interface MovehatRuntime {
     switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
 }
 
+// @public
+export interface MovehatUserConfig {
+    // (undocumented)
+    accounts?: string[];
+    // (undocumented)
+    defaultNetwork?: string;
+    // (undocumented)
+    moveDir?: string;
+    // (undocumented)
+    namedAddresses?: Record<string, string>;
+    // (undocumented)
+    networks: Record<string, NetworkConfig>;
+}
+
 // @public (undocumented)
 export class MoveliteManager implements NodeProvider {
     constructor(binaryPath: string, port?: number, adapter?: ChildProcessAdapter);
@@ -548,13 +566,18 @@ export class MoveliteManager implements NodeProvider {
 
 // @public
 export class MovementApiClient {
-    // Warning: (ae-forgotten-export) The symbol "MovementApiClientOptions" needs to be exported by the entry point index.d.ts
     constructor(nodeUrl: string, apiKey?: string, options?: MovementApiClientOptions);
     getAccount(address: string): Promise<AccountData>;
     getAccountResource(address: string, resourceType: string): Promise<AccountResource>;
     getAccountResources(address: string): Promise<AccountResource[]>;
     getLedgerInfo(): Promise<LedgerInfo>;
     view(payload: unknown, extraHeaders?: Record<string, string>): Promise<unknown[]>;
+}
+
+// @public (undocumented)
+export interface MovementApiClientOptions {
+    maxBytes?: number;
+    timeoutMs?: number;
 }
 
 // @public
@@ -617,6 +640,26 @@ export class PostPublishError extends Error {
     readonly deployment: DeploymentInfo;
 }
 
+// @public (undocumented)
+export interface RunInput {
+    // (undocumented)
+    args: readonly string[];
+    // (undocumented)
+    command: string;
+    // (undocumented)
+    cwd?: string;
+    // (undocumented)
+    env?: ChildProcessEnvironment;
+    inheritStdio?: boolean;
+    maxBuffer?: number;
+    // (undocumented)
+    signal?: AbortSignal;
+    // (undocumented)
+    stdin?: string;
+    // (undocumented)
+    timeoutMs?: number;
+}
+
 // @public
 export interface RunMoveScriptOptions {
     // @internal
@@ -627,11 +670,26 @@ export interface RunMoveScriptOptions {
     typeArgs?: string[];
 }
 
+// @public (undocumented)
+export interface RunResult {
+    exitCode: number;
+    signal?: ChildProcessSignal;
+    // (undocumented)
+    stderr: string;
+    // (undocumented)
+    stdout: string;
+}
+
 // @public
 export interface RunViewFunctionOptions {
     function: string;
     functionArguments?: unknown[];
     typeArguments?: string[];
+}
+
+// @public (undocumented)
+export interface SaveAccountPoolOptions {
+    includeImported?: boolean | undefined;
 }
 
 // @public (undocumented)
@@ -659,6 +717,38 @@ export interface SnapshotOptions {
     name?: string;
     // (undocumented)
     path?: string;
+}
+
+// @public
+export interface SpawnedProcess {
+    exited: Promise<{
+        code: number | null;
+        signal: ChildProcessSignal | null;
+    }>;
+    // (undocumented)
+    kill(signal?: ChildProcessSignal): boolean;
+    // (undocumented)
+    pid: number | undefined;
+    // (undocumented)
+    stderr: Readable | null;
+    // (undocumented)
+    stdin: Writable | null;
+    // (undocumented)
+    stdout: Readable | null;
+    unref(): void;
+}
+
+// @public
+export interface SpawnInput {
+    // (undocumented)
+    args: readonly string[];
+    // (undocumented)
+    command: string;
+    // (undocumented)
+    cwd?: string;
+    // (undocumented)
+    env?: ChildProcessEnvironment;
+    stdio?: 'pipe' | 'ignore';
 }
 
 // @public (undocumented)

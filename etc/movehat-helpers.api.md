@@ -11,7 +11,6 @@ import type { Writable } from 'node:stream';
 
 // @public
 export class AccountManager {
-    // Warning: (ae-forgotten-export) The symbol "AccountManagerOptions" needs to be exported by the entry point index.d.ts
     constructor(options?: AccountManagerOptions);
     clearPool(): void;
     // (undocumented)
@@ -61,8 +60,6 @@ export class AccountManager {
     saveAccountPool(): void;
     // (undocumented)
     saveAccountPool(poolPath: string): void;
-    // Warning: (ae-forgotten-export) The symbol "SaveAccountPoolOptions" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     saveAccountPool(options: SaveAccountPoolOptions): void;
     // (undocumented)
@@ -75,6 +72,11 @@ export class AccountManager {
     static saveAccountPool(options: SaveAccountPoolOptions): void;
     // (undocumented)
     static saveAccountPool(poolPath: string, options: SaveAccountPoolOptions): void;
+}
+
+// @public (undocumented)
+export interface AccountManagerOptions {
+    poolPath?: string | undefined;
 }
 
 // @public (undocumented)
@@ -319,6 +321,11 @@ export interface NodeProvider {
 
 // @public
 export function normalizeAddress(input: string): string;
+
+// @public (undocumented)
+export interface SaveAccountPoolOptions {
+    includeImported?: boolean | undefined;
+}
 
 // @public (undocumented)
 export function saveDeployment(deployment: DeploymentInfo): void;

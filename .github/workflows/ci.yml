@@ -186,9 +186,6 @@ jobs:
       - name: Run unit tests
         run: pnpm test
 
-      - name: Run smoke tests
-        run: bash scripts/smoke-test.sh
-
   # E2E tests + integration suite
   e2e-tests:
     name: Public Testnet & External CLI (advisory)
@@ -274,6 +271,12 @@ jobs:
           esac
           echo "${EXPECTED_BINARY_SHA256}  ${RUNNER_TEMP}/movement" | sha256sum -c
           movement --version
+
+      - name: Run clean-install smoke test
+        # This installs a candidate tarball into an isolated prefix and may
+        # resolve user-template dependencies from npm. Keep it in the
+        # external, advisory job rather than the deterministic PR gate.
+        run: bash scripts/smoke-test.sh
 
       - name: Run E2E tests
         run: pnpm test:e2e:quick

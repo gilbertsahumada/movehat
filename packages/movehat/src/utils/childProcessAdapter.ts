@@ -4,8 +4,45 @@ import type { Readable, Writable } from 'node:stream';
 /** Portable environment map used at the public process boundary. */
 export type ChildProcessEnvironment = Record<string, string | undefined>;
 
-/** Signal name accepted by Node child processes. */
-export type ChildProcessSignal = string;
+/** Signal names accepted by Node child processes. Mirrors `NodeJS.Signals`. */
+export type ChildProcessSignal =
+  | "SIGABRT"
+  | "SIGALRM"
+  | "SIGBUS"
+  | "SIGCHLD"
+  | "SIGCONT"
+  | "SIGFPE"
+  | "SIGHUP"
+  | "SIGILL"
+  | "SIGINT"
+  | "SIGIO"
+  | "SIGIOT"
+  | "SIGKILL"
+  | "SIGPIPE"
+  | "SIGPOLL"
+  | "SIGPROF"
+  | "SIGPWR"
+  | "SIGQUIT"
+  | "SIGSEGV"
+  | "SIGSTKFLT"
+  | "SIGSTOP"
+  | "SIGSYS"
+  | "SIGTERM"
+  | "SIGTRAP"
+  | "SIGTSTP"
+  | "SIGTTIN"
+  | "SIGTTOU"
+  | "SIGUNUSED"
+  | "SIGURG"
+  | "SIGUSR1"
+  | "SIGUSR2"
+  | "SIGVTALRM"
+  | "SIGWINCH"
+  | "SIGXCPU"
+  | "SIGXFSZ"
+  | "SIGBREAK"
+  | "SIGLOST"
+  | "SIGINFO";
 
 /**
  * Injectable abstraction over `child_process.spawn`.
@@ -294,7 +331,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       stdout: child.stdout,
       stderr: child.stderr,
       stdin: child.stdin,
-      kill: (signal?: ChildProcessSignal) => child.kill(signal as NodeJS.Signals | undefined),
+      kill: (signal?: ChildProcessSignal) => child.kill(signal),
       unref: () => {
         child.unref();
         // Typed as Readable/Writable but net.Socket at runtime.

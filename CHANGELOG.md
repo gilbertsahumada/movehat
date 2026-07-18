@@ -76,7 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic checks; public-testnet and external CLI checks remain
   advisory on `main` or manual dispatch. The Docker test image verifies both
   the pinned Movement CLI archive and extracted binary and can no longer fall
-  back to a mock executable. Closes #377. Tracks #371.
+  back to a mock executable; its Node 20/22 base now uses Debian Trixie to
+  satisfy the verified binary's glibc/libstdc++ ABI. Closes #377. Tracks #371.
 
 ### Security
 

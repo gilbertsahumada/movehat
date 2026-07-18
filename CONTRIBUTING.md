@@ -166,7 +166,9 @@ External Movement CLI and public-testnet checks are advisory because they rely
 on services outside this repository. CI runs them for `main` and manual
 dispatches, not as required checks for PRs to `develop`. The Docker test image
 accepts only the pinned linux/amd64 CLI archive and verifies both archive and
-extracted-binary SHA256 values; it never substitutes a mock executable.
+extracted-binary SHA256 values; it never substitutes a mock executable. The
+Node 20/22 test images use Debian Trixie because the verified CLI requires
+GLIBC 2.38/2.39 and CXXABI 1.3.15, which Debian Bookworm does not provide.
 
 ## Project Architecture
 
