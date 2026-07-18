@@ -121,6 +121,47 @@ describe("F3 — MovementApiClient timeouts and byte cap", () => {
     expect(fakeReq.destroyed).toBe(true);
   });
 
+  it("enforces an absolute deadline even while the upstream trickles bytes", async () => {
+    const fakeReq = makeFakeReq();
+    httpRequest.mockImplementation((_url, _options, callback) => {
+      const res = makeUnresolvableResponse();
+      callback?.(res);
+      const interval = setInterval(() => {
+        (res as unknown as EventEmitter).emit("data", Buffer.from(" "));
+      }, 5);
+      interval.unref?.();
+      (res as unknown as EventEmitter).once("aborted", () => clearInterval(interval));
+      fakeReq.once("error", () => clearInterval(interval));
+      return fakeReq as unknown as ClientRequest;
+    });
+
+    const { MovementApiClient } = await import("../../fork/api.js");
+    const client = new MovementApiClient("http://slow.example/v1", undefined, {
+      timeoutMs: 30,
+      maxBytes: 1024,
+    });
+
+    await expect(client.getLedgerInfo()).rejects.toThrow(/timed out/i);
+    expect(fakeReq.destroyed).toBe(true);
+  });
+
+  it("rejects when the response is aborted before end", async () => {
+    const fakeReq = makeFakeReq();
+    httpRequest.mockImplementation((_url, _options, callback) => {
+      const res = makeUnresolvableResponse();
+      callback?.(res);
+      setImmediate(() => (res as unknown as EventEmitter).emit("aborted"));
+      return fakeReq as unknown as ClientRequest;
+    });
+
+    const { MovementApiClient } = await import("../../fork/api.js");
+    const client = new MovementApiClient("http://aborted.example/v1", undefined, {
+      timeoutMs: 1000,
+    });
+
+    await expect(client.getLedgerInfo()).rejects.toThrow(/aborted/i);
+  });
+
   it("rejects and destroys the request when the response exceeds maxBytes", async () => {
     const fakeReq = makeFakeReq();
     httpRequest.mockImplementation(

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -18,6 +18,7 @@ const fakeApi = {
   getAccount: vi.fn(),
   getAccountResource: vi.fn(),
   getAccountResources: vi.fn(),
+  view: vi.fn(),
 };
 
 // Track the (nodeUrl, apiKey) pair every constructor call sees, so we
@@ -33,6 +34,7 @@ vi.mock("../api.js", () => ({
     getAccount = fakeApi.getAccount;
     getAccountResource = fakeApi.getAccountResource;
     getAccountResources = fakeApi.getAccountResources;
+    view = fakeApi.view;
   },
 }));
 
@@ -70,6 +72,7 @@ describe("ForkManager — initialize / load", () => {
     fakeApi.getAccount.mockReset();
     fakeApi.getAccountResource.mockReset();
     fakeApi.getAccountResources.mockReset();
+    fakeApi.view.mockReset();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
   });
 
@@ -132,6 +135,22 @@ describe("ForkManager — initialize / load", () => {
   it("load throws when the fork directory doesn't exist", () => {
     const mgr = new ForkManager(forkPath);
     expect(() => mgr.load()).toThrow(/Fork does not exist/);
+  });
+
+  it("canonicalizes real and symlink aliases to the same lock namespace", () => {
+    mkdirSync(forkPath, { recursive: true });
+    const alias = join(tmpDir, "fork-alias");
+    symlinkSync(forkPath, alias, "dir");
+    const realManager = new ForkManager(forkPath) as unknown as {
+      forkPath: string;
+      accountLockKey(): string;
+      resourceLockKey(): string;
+    };
+    const aliasManager = new ForkManager(alias) as unknown as typeof realManager;
+
+    expect(aliasManager.forkPath).toBe(realManager.forkPath);
+    expect(aliasManager.accountLockKey()).toBe(realManager.accountLockKey());
+    expect(aliasManager.resourceLockKey()).toBe(realManager.resourceLockKey());
   });
 
   it("load restores metadata from disk and reconstructs the API client", async () => {
@@ -275,6 +294,16 @@ describe("ForkManager — account + resource fetch", () => {
     ).rejects.toBeInstanceOf(ForkSnapshotPrunedError);
   });
 
+  it("translates a pruned pinned view snapshot", async () => {
+    fakeApi.view.mockRejectedValue(new MovementApiError(
+      "gone",
+      "http_error",
+      { statusCode: 404, upstreamErrorCode: "version_pruned" }
+    ));
+    await expect(mgr.forwardView({ function: "0x1::m::f" }))
+      .rejects.toBeInstanceOf(ForkSnapshotPrunedError);
+  });
+
   it("getAllResources fetches the whole list once, caches, and returns by type", async () => {
     fakeApi.getAccountResources.mockResolvedValue([
       { type: "0x1::a::A", data: { x: 1 } },
@@ -407,6 +436,24 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
     const result = await mgr.getOrCreateAccount(TEST_ADDR);
     expect(result.sequenceNumber).toBe("0");
     expect(result.authenticationKey).toHaveLength(66);
+  });
+
+  it("returns the account persisted by a concurrent creator", async () => {
+    fakeApi.getAccount.mockRejectedValue(
+      new MovementApiError("not found", "http_error", { statusCode: 404 })
+    );
+    const winner = { sequenceNumber: "9", authenticationKey: "0xwinner" };
+    const storage = (mgr as unknown as { storage: { getAccount(address: string): unknown } }).storage;
+    const originalGetAccount = storage.getAccount.bind(storage);
+    let reads = 0;
+    vi.spyOn(storage, "getAccount").mockImplementation((address: string) => {
+      reads += 1;
+      if (reads === 1) return undefined;
+      if (reads === 2) return winner;
+      return originalGetAccount(address);
+    });
+
+    await expect(mgr.getOrCreateAccount(TEST_ADDR)).resolves.toEqual(winner);
   });
 
   it("resetState clears cached accounts and resources", async () => {

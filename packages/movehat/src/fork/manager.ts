@@ -13,7 +13,8 @@ import {
   isPrunedSnapshotError,
 } from './errors.js';
 import { withFileLock, withFileLocks } from '../utils/fileLock.js';
-import { resolve } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 
 export interface ForkInitializeOptions {
   overwrite?: boolean;
@@ -32,6 +33,18 @@ function forkAuthKeyPlaceholder(normalizedAddress: string): string {
   const stripped = normalizedAddress.startsWith('0x') ? normalizedAddress.slice(2) : normalizedAddress;
   const digest = createHash('sha3-256').update(stripped, 'hex').digest('hex');
   return `0x${digest}`;
+}
+
+function canonicalForkPath(forkPath: string): string {
+  let existing = resolve(forkPath);
+  const suffix: string[] = [];
+  while (!existsSync(existing)) {
+    const parent = dirname(existing);
+    if (parent === existing) break;
+    suffix.unshift(basename(existing));
+    existing = parent;
+  }
+  return resolve(realpathSync(existing), ...suffix);
 }
 
 /**
@@ -53,7 +66,7 @@ export class ForkManager {
   private apiKey?: string;
 
   constructor(forkPath: string) {
-    this.forkPath = resolve(forkPath);
+    this.forkPath = canonicalForkPath(forkPath);
     this.storage = new ForkStorage(this.forkPath);
   }
 
@@ -304,11 +317,21 @@ export class ForkManager {
     if (!this.apiClient) {
       throw new Error('Fork not initialized. Call initialize() or load() first.');
     }
-    return this.apiClient.view(
-      payload,
-      extraHeaders,
-      this.getMetadata().ledgerVersion
-    );
+    try {
+      return await this.apiClient.view(
+        payload,
+        extraHeaders,
+        this.getMetadata().ledgerVersion
+      );
+    } catch (error) {
+      if (isPrunedSnapshotError(error)) {
+        throw new ForkSnapshotPrunedError(
+          `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream`,
+          { cause: error }
+        );
+      }
+      throw error;
+    }
   }
 
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
@@ -446,14 +469,15 @@ export class ForkManager {
         authenticationKey: forkAuthKeyPlaceholder(normalizedAddress),
       };
 
-      await withFileLock(this.accountLockKey(), async () => {
-        if (!this.storage.getAccount(normalizedAddress)) {
-          this.storage.saveAccount(normalizedAddress, newAccount);
-        }
+      const account = await withFileLock(this.accountLockKey(), async () => {
+        const cached = this.storage.getAccount(normalizedAddress);
+        if (cached) return cached;
+        this.storage.saveAccount(normalizedAddress, newAccount);
+        return newAccount;
       });
       logger.success(`Created new account ${normalizedAddress}`, 2);
 
-      return newAccount;
+      return account;
     }
   }
 }

@@ -81,12 +81,23 @@ export class MovementApiClient {
 
     return new Promise<T>((resolve, reject) => {
       let settled = false;
+      let deadline: NodeJS.Timeout | undefined;
       const settle = (fn: () => void): void => {
         if (settled) return;
         settled = true;
+        if (deadline !== undefined) clearTimeout(deadline);
         fn();
       };
-      const req = client.request(url, { method, headers }, (res) => {
+      let req: http.ClientRequest;
+      deadline = setTimeout(() => {
+        req?.destroy();
+        settle(() => reject(new MovementApiError(
+          `Movement API request timed out after ${this.timeoutMs}ms`,
+          'timeout'
+        )));
+      }, this.timeoutMs);
+
+      req = client.request(url, { method, headers }, (res) => {
         const chunks: Buffer[] = [];
         let totalBytes = 0;
         const statusCode = res.statusCode ?? 0;
@@ -145,15 +156,24 @@ export class MovementApiClient {
             )));
           }
         });
+        res.once('aborted', () => {
+          settle(() => reject(new MovementApiError(
+            'Movement API response was aborted',
+            'network_error'
+          )));
+        });
+        res.once('error', (cause) => {
+          settle(() => reject(new MovementApiError(
+            'Movement API response failed',
+            'network_error',
+            { cause }
+          )));
+        });
       });
 
-      req.setTimeout(this.timeoutMs, () => {
-        req.destroy();
-        settle(() => reject(new MovementApiError(
-          `Movement API request timed out after ${this.timeoutMs}ms`,
-          'timeout'
-        )));
-      });
+      // This is an absolute request deadline, not a socket-idle timeout.
+      // A peer that trickles bytes must not keep a pinned fork read alive
+      // indefinitely.
       req.on('error', (cause) => {
         settle(() => reject(new MovementApiError(
           'Movement API request failed',

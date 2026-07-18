@@ -26,6 +26,7 @@ vi.mock("../api.js", () => ({
 }));
 
 import { ForkServer } from "../server.js";
+import { MovementApiError } from "../errors.js";
 
 /**
  * Helper to set up a minimal fork directory so ForkServer.start() succeeds.
@@ -168,6 +169,21 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(status).toBe(502);
     expect(body.error_code).toBe("upstream_error");
     expect(body.message).toContain("connection refused");
+  });
+
+  it("returns 410 when the pinned view snapshot was pruned", async () => {
+    fakeApi.view.mockRejectedValueOnce(new MovementApiError(
+      "gone",
+      "http_error",
+      { statusCode: 410, upstreamErrorCode: "version_pruned" }
+    ));
+
+    const { status, body } = await postView(
+      JSON.stringify({ function: "0x1::coin::supply" })
+    );
+
+    expect(status).toBe(410);
+    expect(body.error_code).toBe("fork_snapshot_pruned");
   });
 
   it("redacts upstream view errors before logging or returning them", async () => {

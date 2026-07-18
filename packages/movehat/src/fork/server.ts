@@ -542,6 +542,10 @@ export class ForkServer {
       const result = await this.forkManager.forwardView(payload, forwardableHeaders);
       this.sendJSON(res, 200, result);
     } catch (error) {
+      if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
+        return;
+      }
       const rawMsg = error instanceof Error ? error.message : String(error);
       // Sanitize: reuse the existing log-injection guard from
       // sanitizePathname (control chars, length cap).
