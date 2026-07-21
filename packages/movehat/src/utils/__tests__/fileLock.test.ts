@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import {
   mkdirSync,
   mkdtempSync,
+  existsSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -153,7 +154,7 @@ describe("withFileLock", () => {
       .rejects.toThrow("must not contain user-owned symlinks");
   });
 
-  it("serializes two real reclaimers without exposing a successor window", async () => {
+  it("does not move a successor after a stale observation", async () => {
     const dir = lockDir();
     const eventFile = join(dirname(dir), "events.jsonl");
     writeFileSync(eventFile, "");
@@ -165,15 +166,17 @@ describe("withFileLock", () => {
 
     const tsxLoader = require.resolve("tsx");
     const worker = join(here, "fixtures", "file-lock-worker.ts");
-    const run = () =>
-      new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          process.execPath,
-          ["--import", tsxLoader, worker, "race", eventFile, "100", dir],
-          {
-            stdio: ["ignore", "ignore", "pipe"],
-          },
-        );
+    const run = (
+      label: string,
+      signalMode = "normal",
+      releaseFile?: string,
+    ) => {
+      const child = spawn(
+        process.execPath,
+        ["--import", tsxLoader, worker, "race", eventFile, "0", dir, signalMode, label, releaseFile ?? ""],
+        { stdio: ["ignore", "ignore", "pipe"] },
+      );
+      const exited = new Promise<void>((resolve, reject) => {
         let stderr = "";
         child.stderr.on("data", (chunk) => {
           stderr += String(chunk);
@@ -184,21 +187,82 @@ describe("withFileLock", () => {
             : reject(new Error(`worker ${code}: ${stderr}`)),
         );
       });
-    await Promise.all([run(), run()]);
+      return { child, exited };
+    };
 
-    const events = readFileSync(eventFile, "utf8")
+    const waitFor = async (predicate: () => boolean): Promise<void> => {
+      const deadline = Date.now() + 5_000;
+      while (!predicate()) {
+        if (Date.now() >= deadline) throw new Error("barrier timed out");
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    };
+
+    // A observes the dead owner and pauses. B wins the first reclaim. C then
+    // becomes the live successor. Resuming A reproduces the stale-observation
+    // interleaving that previously moved C out of the canonical path.
+    const a = run("A", "pause-reclaimer");
+    await waitFor(() => existsSync(`${eventFile}.observed`));
+    const b = run("B");
+    await b.exited;
+    const releaseC = `${eventFile}.release-c`;
+    const c = run("C", "normal", releaseC);
+    await waitFor(() => readFileSync(eventFile, "utf8").includes('"label":"C"'));
+    writeFileSync(`${eventFile}.resume-observed`, "go");
+    await waitFor(() => existsSync(`${eventFile}.intent`));
+    const d = run("D");
+    writeFileSync(`${eventFile}.resume-intent`, "go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    let events = readFileSync(eventFile, "utf8")
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(events.map((event) => event.event)).toEqual([
-      "enter",
-      "exit",
-      "enter",
-      "exit",
-    ]);
-    expect(events[0].pid).not.toBe(events[2].pid);
+    const cEnter = events.findIndex((event) => event.label === "C" && event.event === "enter");
+    expect(cEnter).toBeGreaterThanOrEqual(0);
+    expect(events.slice(cEnter + 1).some((event) => event.event === "enter")).toBe(false);
+
+    writeFileSync(releaseC, "go");
+    await Promise.all([a.exited, c.exited, d.exited]);
+
+    events = readFileSync(eventFile, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    let active = 0;
+    let maxActive = 0;
+    for (const event of events) {
+      active += event.event === "enter" ? 1 : -1;
+      maxActive = Math.max(maxActive, active);
+    }
+    expect(maxActive).toBe(1);
+    expect(new Set(events.filter((event) => event.event === "enter").map((event) => event.label)))
+      .toEqual(new Set(["A", "B", "C", "D"]));
     expect(readdirSync(dir)).toEqual([]);
   }, 15_000);
+
+  it("removes a dead reclaim intent with a unique immutable path", async () => {
+    const dir = lockDir();
+    const lockName = createHash("sha256").update("dead-intent").digest("hex") + ".lock";
+    writeFileSync(
+      join(dir, `${lockName}.intent-999999999-dead`),
+      JSON.stringify({ token: "intent", observedToken: "old", pid: 999_999_999, createdAt: 0 }),
+    );
+    await expect(withFileLock("dead-intent", async () => "ok", { lockDir: dir, timeoutMs: 100 }))
+      .resolves.toBe("ok");
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("fails closed on a corrupt reclaim intent", async () => {
+    const dir = lockDir();
+    const lockName = createHash("sha256").update("corrupt-intent").digest("hex") + ".lock";
+    writeFileSync(join(dir, `${lockName}.intent-corrupt`), "{");
+    await expect(withFileLock("corrupt-intent", async () => "bad", {
+      lockDir: dir,
+      pollMs: 5,
+      timeoutMs: 30,
+    })).rejects.toThrow("Timed out");
+  });
 
   it("cleans up its owned lock on SIGINT so an immediate retry succeeds", async () => {
     const dir = lockDir();

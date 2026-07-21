@@ -8,13 +8,14 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, parse, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
 
 const LOCK_DIR_MODE = 0o700;
 const LOCK_FILE_MODE = 0o600;
@@ -31,6 +32,23 @@ interface LockRecord {
 interface OwnedLock {
   path: string;
   token: string;
+}
+
+interface ReclaimIntent extends LockRecord {
+  observedToken: string;
+}
+
+interface FileLockTestHooks {
+  afterDeadOwnerObserved?: (() => Promise<void>) | undefined;
+  afterIntentPublished?: (() => Promise<void>) | undefined;
+  afterIntentRevalidated?: (() => Promise<void>) | undefined;
+}
+
+let testHooks: FileLockTestHooks | undefined;
+
+/** @internal Test-only scheduling hooks; this module is not a package export. */
+export function __setFileLockTestHooks(hooks?: FileLockTestHooks): void {
+  testHooks = hooks;
 }
 
 export interface FileLockOptions {
@@ -111,13 +129,11 @@ function removeObservedLock(
 
   const moved = parseLock(movedPath);
   if (!recordsEqual(observed, moved)) {
-    try {
-      renameSync(movedPath, path);
-    } catch {
-      // Another contender may already own path. Preserve the unexpected
-      // record for diagnosis instead of deleting a lock we did not observe.
-    }
-    return false;
+    // Never rename back into the canonical path: POSIX rename would overwrite
+    // a successor that acquired during the gap. Under the reclaim-intent
+    // protocol this mismatch is unreachable for cooperating processes, so
+    // preserve the tombstone and fail closed for diagnosis.
+    throw new Error(`Operation lock changed while being removed: ${path}`);
   }
 
   try {
@@ -128,13 +144,93 @@ function removeObservedLock(
   return true;
 }
 
-function removeIfReclaimable(path: string): boolean {
+function intentPrefix(path: string): string {
+  return `${basename(path)}.intent-`;
+}
+
+function intentPaths(path: string): string[] {
+  const prefix = intentPrefix(path);
+  return readdirSync(dirname(path))
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => join(dirname(path), name));
+}
+
+function parseIntent(path: string): ReclaimIntent | null {
+  const record = parseLock(path);
+  if (record === null) return null;
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as Partial<ReclaimIntent>;
+    return typeof value.observedToken === "string" && value.observedToken.length > 0
+      ? (value as ReclaimIntent)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasActiveReclaimIntent(path: string): boolean {
+  let active = false;
+  for (const intentPath of intentPaths(path)) {
+    const intent = parseIntent(intentPath);
+    if (intent === null) {
+      active = true;
+      continue;
+    }
+    if (isProcessAlive(intent.pid)) {
+      active = true;
+      continue;
+    }
+    // Intent names include an unrepeatable UUID. Removing a dead owner's
+    // unique path cannot delete a successor's intent.
+    try { unlinkSync(intentPath); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") active = true;
+    }
+  }
+  return active;
+}
+
+function publishReclaimIntent(path: string, observed: LockRecord): string {
+  const token = randomUUID();
+  const candidatePath = join(dirname(path), `.intent-candidate-${process.pid}-${token}.tmp`);
+  const finalPath = `${path}.intent-${process.pid}-${token}`;
+  let fd: number | undefined;
+  try {
+    fd = openSync(candidatePath, "wx", LOCK_FILE_MODE);
+    const intent: ReclaimIntent = {
+      token,
+      pid: process.pid,
+      createdAt: Date.now(),
+      observedToken: observed.token,
+    };
+    writeFileSync(fd, JSON.stringify(intent), "utf8");
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    linkSync(candidatePath, finalPath);
+    return finalPath;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    try { unlinkSync(candidatePath); } catch { /* preserve original error */ }
+  }
+}
+
+async function removeIfReclaimable(path: string): Promise<boolean> {
   const record = parseLock(path);
   if (record !== null) {
     // A dead owner cannot release its lock, so reclaim immediately. A live
     // owner is authoritative regardless of how long the operation takes.
     if (isProcessAlive(record.pid)) return false;
-    return removeObservedLock(path, record);
+    await testHooks?.afterDeadOwnerObserved?.();
+    const intentPath = publishReclaimIntent(path, record);
+    try {
+      await testHooks?.afterIntentPublished?.();
+      const current = parseLock(path);
+      if (!recordsEqual(record, current)) return false;
+      await testHooks?.afterIntentRevalidated?.();
+      return removeObservedLock(path, record);
+    } finally {
+      try { unlinkSync(intentPath); } catch { /* dead intents are reclaimed later */ }
+    }
   }
 
   // Without a valid immutable token/PID there is no safe owner identity to
@@ -144,7 +240,7 @@ function removeIfReclaimable(path: string): boolean {
 
 function releaseOwnedLock(lock: OwnedLock): void {
   const current = parseLock(lock.path);
-  if (current?.token === lock.token) removeObservedLock(lock.path, current);
+  if (current?.token === lock.token) unlinkSync(lock.path);
   ownedLocks.delete(lock.token);
 }
 
@@ -245,12 +341,11 @@ export async function withFileLock<T>(
       // Hard-link publication is atomic and exclusive: contenders can only
       // observe no lock or the fully-written, fsynced immutable record.
       linkSync(candidatePath, path);
-      acquired = true;
     } catch (error) {
       if (candidateFd !== undefined) closeSync(candidateFd);
       try { unlinkSync(candidatePath); } catch { /* preserve original error */ }
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      if (removeIfReclaimable(path)) continue;
+      if (await removeIfReclaimable(path)) continue;
       const now = Date.now();
       if (now >= deadline)
         throw new Error(`Timed out waiting for operation lock '${key}'`);
@@ -267,6 +362,19 @@ export async function withFileLock<T>(
       releaseOwnedLock({ path, token });
       throw error;
     }
+    // Reclaimers publish an immutable intent before their decisive re-read.
+    // A contender may publish while an intent exists, but it cannot enter.
+    // If an intent appears after this check, that reclaimer observes our live
+    // PID and is forbidden from moving the lock.
+    if (hasActiveReclaimIntent(path)) {
+      releaseOwnedLock({ path, token });
+      const now = Date.now();
+      if (now >= deadline)
+        throw new Error(`Timed out waiting for operation lock '${key}'`);
+      await sleep(Math.min(pollMs, Math.max(0, deadline - now)));
+      continue;
+    }
+    acquired = true;
   }
 
   const lock = { path, token };
