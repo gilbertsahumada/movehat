@@ -129,6 +129,13 @@ export default async function initCommand(projectName?: string) {
 
   try {
     const templatesDir = path.join(__dirname, "..", "templates");
+    const packageManifest = JSON.parse(
+      await fs.readFile(path.join(__dirname, "..", "..", "package.json"), "utf-8")
+    ) as { version?: unknown };
+    const movehatVersion = String(packageManifest.version ?? "");
+    if (!movehatVersion) {
+      throw new Error("Missing version in the Movehat package manifest");
+    }
     const steps = createSpinnerChain();
 
     // Step 1: Create project structure
@@ -138,7 +145,7 @@ export default async function initCommand(projectName?: string) {
       await copyFile(
         path.join(templatesDir, "package.json"),
         path.join(projectPath, "package.json"),
-        { projectName: npmName }
+        { projectName: npmName, movehatVersion }
       );
 
       await copyFile(

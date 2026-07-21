@@ -12,7 +12,7 @@ movehat run <script> [options]
 
 Execute a TypeScript/JavaScript script with the Movehat Runtime Environment.
 
-> ⚠️ Scripts invoked via `movehat run` may use `Harness.createLive(network)` and submit real transactions to testnet or mainnet, spending real MOVE from the configured `PRIVATE_KEY`. Check the script's network target — via the `--network` flag, `MOVEHAT_NETWORK` env var, or the `defaultNetwork` in `movehat.config.ts` — **before** running. For the safe-by-default behavior used by tests, see [Networks and modes](/docs/guides/networks-and-modes).
+> ⚠️ Scripts invoked via `movehat run` may use `Harness.createLive(network)` and submit real transactions to testnet or mainnet, spending real MOVE from the configured `PRIVATE_KEY`. The generated script is local by default. Its precedence is `--network`, `MOVEHAT_NETWORK`, `MH_DEFAULT_NETWORK`, then `defaultNetwork` in `movehat.config.ts`.
 
 ## Options
 
@@ -24,7 +24,7 @@ Execute a TypeScript/JavaScript script with the Movehat Runtime Environment.
 ## Examples
 
 ```bash
-# Deploy to default network (testnet)
+# Deploy to the generated project's default local chain
 movehat run scripts/deploy-counter.ts
 
 # Deploy to specific network
@@ -56,14 +56,26 @@ When a script deploys a contract:
 
 ```typescript
 import { Harness } from "movehat";
+import config from "../movehat.config.js";
 
 async function main() {
-  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  const network = process.env.MH_CLI_NETWORK
+    ?? process.env.MOVEHAT_NETWORK
+    ?? process.env.MH_DEFAULT_NETWORK
+    ?? config.defaultNetwork
+    ?? "local";
+  const isLocal = network === "local" || network === "movelite";
+  const harness = isLocal
+    ? await Harness.createLocal({
+        ...(network === "movelite" ? { useMovelite: true } : {}),
+        autoDeploy: ["counter"],
+      })
+    : await Harness.createLive(network);
   try {
     console.log("Network:", harness.runtime.network.name);
     console.log("Account:", harness.runtime.account.accountAddress.toString());
 
-    // Your deployment logic here, e.g.:
+    // Local uses the backend-compatible autoDeploy path. Live networks can use:
     //   const deployment = await harness.deployCodeObject({ moduleName: "counter" });
     //   const [value] = await harness.runViewFunction({ function: "..." });
     //   const result = await harness.runMoveScript({ scriptPath: "scripts/init.move" });

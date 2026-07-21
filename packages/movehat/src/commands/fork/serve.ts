@@ -24,7 +24,13 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
     } else {
       // Use default fork path based on current network
       const config = await loadUserConfig();
-      const networkName = process.env.MH_CLI_NETWORK || config.defaultNetwork || 'testnet';
+      const explicitNetwork = process.env.MH_CLI_NETWORK;
+      let networkName = explicitNetwork || config.defaultNetwork || 'testnet';
+      if (!explicitNetwork && (networkName === 'local' || networkName === 'movelite')) {
+        // Forks are snapshots of remote networks; a local default cannot
+        // name one, so serve the conventional testnet fork instead.
+        networkName = 'testnet';
+      }
 
       // Lightweight validation: only check if network exists in config
       // Don't validate accounts/keys since fork serve only reads data

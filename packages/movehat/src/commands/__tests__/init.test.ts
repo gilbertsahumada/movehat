@@ -14,7 +14,11 @@ vi.mock("../../helpers/banner.js", () => ({
 }));
 
 const initModule = await import("../init.js");
-const { default: initCommand, resolveProjectNames, InvalidProjectNameError } = initModule;
+const {
+  default: initCommand,
+  resolveProjectNames,
+  InvalidProjectNameError,
+} = initModule;
 
 /**
  * Strategy: real tmpdir + real fs ops (matches §6.1's example-as-canonical
@@ -113,6 +117,32 @@ describe("initCommand", () => {
     expect(moveToml).toContain('name = "my_test_project"');
     expect(moveToml).not.toContain("{{movePackageName}}");
     expect(moveToml).not.toContain("{{projectName}}");
+    const pkg = JSON.parse(
+      readFileSync(join(target, "package.json"), "utf-8")
+    ) as { dependencies: Record<string, string> };
+    const installedVersion = await import("../../../package.json", {
+      with: { type: "json" },
+    }).then((module) => module.default.version);
+    expect(pkg.dependencies.movehat).toBe(installedVersion);
+    expect(pkg.dependencies.movehat).not.toContain("{{movehatVersion}}");
+    const config = readFileSync(join(target, "movehat.config.ts"), "utf-8");
+    expect(config).toContain('defaultNetwork: "local"');
+    const deployScript = readFileSync(
+      join(target, "scripts", "deploy-counter.ts"),
+      "utf-8"
+    );
+    const networkResolution = deployScript.slice(
+      deployScript.indexOf("const network ="),
+      deployScript.indexOf("const harness =")
+    );
+    expect(networkResolution.indexOf("MH_CLI_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MOVEHAT_NETWORK")
+    );
+    expect(networkResolution.indexOf("MOVEHAT_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MH_DEFAULT_NETWORK")
+    );
+    expect(deployScript).toContain('network === "local" || network === "movelite"');
+    expect(deployScript).toContain("Harness.createLive(network)");
   });
 
   it("substitutes {{projectName}} placeholders inside template files", async () => {

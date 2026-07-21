@@ -144,6 +144,8 @@ echo "----------------------------------------"
 # test --move`, and the fork system end-to-end. This is the last chance
 # to catch packaging regressions (missing dist files, broken exports,
 # stale templates) before the artifact reaches npm users.
+bash scripts/test-candidate-tarball.sh
+check_ok "Candidate tarball install experience passed"
 bash scripts/e2e-local.sh
 check_ok "Install-experience E2E passed"
 

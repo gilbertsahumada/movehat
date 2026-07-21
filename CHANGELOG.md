@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `movehat init` now pins the exact installed Movehat version and generates a
+  credential-free local deployment flow by default. The canonical script
+  respects `--network` / `MH_CLI_NETWORK`, `MOVEHAT_NETWORK`,
+  `MH_DEFAULT_NETWORK`, then config precedence, and only uses `createLive` for
+  an explicit public/custom network. Release, E2E, and dogfood gates install
+  the candidate tarball before dependency resolution, so normal and
+  prerelease versions are testable before publication. Closes #372.
+- Scaffolded `Move.toml` now pins the AptosFramework dependency to an exact
+  `movement`-branch commit instead of the moving branch ref, so fresh projects
+  compile reproducibly regardless of upstream framework changes. The pin is
+  bumped deliberately alongside Movement CLI upgrades.
+- `movehat fork create` / `fork serve` without `--network` fall back to
+  `testnet` when the project's `defaultNetwork` is the disposable local chain
+  (which has nothing durable to snapshot), preserving the 0.6.0 no-flag fork
+  behavior for the new local-first scaffold.
+
 ## [0.6.0] - 2026-07-12
 
 ### Changed

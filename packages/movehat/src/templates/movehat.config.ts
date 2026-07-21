@@ -13,16 +13,16 @@ dotenv.config();
 
 export default {
   // Default network to use when no --network flag is provided
-  // "testnet" = Movement testnet (public, auto-generates test accounts)
+  // "local" = self-contained local chain (movelite when available,
+  // otherwise Movement node); no credentials required
+  // "testnet" = Movement testnet (public, requires an explicit account)
   // "mainnet" = Movement mainnet (requires PRIVATE_KEY in .env)
-  // "local" = Fork server running on localhost:8080
-  defaultNetwork: "testnet",
+  defaultNetwork: "local",
 
   // Network configurations
   networks: {
-    // Movement Testnet - Public test network (recommended for development)
-    // Auto-generates test accounts - no local setup required
-    // Perfect for running tests with transaction simulation
+    // Movement Testnet - Public test network. Set PRIVATE_KEY before
+    // selecting this network; the default workflow never contacts it.
     testnet: {
       url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
@@ -33,8 +33,7 @@ export default {
       url: "https://mainnet.movementnetwork.xyz/v1",
       chainId: "mainnet",
     },
-    // Local fork server (requires: movehat fork serve)
-    // Useful for testing against a snapshot of real network state
+    // Local endpoints are injected by Harness.createLocal at runtime.
     local: {
       url: "http://localhost:8080/v1",
       chainId: "local",

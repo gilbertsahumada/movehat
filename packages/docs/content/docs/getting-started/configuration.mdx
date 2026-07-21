@@ -14,7 +14,7 @@ dotenv.config();
 
 export default {
   // Default network to use when no --network flag is provided
-  defaultNetwork: "testnet",
+  defaultNetwork: "local",
 
   // Network configurations
   networks: {
@@ -54,7 +54,7 @@ export default {
 ## Environment Variables
 
 ```bash
-# Required: Your wallet private key (works on all networks)
+# Required only for public-network transactions
 PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
 
 # Optional: Override RPC URL or default network
@@ -94,9 +94,9 @@ PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
 
 | Network | Description |
 |---------|-------------|
-| `testnet` (default) | Movement testnet, auto-generates test accounts |
+| `testnet` | Movement testnet; select explicitly for live transactions |
 | `mainnet` | Movement mainnet, requires `PRIVATE_KEY` in `.env` |
-| `local` | Local fork server on `localhost:8080` |
+| `local` (default) | Self-contained local chain; no credentials required |
 
 ## Using Multiple Accounts
 

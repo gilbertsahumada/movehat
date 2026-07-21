@@ -1,27 +1,41 @@
 import { Harness } from "movehat";
+import config from "../movehat.config.js";
 
 async function main() {
   console.log("🚀 Deploying Counter contract...\n");
 
-  // Hardhat-style Harness — the primary public API.
-  // createLive binds to a real running network (testnet / mainnet / a
-  // custom one defined in movehat.config.ts). No local process spawned.
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
-  const harness = await Harness.createLive(network);
+  // Safe by default: the generated project runs against a disposable local
+  // chain. Set MOVEHAT_NETWORK=testnet/mainnet/custom only when you intend to
+  // submit a public-network transaction and have configured PRIVATE_KEY.
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK ??
+    config.defaultNetwork ??
+    "local";
+  const isLocal = network === "local" || network === "movelite";
+  const harness = isLocal
+    ? await Harness.createLocal({
+        ...(network === "movelite" ? { useMovelite: true } : {}),
+        // Movehat selects the SDK publish path when Movelite is the backend,
+        // avoiding assumptions made by `movement move deploy-object` about
+        // full-node REST response fields.
+        autoDeploy: ["counter"],
+      })
+    : await Harness.createLive(network);
   try {
     console.log(`✅ Runtime initialized on ${harness.runtime.network.name}`);
     console.log(`   Account: ${harness.runtime.account.accountAddress.toString()}`);
     console.log(`   RPC: ${harness.runtime.network.rpc}\n`);
 
-    // Deploy as a code object via `movement move deploy-object`. If the
-    // Move.toml's named address differs from the module identifier
-    // (e.g. `module my_pkg::counter` with `[addresses] my_pkg = "_"`),
-    // pass `addressName: "my_pkg"` in addition to `moduleName: "counter"`.
-    //
-    // To redeploy an existing record, set MH_CLI_REDEPLOY=true.
-    const deployment = await harness.deployCodeObject({
-      moduleName: "counter",
-    });
+    // Local setup auto-deploys through the backend-compatible path. Live
+    // networks retain code-object deployment and require an explicit opt-in.
+    const deployment = isLocal
+      ? harness.runtime.getDeployment("counter")
+      : await harness.deployCodeObject({ moduleName: "counter" });
+    if (!deployment) {
+      throw new Error("Local counter deployment record was not created");
+    }
 
     console.log(`\n✅ Module deployed at: ${deployment.address}::counter`);
     if (deployment.txHash) {
@@ -54,8 +68,7 @@ async function main() {
     console.log(`\n📊 Counter value: ${value}`);
   } finally {
     // Always release the Harness — cleanup() is idempotent and safe to
-    // call on a `createLive` instance even though no local process was
-    // spawned (it just flips the use-after-cleanup poison flag).
+    // call for every mode; local mode also releases the node lifecycle.
     await harness.cleanup();
   }
 }
