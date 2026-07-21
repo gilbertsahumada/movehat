@@ -304,7 +304,7 @@ describe('runCliUntilInterrupted', () => {
 
     const pending = runCliUntilInterrupted(
       { command: 'mocha', args: ['--watch'], timeoutMs: Infinity },
-      { adapter, throwOnNonZeroExit: false },
+      { adapter },
       signalProcess
     );
     signalProcess.emit('SIGINT');
@@ -314,6 +314,24 @@ describe('runCliUntilInterrupted', () => {
     expect(result.signal).toBe('SIGTERM');
     expect(result.interruptedByParent).toBe('SIGINT');
     expect(signalProcess.exitCode).toBe(130);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
+  });
+
+  it('preserves an explicit throwOnNonZeroExit override', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    const adapter = makeAdapter({ exitCode: 7, stdout: '', stderr: 'failed' });
+
+    await expect(
+      runCliUntilInterrupted(
+        { command: 'movement', args: ['move', 'test'], timeoutMs: Infinity },
+        { adapter, throwOnNonZeroExit: true },
+        signalProcess
+      )
+    ).rejects.toBeInstanceOf(CliExecutionError);
+
     expect(signalProcess.listenerCount('SIGINT')).toBe(0);
     expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
   });

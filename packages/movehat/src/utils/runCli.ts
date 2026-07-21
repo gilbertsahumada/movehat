@@ -110,7 +110,15 @@ export async function runCliUntilInterrupted(
     const signal = input.signal
       ? AbortSignal.any([input.signal, controller.signal])
       : controller.signal;
-    const result = await runCli({ ...input, signal }, options);
+    // The wrapper must observe the child's final result before callers decide
+    // how to handle it, otherwise runCli's default non-zero exception would
+    // prevent us from attaching the parent signal that caused the shutdown.
+    // An explicit caller override remains authoritative.
+    const interruptOptions: RunCliOptions = {
+      ...options,
+      throwOnNonZeroExit: options.throwOnNonZeroExit ?? false,
+    };
+    const result = await runCli({ ...input, signal }, interruptOptions);
     if (receivedSignal) {
       result.interruptedByParent = receivedSignal;
     }

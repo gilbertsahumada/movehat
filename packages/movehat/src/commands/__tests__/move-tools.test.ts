@@ -112,7 +112,7 @@ describe("Movement CLI quality commands", () => {
       "--package-dir",
       packageDir,
     ]);
-    expect(runCliMock.mock.calls[0]![0].timeoutMs).toBe(5 * 60 * 1000);
+    expect(runCliMock.mock.calls[0]![0].timeoutMs).toBe(30 * 60 * 1000);
     expect(runCliMock.mock.calls[1]![0].timeoutMs).toBe(5 * 60 * 1000);
   });
 
