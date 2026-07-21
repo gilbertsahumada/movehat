@@ -1,5 +1,4 @@
 import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
-import { realpathSync } from "node:fs";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   DeployCodeObjectOptions,
@@ -37,6 +36,7 @@ import {
 import { withKeyedLock } from "../utils/keyedMutex.js";
 import { withFileLocks } from "../utils/fileLock.js";
 import { isHexAddress, normalizeAddress } from "../utils/address.js";
+import { deploymentLockKeys } from "../utils/deploymentLockKeys.js";
 
 function validateMoveIdentifier(value: string, label: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
@@ -162,13 +162,14 @@ async function executeMovementMoveObject(
   // bytecode compiled for the other deploy's address. Upgrade builds
   // too, so it takes the lock as well.
   const chainIdentity = config.networkConfig.chainId ?? config.network;
-  const canonicalDir = realpathSync(safeDir);
-  return withKeyedLock(canonicalDir, () =>
+  const lockScope = deploymentLockKeys({
+    packageDir: safeDir,
+    chainIdentity,
+    moduleName,
+  });
+  return withKeyedLock(lockScope.canonicalPackageDir, () =>
     withFileLocks(
-      [
-        `package:${canonicalDir}`,
-        `deployment:${chainIdentity}:${moduleName}`,
-      ],
+      lockScope.keys,
       () => executeMovementMoveObjectLocked(opts, dir, safeDir),
       { timeoutMs: 360_000, onWait: (message) => logger.info(message) },
     ),

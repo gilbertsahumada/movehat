@@ -1,5 +1,5 @@
 import { Account, Aptos, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
@@ -31,6 +31,7 @@ import { redactSecrets } from "../utils/redact.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
 import { withFileLocks } from "../utils/fileLock.js";
 import { isHexAddress } from "../utils/address.js";
+import { deploymentLockKeys } from "../utils/deploymentLockKeys.js";
 
 /** @internal */
 export interface PublisherDeps {
@@ -86,13 +87,14 @@ export class Publisher {
     // already-deployed check through saveDeployment also closes the
     // check-then-publish TOCTOU for same-module deploys.
     const chainIdentity = config.networkConfig.chainId ?? config.network;
-    const canonicalDir = realpathSync(safeDir);
-    return withKeyedLock(canonicalDir, () =>
+    const lockScope = deploymentLockKeys({
+      packageDir: safeDir,
+      chainIdentity,
+      moduleName,
+    });
+    return withKeyedLock(lockScope.canonicalPackageDir, () =>
       withFileLocks(
-        [
-          `package:${canonicalDir}`,
-          `deployment:${chainIdentity}:${moduleName}`,
-        ],
+        lockScope.keys,
         () => this.deployLocked(input, dir, safeDir),
         { timeoutMs: 360_000, onWait: (message) => logger.info(message) },
       ),
