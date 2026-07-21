@@ -32,7 +32,7 @@
     "dev:docs": "pnpm --filter docs dev",
     "docs:api": "pnpm --filter movehat docs:api",
     "bench": "pnpm --filter movehat bench",
-    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint packages/movehat/src --max-warnings 0",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint packages/movehat/src packages/docs/app packages/docs/lib packages/docs/next.config.mjs packages/docs/source.config.ts --max-warnings 0",
     "format:check": "prettier --check package.json packages/movehat/package.json packages/docs/package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json",
     "format:write": "prettier --write package.json packages/movehat/package.json packages/docs/package.json pnpm-workspace.yaml eslint.config.mjs .prettierrc.json",
     "cycles": "madge --circular --extensions ts --exclude '(__tests__|templates)' packages/movehat/src",

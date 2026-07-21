@@ -7,7 +7,9 @@ export default tseslint.config(
       "**/dist/**",
       "**/coverage/**",
       "**/build/**",
+      "**/.next/**",
       "**/node_modules/**",
+      "**/out/**",
       "packages/movehat/src/templates/**",
     ],
   },
@@ -36,6 +38,14 @@ export default tseslint.config(
     files: ["packages/movehat/src/**/__tests__/**/*.ts", "packages/movehat/src/**/*.test.ts"],
     rules: {
       "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  {
+    files: ["packages/docs/next.config.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+      },
     },
   },
 );
