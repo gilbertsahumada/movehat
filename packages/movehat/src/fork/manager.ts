@@ -57,6 +57,7 @@ export class ForkManager {
   private storage: ForkStorage;
   private apiClient: MovementApiClient | null = null;
   private metadata: ForkMetadata | null = null;
+  private cacheGeneration: string | null = null;
 
   /**
    * Optional API key sent as `Authorization: Bearer <key>` on every
@@ -77,6 +78,13 @@ export class ForkManager {
 
   private resourceLockKey(): string {
     return `fork:${this.forkPath}:resources`;
+  }
+
+  private expectedCacheGeneration(): string {
+    if (this.cacheGeneration === null) {
+      this.cacheGeneration = this.storage.getCacheGeneration();
+    }
+    return this.cacheGeneration;
   }
 
   private translateReadError(error: unknown, notFoundMessage: string): never {
@@ -140,7 +148,7 @@ export class ForkManager {
       createdAt: new Date().toISOString(),
     };
 
-    await withFileLocks(
+    const cacheGeneration = await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
         if (this.storage.exists() && !options.overwrite) {
@@ -150,14 +158,19 @@ export class ForkManager {
         }
         this.storage.initialize();
         if (options.overwrite) {
+          const generation = this.storage.advanceCacheGeneration();
           this.storage.clearAccounts();
           this.storage.clearResources();
+          this.storage.saveMetadata(metadata);
+          return generation;
         }
         this.storage.saveMetadata(metadata);
+        return this.storage.getCacheGeneration();
       }
     );
     this.metadata = metadata;
     this.apiClient = apiClient;
+    this.cacheGeneration = cacheGeneration;
 
     logger.success(`Fork initialized at ledger version ${ledgerInfo.ledger_version}`);
   }
@@ -174,6 +187,7 @@ export class ForkManager {
 
     this.metadata = this.storage.loadMetadata();
     this.storage.migrateLegacyResourceCache();
+    this.cacheGeneration = this.storage.getCacheGeneration();
     this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
   }
 
@@ -193,6 +207,7 @@ export class ForkManager {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
+      const expectedGeneration = this.expectedCacheGeneration();
 
       logger.info(`Fetching account ${normalizedAddress} from network...`, 2);
       let accountData;
@@ -211,6 +226,9 @@ export class ForkManager {
       };
 
       accountState = await withFileLock(this.accountLockKey(), async () => {
+        if (this.storage.getCacheGeneration() !== expectedGeneration) {
+          return accountState!;
+        }
         const cached = this.storage.getAccount(normalizedAddress);
         if (cached) return cached;
         this.storage.saveAccount(normalizedAddress, accountState!);
@@ -233,6 +251,7 @@ export class ForkManager {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
+      const expectedGeneration = this.expectedCacheGeneration();
 
       logger.info(`Fetching resource ${resourceType} for ${normalizedAddress}...`, 2);
 
@@ -244,6 +263,9 @@ export class ForkManager {
         );
         resource = resourceData.data;
         resource = await withFileLock(this.resourceLockKey(), async () => {
+          if (this.storage.getCacheGeneration() !== expectedGeneration) {
+            return resource;
+          }
           if (this.storage.hasResource(normalizedAddress, resourceType)) {
             return this.storage.getResource(normalizedAddress, resourceType);
           }
@@ -271,6 +293,7 @@ export class ForkManager {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
+      const expectedGeneration = this.expectedCacheGeneration();
 
       logger.info(`Fetching all resources for ${normalizedAddress}...`, 2);
       let resourcesList;
@@ -289,6 +312,9 @@ export class ForkManager {
       }
 
       resources = await withFileLock(this.resourceLockKey(), async () => {
+        if (this.storage.getCacheGeneration() !== expectedGeneration) {
+          return resources;
+        }
         if (this.storage.hasAllResources(normalizedAddress)) {
           return this.storage.getAllResources(normalizedAddress);
         }
@@ -440,13 +466,16 @@ export class ForkManager {
     logger.newline();
     logger.step("Resetting fork state...");
 
-    await withFileLocks(
+    const generation = await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
+        const nextGeneration = this.storage.advanceCacheGeneration();
         this.storage.clearAccounts();
         this.storage.clearResources();
+        return nextGeneration;
       }
     );
+    this.cacheGeneration = generation;
 
     logger.success("Fork state reset to initial snapshot");
     logger.newline();

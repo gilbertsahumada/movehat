@@ -59,6 +59,8 @@ function writePrivateFile(path: string, data: string): void {
 }
 
 const LEGACY_MIGRATION_MARKER = '.resource-cache-v1';
+const CACHE_GENERATION_FILE = '.generation';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readJsonFile<T>(path: string, label: string): T {
   try {
@@ -117,6 +119,30 @@ export class ForkStorage {
     return join(this.forkPath, 'cache', `${safeFilename}.all-resources`);
   }
 
+  getCacheGeneration(): string {
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    const generationPath = join(cacheDir, CACHE_GENERATION_FILE);
+    if (!existsSync(generationPath)) {
+      const generation = randomUUID();
+      writePrivateFile(generationPath, `${generation}\n`);
+      return generation;
+    }
+    const generation = readFileSync(generationPath, 'utf8').trim();
+    if (!UUID_RE.test(generation)) {
+      throw new Error(`Invalid fork cache generation at ${generationPath}`);
+    }
+    return generation;
+  }
+
+  advanceCacheGeneration(): string {
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    const generation = randomUUID();
+    writePrivateFile(join(cacheDir, CACHE_GENERATION_FILE), `${generation}\n`);
+    return generation;
+  }
+
   /**
    * Initialize fork directory structure
    */
@@ -147,6 +173,7 @@ export class ForkStorage {
 
     const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
     if (!existsSync(migrationMarker)) writePrivateFile(migrationMarker, 'complete\n');
+    this.getCacheGeneration();
   }
 
   /**
@@ -159,6 +186,7 @@ export class ForkStorage {
     const cacheDir = join(this.forkPath, 'cache');
     const resourcesDir = join(this.forkPath, 'resources');
     ensurePrivateDirectory(cacheDir);
+    this.getCacheGeneration();
     const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
     if (existsSync(migrationMarker)) return;
 

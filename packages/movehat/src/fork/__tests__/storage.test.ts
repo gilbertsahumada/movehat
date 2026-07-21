@@ -289,6 +289,7 @@ describe('ForkStorage', () => {
       expect(storage.hasAllResources('0x2')).toBe(true);
       expect(storage.getAllResources('0x1')).toEqual({});
       expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+      expect(storage.getCacheGeneration()).toMatch(/^[0-9a-f-]{36}$/i);
     });
 
     it('resumes an interrupted legacy migration idempotently', () => {
@@ -317,6 +318,17 @@ describe('ForkStorage', () => {
         .toThrow(/object-shaped resource map/);
       expect(storage.hasAllResources('0x1')).toBe(false);
       expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(false);
+    });
+
+    it('advances cache generations without clearing migration state', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const first = storage.getCacheGeneration();
+      const second = storage.advanceCacheGeneration();
+
+      expect(second).not.toBe(first);
+      expect(storage.getCacheGeneration()).toBe(second);
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
     });
   });
 

@@ -60,6 +60,12 @@ function ledgerInfoFixture() {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 describe("ForkManager — initialize / load", () => {
   let tmpDir: string;
   let forkPath: string;
@@ -258,6 +264,19 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
   });
 
+  it("does not commit an account fetch from before resetState", async () => {
+    const pending = deferred<{ sequence_number: string; authentication_key: string }>();
+    fakeApi.getAccount.mockReturnValueOnce(pending.promise);
+
+    const read = mgr.getAccount(TEST_ADDR);
+    await vi.waitFor(() => expect(fakeApi.getAccount).toHaveBeenCalledTimes(1));
+    await mgr.resetState();
+    pending.resolve({ sequence_number: "7", authentication_key: "0xold" });
+
+    await expect(read).resolves.toMatchObject({ sequenceNumber: "7" });
+    expect(mgr.listAccounts()).toEqual([]);
+  });
+
   it("getAccount throws if the manager was never initialized/loaded", async () => {
     const fresh = new ForkManager(join(tmpDir, "uninitialized"));
     await expect(fresh.getAccount(TEST_ADDR)).rejects.toThrow(
@@ -275,6 +294,22 @@ describe("ForkManager — account + resource fetch", () => {
     const r2 = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
     expect(r2).toEqual({ value: "42" });
     expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not commit a resource fetch from before overwrite", async () => {
+    const pending = deferred<{ data: { value: string } }>();
+    fakeApi.getAccountResource.mockReturnValueOnce(pending.promise);
+
+    const read = mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    await vi.waitFor(() => expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1));
+    await mgr.initialize(TEST_NODE_URL, "replacement", undefined, { overwrite: true });
+    pending.resolve({ data: { value: "old" } });
+
+    await expect(read).resolves.toEqual({ value: "old" });
+    const storage = (mgr as unknown as {
+      storage: { hasResource(address: string, type: string): boolean };
+    }).storage;
+    expect(storage.hasResource(TEST_ADDR, "0x1::counter::Counter")).toBe(false);
   });
 
   it("getResource rethrows a clean 'not found' for upstream 404 errors", async () => {
@@ -333,6 +368,22 @@ describe("ForkManager — account + resource fetch", () => {
     // Second call should hit cache (API call count stays at 1).
     await mgr.getAllResources(TEST_ADDR);
     expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not commit an all-resources marker from before resetState", async () => {
+    const pending = deferred<Array<{ type: string; data: { value: string } }>>();
+    fakeApi.getAccountResources.mockReturnValueOnce(pending.promise);
+
+    const read = mgr.getAllResources(TEST_ADDR);
+    await vi.waitFor(() => expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1));
+    await mgr.resetState();
+    pending.resolve([{ type: "0x1::a::A", data: { value: "old" } }]);
+
+    await expect(read).resolves.toEqual({ "0x1::a::A": { value: "old" } });
+    const storage = (mgr as unknown as {
+      storage: { hasAllResources(address: string): boolean };
+    }).storage;
+    expect(storage.hasAllResources(TEST_ADDR)).toBe(false);
   });
 });
 
