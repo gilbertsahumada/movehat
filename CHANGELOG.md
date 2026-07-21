@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Public testnet and mainnet transactions no longer receive Movehat's known
+  deterministic development key. Projects created with 0.6.0 that keep
+  `defaultNetwork: "testnet"` must either switch their default to `"local"`
+  for the credential-free development flow, or configure `PRIVATE_KEY`, global
+  `accounts`, or `networks.<name>.accounts` before submitting transactions.
+  Mainnet must also be declared explicitly in `movehat.config.ts`. Read-only
+  public forks still need no signing key; an RPC API key is independent from a
+  signing account. Closes #373. Tracks #371.
+
 ### Changed
 
 - `movehat init` now pins the exact installed Movehat version and generates a
@@ -16,14 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an explicit public/custom network. Release, E2E, and dogfood gates install
   the candidate tarball before dependency resolution, so normal and
   prerelease versions are testable before publication. Closes #372.
-- Public testnet now requires explicit signing credentials, while deterministic
-  development credentials remain limited to loopback local/movelite networks.
-  Mainnet must be declared explicitly. Network selector conflicts are typed,
-  read-only fork creation no longer resolves accounts, and Movelite discovery
+- Deterministic development credentials are now limited to loopback
+  local/movelite networks. Network selector conflicts are typed, read-only fork
+  creation resolves endpoints without signing accounts, and Movelite discovery
   supports explicit relative/absolute paths, package installs, local or global
   npm bins, and safe fallback to Movement node. Local-node state is protected
   by ownership markers with conservative migration of recognized 0.6 layouts.
-  Closes #373. Tracks #371.
 
 ## [0.6.0] - 2026-07-12
 
