@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 import { MoveliteManager, findMoveliteBinary } from "../MoveliteManager.js";
 import { cleanupCallbacks } from "../../core/movementProfile.js";
@@ -732,7 +732,7 @@ describe("findMoveliteBinary — MOVELITE_PATH override", () => {
     writeFileSync(valid, "#!/bin/sh\n", { mode: 0o755 });
     expect(
       findMoveliteBinary({
-        env: { PATH: `${invalidDir}${require("node:path").delimiter}${validDir}` },
+        env: { PATH: `${invalidDir}${delimiter}${validDir}` },
         includePackage: false,
       })
     ).toBe(realpathSync(valid));

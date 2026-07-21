@@ -332,8 +332,6 @@ export async function withFileLock<T>(
       try {
         writeFileSync(candidateFd, JSON.stringify(record), "utf8");
         fsyncSync(candidateFd);
-      } catch (error) {
-        throw error;
       } finally {
         closeSync(candidateFd);
         candidateFd = undefined;
