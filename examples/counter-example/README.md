@@ -9,7 +9,7 @@ A working Movehat project scaffolded around several Move modules under the `hell
 | `npm run compile` | `movehat compile` — Movement CLI build wrapper. | n/a |
 | `npm test` | `Harness.createLocal` + `runViewFunction` + auto-deploy in tests. | local-node |
 | `npm run deploy` | `Harness.createLocal` by default; set `MOVEHAT_NETWORK` to opt into `Harness.createLive`. | local (default) or live |
-| `npm run upgrade` | `harness.upgradeCodeObject` — re-publishes the package into the existing code object (requires a prior `npm run deploy`). | live |
+| `MOVEHAT_NETWORK=testnet npm run upgrade` | `harness.upgradeCodeObject` — re-publishes the package into an existing live code object created by a deploy to the same network. | explicit live network |
 | `npm run run-script` | `harness.runMoveScript` — submits an on-the-fly compiled Move script as a one-shot tx. | local-node |
 | `npm run demo-fork` | Low-level `ForkManager` API — manual init/load + direct resource read/write. | fork |
 | `npm run demo-harness-fork` | `Harness.createFork` — high-level factory; read-only `runViewFunction` + write-rejection contract + post-cleanup poisoning via `HarnessDisposedError`. | fork |
@@ -18,7 +18,9 @@ A working Movehat project scaffolded around several Move modules under the `hell
 
 - Node 20+, npm or pnpm, Movement CLI installed (see [movehat.org docs](https://movehat.org)).
 - The default `deploy` is local and needs no credentials. For public-network
-  `deploy` / `upgrade`, set `MOVEHAT_NETWORK` and provide `PRIVATE_KEY` in `.env`.
+  `deploy` / `upgrade`, set `MOVEHAT_NETWORK`, provide `PRIVATE_KEY` in `.env`,
+  and run both commands against the same explicit network. `upgrade` refuses
+  the local default because code-object upgrades are a live-network workflow.
 - For `demo-fork` / `demo-harness-fork`: optional `MOVEMENT_API_KEY` to avoid public-endpoint rate limits.
 
 ## Layout

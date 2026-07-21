@@ -1,4 +1,5 @@
 import { Harness } from "movehat";
+import config from "../movehat.config.js";
 
 /**
  * Canonical example of `harness.upgradeCodeObject` — re-publishes the
@@ -13,12 +14,25 @@ import { Harness } from "movehat";
  * Move.toml's named address slot differs from the on-chain module id,
  * so the upgrade has to bind the same way the original deploy did.
  *
- * Run: `npm run upgrade` (after a successful `npm run deploy`).
+ * Run: `MOVEHAT_NETWORK=testnet npm run upgrade` after deploying to the same
+ * live network with `MOVEHAT_NETWORK=testnet npm run deploy`.
  */
 async function main() {
   console.log("Upgrading Counter contract...\n");
 
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK ??
+    config.defaultNetwork ??
+    "local";
+  if (network === "local" || network === "movelite") {
+    throw new Error(
+      "upgrade-counter.ts requires an explicit live network. " +
+        "Set MOVEHAT_NETWORK=testnet (or use --network testnet), configure " +
+        "PRIVATE_KEY, and deploy to that same network before upgrading.",
+    );
+  }
   const harness = await Harness.createLive(network);
   try {
     const objectAddress = harness.runtime.getDeploymentAddress("counter");
