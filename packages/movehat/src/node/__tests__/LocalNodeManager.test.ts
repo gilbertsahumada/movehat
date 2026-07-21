@@ -334,7 +334,7 @@ describe("LocalNodeManager — start / stop / lifecycle", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("adopts a recognized 0.6 directory in place before start or clean", async () => {
+  it("adopts a recognized 0.6 directory on start; clean removes one without adopting it", async () => {
     mkdirSync(join(tmpDir, "0"));
     writeFileSync(join(tmpDir, "mint.key"), "key");
     writeFileSync(join(tmpDir, "waypoint.txt"), "waypoint");
