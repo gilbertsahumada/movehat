@@ -13,6 +13,8 @@ counter = "0xcafe"
 
 [dependencies.AptosFramework]
 git = "https://github.com/movementlabsxyz/aptos-core.git"
+# Commit from the `movement` branch, pinned so scaffolds build reproducibly.
+# Bump deliberately (alongside Movement CLI upgrades), not automatically.
 rev = "8c50fc069db7df39e2cd05263a75981f9487f838"
 subdir = "aptos-move/framework/aptos-framework"
 

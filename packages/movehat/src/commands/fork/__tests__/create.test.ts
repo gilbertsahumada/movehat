@@ -93,6 +93,23 @@ describe("forkCreateCommand", () => {
     expect(promptsMock).not.toHaveBeenCalled();
   });
 
+  it("falls back to testnet when defaultNetwork is the disposable local chain", async () => {
+    loadUserConfigMock.mockResolvedValue({
+      defaultNetwork: "local",
+      networks: {
+        testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+        local: { url: "http://localhost:8080/v1", chainId: "local" },
+      },
+    });
+
+    await forkCreateCommand({});
+
+    expect(resolveNetworkConfigMock).toHaveBeenCalledWith(expect.anything(), "testnet");
+    expect(ForkManagerCtor).toHaveBeenCalledWith(
+      join(process.cwd(), ".movehat", "forks", "testnet-fork")
+    );
+  });
+
   it("uses a custom fork name and path when provided", async () => {
     const customPath = join(tmpCwd, "my-custom-fork");
     await forkCreateCommand({ network: "testnet", path: customPath, name: "ignored-when-path-set" });
