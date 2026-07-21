@@ -6,14 +6,20 @@ icon: CloudUpload
 
 ## Writing Deployment Scripts
 
-Deployment scripts use the **Hardhat-style `Harness` API**, which wraps the Movement SDK + the new code-object publish path (`movement move deploy-object`):
+The generated deployment script is local-first and needs no credentials. A
+live-only deployment script uses the **Hardhat-style `Harness` API** with an
+explicit public network and signing account:
 
 ```typescript
 // scripts/deploy-counter.ts
 import { Harness } from "movehat";
 
 async function main() {
-  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
+  if (!network) {
+    throw new Error("Select a live network with --network or MOVEHAT_NETWORK");
+  }
+  const harness = await Harness.createLive(network);
   try {
     console.log("Deploying from:", harness.runtime.account.accountAddress.toString());
     console.log("Network:", harness.runtime.network.name);
@@ -49,12 +55,12 @@ main().catch((error) => {
 ## Running Deployment Scripts
 
 ```bash
-# Deploy to testnet (default)
+# Run the generated script on its credential-free local default
 movehat run scripts/deploy-counter.ts
 
-# Deploy to specific network
+# Public deployments are explicit and require configured credentials
+movehat run scripts/deploy-counter.ts --network testnet
 movehat run scripts/deploy-counter.ts --network mainnet
-movehat run scripts/deploy-counter.ts --network local
 ```
 
 ## Deployment Tracking
@@ -148,7 +154,10 @@ harness.runtime.getDeploymentAddress // Get deployed address
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
+  if (!network) {
+    throw new Error("Select testnet or mainnet explicitly");
+  }
   const harness = await Harness.createLive(network);
   try {
     if (harness.runtime.network.name === "mainnet") {

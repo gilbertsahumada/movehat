@@ -88,6 +88,10 @@ If you don't pass `accountLabels`, the harness defaults to `["deployer", "alice"
 
 Read-only path. `network` is `'testnet'`, `'mainnet'`, or any custom name resolvable by `loadUserConfig`. Spawns a `ForkServer` reading from the upstream JSON-RPC endpoint and caching responses on disk.
 
+Public forks do not submit transactions and therefore do not require
+`PRIVATE_KEY` or a configured signing account. An optional RPC API key only
+authenticates upstream reads; it is not a signing credential.
+
 ```typescript
 const harness = await Harness.createFork("testnet");
 // harness.runViewFunction works against runtime.aptos.view payloads that
@@ -108,8 +112,12 @@ const harness = await Harness.createFork("testnet");
 Binds to a real running network. No local process is spawned; transactions hit the configured RPC. Use for testnet / mainnet deployments and real-network reads/writes.
 
 ```typescript
-const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
+if (!network) throw new Error("Select a live network explicitly");
+const harness = await Harness.createLive(network);
 ```
+
+Testnet and mainnet transactions require an explicit configured account.
 
 ## Methods
 

@@ -6,7 +6,11 @@ icon: Rocket
 
 > ⚠️ **This tutorial submits real transactions to a live network.** Every step on testnet costs testnet MOVE (free, but rate-limited); every step on mainnet costs **real MOVE** and is irreversible. Run on testnet first. Never copy a `createLive(network)` call into a `tests/*.test.ts` file — see [Networks and modes](./networks-and-modes) for the safety story.
 
-This tutorial walks through the canonical deploy + upgrade flow using `Harness.createLive(network)` and the two scripts that ship with `movehat init`: `scripts/deploy-counter.ts` and `scripts/upgrade-counter.ts`. By the end you'll have a code object live on testnet and have re-published bytecode into it without changing the on-chain address.
+This tutorial adapts the generated local-first deploy script into an explicit
+`Harness.createLive(network)` deploy + upgrade flow. The full pair lives in the
+counter example as `scripts/deploy-counter.ts` and `scripts/upgrade-counter.ts`.
+By the end you'll have a code object live on testnet and have re-published
+bytecode into it without changing the on-chain address.
 
 ## Prerequisites
 
@@ -31,7 +35,10 @@ The canonical script lives at `scripts/deploy-counter.ts` after `movehat init`. 
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
+  if (network !== "testnet" && network !== "mainnet") {
+    throw new Error("Set MOVEHAT_NETWORK=testnet or mainnet explicitly");
+  }
   const harness = await Harness.createLive(network);
   try {
     const deployment = await harness.deployCodeObject({
@@ -66,9 +73,9 @@ Two things to notice:
 ## Step 2 — Deploy
 
 ```bash
-npx movehat run scripts/deploy-counter.ts
+npx movehat run scripts/deploy-counter.ts --network testnet
 # or, if your package.json declares an npm script for it:
-npm run deploy
+MOVEHAT_NETWORK=testnet npm run deploy
 ```
 
 Expected output (paths and hashes will differ):
@@ -125,9 +132,9 @@ await harness.cleanup();
 Modify `move/sources/counter.move` — add a `decrement` function, change a constant, anything that changes the bytecode. Then run:
 
 ```bash
-npx movehat run scripts/upgrade-counter.ts
+npx movehat run scripts/upgrade-counter.ts --network testnet
 # or:
-npm run upgrade
+MOVEHAT_NETWORK=testnet npm run upgrade
 ```
 
 The upgrade script:
