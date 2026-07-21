@@ -191,11 +191,16 @@ Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [
 | `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://movehat.org/docs/cli/compile) |
 | `movehat lint` | Lint the configured Move package | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
 | `movehat prove` | Run the Move Prover without an artificial timeout | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
-| `movehat test --coverage` | Run Move tests and print their coverage summary | [/docs/cli/test](https://movehat.org/docs/cli/test) |
-| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat test --coverage` | Run covered Move tests and print their coverage summary | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (TTY menu; all suites in non-interactive use) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
 | `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://movehat.org/docs/cli/run) |
 | `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://movehat.org/docs/cli/fork) |
 | `movehat update` | Check npm for a newer version and upgrade | — |
+
+`--coverage` by itself covers only the Move test phase. Combine it with `--all`
+to run covered Move tests and their summary before the TypeScript suite.
+Coverage cannot be combined with `--watch`; `--coverage --ts` is rejected
+unless `--all` is also present. `--filter` applies to the Move phase only.
 
 ## Troubleshooting
 

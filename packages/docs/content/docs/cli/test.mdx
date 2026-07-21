@@ -22,14 +22,29 @@ default safe for CI.
 | `--ts` | Run only TypeScript integration tests (starts local node) |
 | `--all` | Run all tests (Move + TypeScript) |
 | `--watch` | Run TypeScript tests in watch mode (implies `--ts`) |
-| `--coverage` | Run Move tests with coverage and print the summary |
-| `--filter <pattern>` | Filter Move tests by pattern |
+| `--coverage` | Cover the Move test phase and print its summary |
+| `--filter <pattern>` | Filter the Move test phase by pattern |
 
 > Shorthand commands like `movehat test:move` forward additional flags to the underlying runner. For example, `movehat test:move --ignore-warnings` is valid and forwards `--ignore-warnings` to the Move test runner.
 
-## Interactive Menu
+## Coverage combinations
 
-When you run `movehat test` without flags:
+- `--coverage` alone runs covered Move tests and prints the coverage summary;
+  it does not start the TypeScript suite.
+- `--all --coverage` runs covered Move tests and their summary first, then runs
+  the normal TypeScript integration suite.
+- `--coverage --watch` is rejected because watch mode runs TypeScript tests.
+- `--coverage --ts` is rejected unless `--all` is also present.
+- `--filter <pattern>` applies to the Move phase, including its covered form;
+  it does not filter TypeScript tests.
+
+The covered Move test phase has a finite 30-minute timeout. Printing the
+coverage summary and normal finite Move commands retain their shorter safety
+timeouts.
+
+## Interactive and non-interactive defaults
+
+When you run `movehat test` without flags in a TTY, Movehat shows this menu:
 
 ```
 ? What tests do you want to run?
@@ -37,6 +52,9 @@ When you run `movehat test` without flags:
   TypeScript integration tests (starts local node)
   All tests (Move + TypeScript)
 ```
+
+Without a TTY, the same flagless command runs both Move and TypeScript suites
+instead of waiting for input. This makes `movehat test` deterministic in CI.
 
 ## Examples
 
@@ -58,6 +76,9 @@ movehat test --watch
 
 # Run Move tests and print their coverage summary
 movehat test --coverage
+
+# Cover Move tests, print their summary, then run TypeScript tests
+movehat test --all --coverage
 
 # Filter Move tests by pattern
 movehat test --move --filter test_increment

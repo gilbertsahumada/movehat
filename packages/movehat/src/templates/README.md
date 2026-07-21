@@ -53,7 +53,9 @@ npm run compile
 npm test
 ```
 
-When you run `npm test`, you'll see an **interactive menu**:
+When you run `npm test` in a TTY, you'll see an **interactive menu**. In CI or
+another non-interactive shell, the same command runs all suites without
+waiting for input:
 
 ```text
 ? What tests do you want to run?
@@ -78,12 +80,16 @@ When you run `npm test`, you'll see an **interactive menu**:
    - Run with: `npm run test:ts` or `movehat test --ts`
 
 **Commands:**
-- `npm test` - Interactive menu to choose test type
+- `npm test` - TTY menu, or all suites in non-interactive use
 - `npm run test:move` or `movehat test --move` - Only Move unit tests (fast)
 - `npm run test:ts` or `movehat test --ts` - Only TypeScript integration tests
 - `movehat test --all` - Both Move + TypeScript tests
 - `npm run test:watch` or `movehat test --watch` - TypeScript tests in watch mode
 - `npm run test:coverage` or `movehat test --coverage` - Move coverage summary
+- `movehat test --all --coverage` - Covered Move tests and summary, then TypeScript tests
+
+Coverage cannot be combined with `--watch`. `--coverage --ts` requires
+`--all`, and `--filter` applies only to the Move phase.
 
 ### 5. Deploy (optional)
 
