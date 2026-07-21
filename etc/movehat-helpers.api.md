@@ -9,6 +9,14 @@ import { Aptos } from '@aptos-labs/ts-sdk';
 import type { Readable } from 'node:stream';
 import type { Writable } from 'node:stream';
 
+// @public (undocumented)
+export interface AccountData {
+    // (undocumented)
+    authentication_key: string;
+    // (undocumented)
+    sequence_number: string;
+}
+
 // @public
 export class AccountManager {
     constructor(options?: AccountManagerOptions);
@@ -80,10 +88,39 @@ export interface AccountManagerOptions {
 }
 
 // @public (undocumented)
+export interface AccountResource {
+    data: unknown;
+    // (undocumented)
+    type: string;
+}
+
+// @public (undocumented)
+export interface AccountState {
+    // (undocumented)
+    authenticationKey: string;
+    // (undocumented)
+    sequenceNumber: string;
+}
+
+// @public (undocumented)
 export function assertTransactionFailed(result: TransactionResult, expectedError?: string): void;
 
 // @public
 export function assertTransactionSuccess(result: TransactionResult): void;
+
+// @public
+export interface ChildProcessAdapter {
+    // (undocumented)
+    run(input: RunInput): Promise<RunResult>;
+    // (undocumented)
+    spawn(input: SpawnInput): SpawnedProcess;
+}
+
+// @public
+export type ChildProcessEnvironment = Record<string, string | undefined>;
+
+// @public
+export type ChildProcessSignal = "SIGABRT" | "SIGALRM" | "SIGBUS" | "SIGCHLD" | "SIGCONT" | "SIGFPE" | "SIGHUP" | "SIGILL" | "SIGINT" | "SIGIO" | "SIGIOT" | "SIGKILL" | "SIGPIPE" | "SIGPOLL" | "SIGPROF" | "SIGPWR" | "SIGQUIT" | "SIGSEGV" | "SIGSTKFLT" | "SIGSTOP" | "SIGSYS" | "SIGTERM" | "SIGTRAP" | "SIGTSTP" | "SIGTTIN" | "SIGTTOU" | "SIGUNUSED" | "SIGURG" | "SIGUSR1" | "SIGUSR2" | "SIGVTALRM" | "SIGWINCH" | "SIGXCPU" | "SIGXFSZ" | "SIGBREAK" | "SIGLOST" | "SIGINFO";
 
 // @public
 export function compareForkState(forkPath: string, account: string, resourceType: string, currentValue: unknown): Promise<{
@@ -100,13 +137,28 @@ export interface DeploymentInfo {
     // (undocumented)
     address: string;
     // (undocumented)
+    artifactHash?: string | undefined;
+    // (undocumented)
     blockNumber?: string | undefined;
     // (undocumented)
+    chainId?: string | undefined;
+    // (undocumented)
+    cliVersion?: string | undefined;
+    // (undocumented)
+    compilerVersion?: string | undefined;
+    // (undocumented)
     deployer: string;
+    // (undocumented)
+    kind?: "publish" | "code-object" | "upgrade-object" | undefined;
     // (undocumented)
     moduleName: string;
     // (undocumented)
     network: string;
+    // (undocumented)
+    previousTxHash?: string | undefined;
+    // (undocumented)
+    rpcFingerprint?: string | undefined;
+    schemaVersion?: 2 | undefined;
     // (undocumented)
     timestamp: number;
     // (undocumented)
@@ -114,7 +166,16 @@ export interface DeploymentInfo {
 }
 
 // @public (undocumented)
-export function findMoveliteBinary(): string | null;
+export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
+
+// @public (undocumented)
+export interface FindMoveliteBinaryOptions {
+    // (undocumented)
+    env?: Record<string, string | undefined>;
+    includePackage?: boolean;
+    // (undocumented)
+    projectRoot?: string;
+}
 
 // @public (undocumented)
 export interface ForkInfo {
@@ -126,6 +187,69 @@ export interface ForkInfo {
     nodeUrl?: string;
     // (undocumented)
     path: string;
+}
+
+// @public (undocumented)
+export interface ForkInitializeOptions {
+    // (undocumented)
+    overwrite?: boolean;
+}
+
+// @public
+export class ForkManager {
+    constructor(forkPath: string);
+    forwardView(payload: unknown, extraHeaders?: Record<string, string>): Promise<unknown[]>;
+    fundAccount(address: string, amount: number, coinType?: string): Promise<void>;
+    fundMultipleAccounts(addresses: string[], amount: number, coinType?: string): Promise<void>;
+    // (undocumented)
+    getAccount(address: string): Promise<AccountState>;
+    // (undocumented)
+    getAllResources(address: string): Promise<Record<string, unknown>>;
+    // (undocumented)
+    getMetadata(): ForkMetadata;
+    getOrCreateAccount(address: string): Promise<AccountState>;
+    // (undocumented)
+    getResource(address: string, resourceType: string): Promise<unknown>;
+    initialize(nodeUrl: string, networkName?: string, apiKey?: string, options?: ForkInitializeOptions): Promise<void>;
+    // (undocumented)
+    listAccounts(): string[];
+    load(): void;
+    resetState(): Promise<void>;
+    setApiKey(apiKey: string | undefined): void;
+    // (undocumented)
+    setResource(address: string, resourceType: string, data: unknown): Promise<void>;
+}
+
+// @public
+export interface ForkMetadata {
+    // (undocumented)
+    blockHeight: string;
+    // (undocumented)
+    chainId: number;
+    // (undocumented)
+    createdAt: string;
+    // (undocumented)
+    epoch: string;
+    // (undocumented)
+    ledgerVersion: string;
+    // (undocumented)
+    network: string;
+    // (undocumented)
+    nodeUrl: string;
+    // (undocumented)
+    timestamp: string;
+}
+
+// @public
+export class ForkServer {
+    constructor(forkPath: string, port?: number, host?: string, options?: ForkServerOptions);
+    start(): Promise<void>;
+    stop(): Promise<void>;
+}
+
+// @public (undocumented)
+export interface ForkServerOptions {
+    corsAllowOrigins?: readonly string[];
 }
 
 // @public
@@ -143,11 +267,35 @@ export function getForkInfo(path: string): Promise<ForkInfo>;
 // @public
 export function isHexAddress(input: string): boolean;
 
+// @public (undocumented)
+export interface LedgerInfo {
+    // (undocumented)
+    block_height: string;
+    // (undocumented)
+    chain_id: number;
+    // (undocumented)
+    epoch: string;
+    // (undocumented)
+    git_hash?: string;
+    // (undocumented)
+    ledger_timestamp: string;
+    // (undocumented)
+    ledger_version: string;
+    // (undocumented)
+    node_role: string;
+    // (undocumented)
+    oldest_block_height: string;
+    // (undocumented)
+    oldest_ledger_version: string;
+}
+
 // @public
 export function listSnapshots(): Promise<string[]>;
 
 // @public (undocumented)
-export function loadDeployment(network: string, moduleName: string): DeploymentInfo | null;
+export function loadDeployment(network: string, moduleName: string, options?: {
+    quarantineCorrupt?: boolean;
+}): DeploymentInfo | null;
 
 // @public (undocumented)
 export interface LocalNodeInfo {
@@ -175,7 +323,6 @@ export class LocalNodeManager {
 
 // @public (undocumented)
 export interface LocalNodeOptions {
-    // Warning: (ae-forgotten-export) The symbol "ChildProcessAdapter" needs to be exported by the entry point index.d.ts
     adapter?: ChildProcessAdapter;
     // @deprecated
     apiPort?: number;
@@ -193,23 +340,20 @@ export interface LocalNodeOptions {
 
 // @public
 export interface LocalTestingContext {
-    // Warning: (ae-forgotten-export) The symbol "ForkManager" needs to be exported by the entry point index.d.ts
-    //
     // @internal (undocumented)
     forkManager?: ForkManager;
-    // Warning: (ae-forgotten-export) The symbol "ForkServer" needs to be exported by the entry point index.d.ts
-    //
     // @internal (undocumented)
     forkServer?: ForkServer;
     // @internal (undocumented)
     localNode?: NodeProvider;
     ownsNode: boolean;
-    // Warning: (ae-forgotten-export) The symbol "MovehatRuntime" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     runtime: MovehatRuntime;
     teardown: () => Promise<void>;
 }
+
+// @public
+export type LocalTestingMode = 'local-node' | 'fork';
 
 // @public
 export interface LocalTestOptions {
@@ -227,14 +371,14 @@ export interface LocalTestOptions {
     // (undocumented)
     forkNetwork?: 'testnet' | 'mainnet' | string;
     // (undocumented)
+    forkOverwrite?: boolean;
+    // (undocumented)
     forkPort?: number;
     // (undocumented)
     forkResetState?: boolean;
     forkRpcUrl?: string;
     // (undocumented)
     localNode?: NodeProvider;
-    // Warning: (ae-forgotten-export) The symbol "LocalTestingMode" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     mode?: LocalTestingMode;
     // (undocumented)
@@ -276,8 +420,6 @@ export interface MovehatConfig {
     namedAddresses: Record<string, string>;
     // (undocumented)
     network: string;
-    // Warning: (ae-forgotten-export) The symbol "NetworkConfig" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     networkConfig: NetworkConfig;
     // (undocumented)
@@ -286,6 +428,45 @@ export interface MovehatConfig {
     profile: string;
     // (undocumented)
     rpc: string;
+}
+
+// @public (undocumented)
+export interface MovehatRuntime {
+    // (undocumented)
+    account: Account;
+    // (undocumented)
+    accountManager: AccountManager;
+    // (undocumented)
+    accounts: Account[];
+    // (undocumented)
+    aptos: Aptos;
+    // (undocumented)
+    config: MovehatConfig;
+    // (undocumented)
+    createAccount: () => Account;
+    // (undocumented)
+    deployContract: (moduleName: string, options?: {
+        packageDir?: string;
+        adapter?: ChildProcessAdapter;
+        sdkPublish?: boolean;
+        redeploy?: boolean;
+    }) => Promise<DeploymentInfo>;
+    // (undocumented)
+    getAccount: (privateKey: string) => Account;
+    // (undocumented)
+    getAccountByIndex: (index: number) => Account;
+    // (undocumented)
+    getContract: (address: string, moduleName: string) => MoveContract;
+    // (undocumented)
+    getDeployment: (moduleName: string) => DeploymentInfo | null;
+    // (undocumented)
+    getDeploymentAddress: (moduleName: string) => string | null;
+    // (undocumented)
+    getDeployments: () => Record<string, DeploymentInfo>;
+    // (undocumented)
+    network: NetworkInfo;
+    // (undocumented)
+    switchNetwork: (networkName: string) => Promise<MovehatRuntime>;
 }
 
 // @public (undocumented)
@@ -305,6 +486,30 @@ export class MoveliteManager implements NodeProvider {
     stop(): Promise<void>;
 }
 
+// @public
+export interface NetworkConfig {
+    // (undocumented)
+    accounts?: string[];
+    // (undocumented)
+    chainId?: string;
+    // (undocumented)
+    namedAddresses?: Record<string, string>;
+    // (undocumented)
+    profile?: string;
+    // (undocumented)
+    url: string;
+}
+
+// @public (undocumented)
+export interface NetworkInfo {
+    // (undocumented)
+    chainId?: string;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    rpc: string;
+}
+
 // @public (undocumented)
 export interface NodeProvider {
     // (undocumented)
@@ -321,6 +526,36 @@ export interface NodeProvider {
 
 // @public
 export function normalizeAddress(input: string): string;
+
+// @public (undocumented)
+export interface RunInput {
+    // (undocumented)
+    args: readonly string[];
+    // (undocumented)
+    command: string;
+    // (undocumented)
+    cwd?: string;
+    // (undocumented)
+    env?: ChildProcessEnvironment;
+    inheritStdio?: boolean;
+    maxBuffer?: number;
+    // (undocumented)
+    signal?: AbortSignal;
+    // (undocumented)
+    stdin?: string;
+    timeoutMs?: number;
+}
+
+// @public (undocumented)
+export interface RunResult {
+    exitCode: number;
+    interruptedByParent?: "SIGINT" | "SIGTERM";
+    signal?: ChildProcessSignal;
+    // (undocumented)
+    stderr: string;
+    // (undocumented)
+    stdout: string;
+}
 
 // @public (undocumented)
 export interface SaveAccountPoolOptions {
@@ -352,6 +587,38 @@ export interface SnapshotOptions {
     name?: string;
     // (undocumented)
     path?: string;
+}
+
+// @public
+export interface SpawnedProcess {
+    exited: Promise<{
+        code: number | null;
+        signal: ChildProcessSignal | null;
+    }>;
+    // (undocumented)
+    kill(signal?: ChildProcessSignal): boolean;
+    // (undocumented)
+    pid: number | undefined;
+    // (undocumented)
+    stderr: Readable | null;
+    // (undocumented)
+    stdin: Writable | null;
+    // (undocumented)
+    stdout: Readable | null;
+    unref(): void;
+}
+
+// @public
+export interface SpawnInput {
+    // (undocumented)
+    args: readonly string[];
+    // (undocumented)
+    command: string;
+    // (undocumented)
+    cwd?: string;
+    // (undocumented)
+    env?: ChildProcessEnvironment;
+    stdio?: 'pipe' | 'ignore';
 }
 
 // @public (undocumented)

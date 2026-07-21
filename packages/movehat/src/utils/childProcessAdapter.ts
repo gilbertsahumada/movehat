@@ -111,7 +111,7 @@ export interface RunResult {
    * Populated when the child died from a signal (e.g. external abort, kill
    * during shutdown). `undefined` for normal exits.
    */
-  signal?: NodeJS.Signals;
+  signal?: ChildProcessSignal;
   /**
    * Set by `runCliUntilInterrupted` when Movehat received the signal and
    * forwarded shutdown to the child. A child-only signal leaves this unset,

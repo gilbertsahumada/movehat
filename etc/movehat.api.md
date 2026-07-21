@@ -132,6 +132,25 @@ export function compareForkState(forkPath: string, account: string, resourceType
     changed: boolean;
 }>;
 
+// @public
+export interface CreateForkOptions {
+    // (undocumented)
+    accountLabels?: readonly string[];
+    // (undocumented)
+    apiKey?: string;
+    // (undocumented)
+    name?: string;
+    // (undocumented)
+    network?: string;
+    overwrite?: boolean;
+    // (undocumented)
+    port?: number;
+    // (undocumented)
+    resetState?: boolean;
+    // (undocumented)
+    rpcUrl?: string;
+}
+
 // @public (undocumented)
 export function createTestAccount(): Account;
 
@@ -152,13 +171,28 @@ export interface DeploymentInfo {
     // (undocumented)
     address: string;
     // (undocumented)
+    artifactHash?: string | undefined;
+    // (undocumented)
     blockNumber?: string | undefined;
     // (undocumented)
+    chainId?: string | undefined;
+    // (undocumented)
+    cliVersion?: string | undefined;
+    // (undocumented)
+    compilerVersion?: string | undefined;
+    // (undocumented)
     deployer: string;
+    // (undocumented)
+    kind?: "publish" | "code-object" | "upgrade-object" | undefined;
     // (undocumented)
     moduleName: string;
     // (undocumented)
     network: string;
+    // (undocumented)
+    previousTxHash?: string | undefined;
+    // (undocumented)
+    rpcFingerprint?: string | undefined;
+    schemaVersion?: 2 | undefined;
     // (undocumented)
     timestamp: number;
     // (undocumented)
@@ -166,7 +200,28 @@ export interface DeploymentInfo {
 }
 
 // @public (undocumented)
-export function findMoveliteBinary(): string | null;
+export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
+
+// @public (undocumented)
+export interface FindMoveliteBinaryOptions {
+    // (undocumented)
+    env?: Record<string, string | undefined>;
+    includePackage?: boolean;
+    // (undocumented)
+    projectRoot?: string;
+}
+
+// @public (undocumented)
+export class ForkAlreadyExistsError extends Error {
+    constructor(message: string);
+}
+
+// @public (undocumented)
+export class ForkDataNotFoundError extends Error {
+    constructor(message: string, options?: {
+        cause?: unknown;
+    });
+}
 
 // @public (undocumented)
 export interface ForkInfo {
@@ -178,6 +233,12 @@ export interface ForkInfo {
     nodeUrl?: string;
     // (undocumented)
     path: string;
+}
+
+// @public (undocumented)
+export interface ForkInitializeOptions {
+    // (undocumented)
+    overwrite?: boolean;
 }
 
 // @public
@@ -195,7 +256,7 @@ export class ForkManager {
     getOrCreateAccount(address: string): Promise<AccountState>;
     // (undocumented)
     getResource(address: string, resourceType: string): Promise<unknown>;
-    initialize(nodeUrl: string, networkName?: string, apiKey?: string): Promise<void>;
+    initialize(nodeUrl: string, networkName?: string, apiKey?: string, options?: ForkInitializeOptions): Promise<void>;
     // (undocumented)
     listAccounts(): string[];
     load(): void;
@@ -237,19 +298,33 @@ export interface ForkServerOptions {
     corsAllowOrigins?: readonly string[];
 }
 
+// @public (undocumented)
+export class ForkSnapshotPrunedError extends Error {
+    constructor(message: string, options?: {
+        cause?: unknown;
+    });
+}
+
 // @public
 export class ForkStorage {
     constructor(forkPath: string);
+    // (undocumented)
+    advanceCacheGeneration(): string;
     clearAccounts(): void;
     clearResources(): void;
     exists(): boolean;
     getAccount(address: string): AccountState | null;
     getAllResources(address: string): Record<string, unknown>;
+    // (undocumented)
+    getCacheGeneration(): string;
     getResource(address: string, resourceType: string): unknown | null;
+    // (undocumented)
+    hasAllResources(address: string): boolean;
     hasResource(address: string, resourceType: string): boolean;
     initialize(): void;
     listAccounts(): string[];
     loadMetadata(): ForkMetadata;
+    migrateLegacyResourceCache(): void;
     saveAccount(address: string, state: AccountState): void;
     saveAllResources(address: string, resources: Record<string, unknown>): void;
     saveMetadata(metadata: ForkMetadata): void;
@@ -273,6 +348,8 @@ export class Harness {
     readonly accounts: Readonly<Record<string, Account>>;
     cleanup(): Promise<void>;
     static createFork(network: string, apiKey?: string, rpcUrl?: string): Promise<Harness>;
+    // (undocumented)
+    static createFork(options?: CreateForkOptions): Promise<Harness>;
     static createLive(network: string, _faucetUrl?: string): Promise<Harness>;
     static createLocal(options?: LocalTestOptions): Promise<Harness>;
     deployCodeObject(options: DeployCodeObjectOptions): Promise<CodeObjectInfo>;
@@ -317,6 +394,13 @@ export interface InitRuntimeOptions {
     traceRpcUrl?: string;
 }
 
+// @public (undocumented)
+export class InvalidPersistedStateError extends Error {
+    constructor(message: string, path: string, options?: ErrorOptions);
+    // (undocumented)
+    readonly path: string;
+}
+
 // @public
 export function isHexAddress(input: string): boolean;
 
@@ -346,7 +430,9 @@ export interface LedgerInfo {
 export function listSnapshots(): Promise<string[]>;
 
 // @public (undocumented)
-export function loadDeployment(network: string, moduleName: string): DeploymentInfo | null;
+export function loadDeployment(network: string, moduleName: string, options?: {
+    quarantineCorrupt?: boolean;
+}): DeploymentInfo | null;
 
 // @public (undocumented)
 export interface LocalNodeInfo {
@@ -421,6 +507,8 @@ export interface LocalTestOptions {
     forkName?: string;
     // (undocumented)
     forkNetwork?: 'testnet' | 'mainnet' | string;
+    // (undocumented)
+    forkOverwrite?: boolean;
     // (undocumented)
     forkPort?: number;
     // (undocumented)
@@ -564,21 +652,46 @@ export class MoveliteManager implements NodeProvider {
     stop(): Promise<void>;
 }
 
-// @public
+// @public (undocumented)
 export class MovementApiClient {
     constructor(nodeUrl: string, apiKey?: string, options?: MovementApiClientOptions);
-    getAccount(address: string): Promise<AccountData>;
-    getAccountResource(address: string, resourceType: string): Promise<AccountResource>;
-    getAccountResources(address: string): Promise<AccountResource[]>;
+    // (undocumented)
+    getAccount(address: string, ledgerVersion?: string): Promise<AccountData>;
+    // (undocumented)
+    getAccountResource(address: string, resourceType: string, ledgerVersion?: string): Promise<AccountResource>;
+    // (undocumented)
+    getAccountResources(address: string, ledgerVersion?: string): Promise<AccountResource[]>;
+    // (undocumented)
     getLedgerInfo(): Promise<LedgerInfo>;
-    view(payload: unknown, extraHeaders?: Record<string, string>): Promise<unknown[]>;
+    // (undocumented)
+    view(payload: unknown, extraHeaders?: Record<string, string>, ledgerVersion?: string): Promise<unknown[]>;
 }
 
 // @public (undocumented)
 export interface MovementApiClientOptions {
+    // (undocumented)
     maxBytes?: number;
+    // (undocumented)
     timeoutMs?: number;
 }
+
+// @public
+export class MovementApiError extends Error {
+    constructor(message: string, code: MovementApiErrorCode, options?: {
+        statusCode?: number;
+        upstreamErrorCode?: string;
+        cause?: unknown;
+    });
+    // (undocumented)
+    readonly code: MovementApiErrorCode;
+    // (undocumented)
+    readonly statusCode?: number;
+    // (undocumented)
+    readonly upstreamErrorCode?: string;
+}
+
+// @public (undocumented)
+export type MovementApiErrorCode = 'http_error' | 'timeout' | 'response_too_large' | 'invalid_response' | 'network_error';
 
 // @public
 export interface MoveScriptResult {
@@ -602,6 +715,15 @@ export interface NetworkConfig {
     profile?: string;
     // (undocumented)
     url: string;
+}
+
+// @public
+export class NetworkConflictError extends Error {
+    constructor(apiNetwork: string, cliNetwork: string);
+    // (undocumented)
+    readonly apiNetwork: string;
+    // (undocumented)
+    readonly cliNetwork: string;
 }
 
 // @public (undocumented)
@@ -656,7 +778,6 @@ export interface RunInput {
     signal?: AbortSignal;
     // (undocumented)
     stdin?: string;
-    // (undocumented)
     timeoutMs?: number;
 }
 
@@ -673,6 +794,7 @@ export interface RunMoveScriptOptions {
 // @public (undocumented)
 export interface RunResult {
     exitCode: number;
+    interruptedByParent?: "SIGINT" | "SIGTERM";
     signal?: ChildProcessSignal;
     // (undocumented)
     stderr: string;
@@ -786,6 +908,19 @@ export interface TestFixture<TModules extends string = string> {
     teardown: () => Promise<void>;
 }
 
+// @public
+export class TransactionOutcomeUnknownError extends Error {
+    constructor(message: string, operation: string, txHash?: string | undefined, stdoutPreview?: string, cause?: Error | undefined);
+    // (undocumented)
+    readonly cause?: Error | undefined;
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly stdoutPreview: string | undefined;
+    // (undocumented)
+    readonly txHash?: string | undefined;
+}
+
 // @public (undocumented)
 export interface TransactionResult {
     // (undocumented)
@@ -794,6 +929,13 @@ export interface TransactionResult {
     success: boolean;
     // (undocumented)
     vm_status: string;
+}
+
+// @public
+export class UnsafePathError extends Error {
+    constructor(message: string, path: string);
+    // (undocumented)
+    readonly path: string;
 }
 
 // @public

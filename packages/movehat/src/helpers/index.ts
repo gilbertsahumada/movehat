@@ -33,6 +33,17 @@ export type { LocalNodeOptions, LocalNodeInfo } from "../node/LocalNodeManager.j
 export { MoveliteManager, findMoveliteBinary } from "../node/MoveliteManager.js";
 export type { FindMoveliteBinaryOptions } from "../node/MoveliteManager.js";
 export type { NodeProvider } from "../node/NodeProvider.js";
+export { ForkManager } from "../fork/manager.js";
+export type { ForkInitializeOptions } from "../fork/manager.js";
+export { ForkServer } from "../fork/server.js";
+export type { ForkServerOptions } from "../fork/server.js";
+export type {
+  AccountData,
+  AccountResource,
+  AccountState,
+  ForkMetadata,
+  LedgerInfo,
+} from "../types/fork.js";
 export { setupLocalTesting } from "./setupLocalTesting.js";
 export type { LocalTestingContext } from "./setupLocalTesting.js";
 export {
@@ -42,4 +53,19 @@ export {
 export type { TestFixture } from "./testFixtures.js";
 export { normalizeAddress, isHexAddress } from "../utils/address.js";
 
-export type { MovehatConfig, LocalTestOptions } from "../types/config.js";
+export type {
+  LocalTestingMode,
+  MovehatConfig,
+  LocalTestOptions,
+  NetworkConfig,
+} from "../types/config.js";
+export type { MovehatRuntime, NetworkInfo } from "../types/runtime.js";
+export type {
+  ChildProcessAdapter,
+  ChildProcessEnvironment,
+  ChildProcessSignal,
+  RunInput,
+  RunResult,
+  SpawnInput,
+  SpawnedProcess,
+} from "../utils/childProcessAdapter.js";
