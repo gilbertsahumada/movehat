@@ -108,6 +108,16 @@ describe("ForkManager — initialize / load", () => {
     expect(apiCtorCalls[0]?.apiKey).toBe("secret-key");
   });
 
+  it("reinitializing without an apiKey clears a key from the prior initialization", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const mgr = new ForkManager(forkPath);
+
+    await mgr.initialize(TEST_NODE_URL, "testnet", "secret-key");
+    await mgr.initialize(TEST_NODE_URL, "testnet", undefined, { overwrite: true });
+
+    expect(apiCtorCalls.at(-1)?.apiKey).toBeUndefined();
+  });
+
   it("initialize labels the fork with the provided networkName", async () => {
     fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
     const mgr = new ForkManager(forkPath);
@@ -289,9 +299,11 @@ describe("ForkManager — account + resource fetch", () => {
       "http_error",
       { statusCode: 410, upstreamErrorCode: "version_pruned" }
     ));
-    await expect(
-      mgr.getResource(TEST_ADDR, "0x1::missing::Resource")
-    ).rejects.toBeInstanceOf(ForkSnapshotPrunedError);
+    const error = await mgr.getResource(TEST_ADDR, "0x1::missing::Resource")
+      .catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ForkSnapshotPrunedError);
+    expect((error as Error).message).toMatch(/recreate.*overwrite/i);
+    expect((error as Error).message).toMatch(/resetState.*cannot/i);
   });
 
   it("translates a pruned pinned view snapshot", async () => {
@@ -300,8 +312,11 @@ describe("ForkManager — account + resource fetch", () => {
       "http_error",
       { statusCode: 404, upstreamErrorCode: "version_pruned" }
     ));
-    await expect(mgr.forwardView({ function: "0x1::m::f" }))
-      .rejects.toBeInstanceOf(ForkSnapshotPrunedError);
+    const error = await mgr.forwardView({ function: "0x1::m::f" })
+      .catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ForkSnapshotPrunedError);
+    expect((error as Error).message).toMatch(/recreate.*overwrite/i);
+    expect((error as Error).message).toMatch(/resetState.*cannot/i);
   });
 
   it("getAllResources fetches the whole list once, caches, and returns by type", async () => {

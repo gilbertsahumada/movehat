@@ -304,6 +304,20 @@ describe('ForkStorage', () => {
       }).not.toThrow();
       expect(storage.hasAllResources('0x1')).toBe(true);
     });
+
+    it('does not mark malformed legacy resource maps complete', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: JSON.stringify({
+          '0x1::a::A': ['not', 'resource', 'data'],
+        }),
+      });
+      const storage = new ForkStorage(forkPath);
+
+      expect(() => storage.migrateLegacyResourceCache())
+        .toThrow(/object-shaped resource map/);
+      expect(storage.hasAllResources('0x1')).toBe(false);
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(false);
+    });
   });
 
   describe('address sanitization', () => {

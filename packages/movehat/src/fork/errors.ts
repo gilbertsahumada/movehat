@@ -44,6 +44,9 @@ export class ForkSnapshotPrunedError extends Error {
   }
 }
 
+export const FORK_SNAPSHOT_PRUNED_GUIDANCE =
+  'Recreate the fork at a fresh ledger version (CLI: run movehat fork create again and confirm overwrite; API: initialize with overwrite: true). resetState() only clears local cache and cannot restore a pruned upstream snapshot.';
+
 export class ForkAlreadyExistsError extends Error {
   constructor(message: string) {
     super(message);

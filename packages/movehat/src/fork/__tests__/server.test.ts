@@ -184,6 +184,8 @@ describe("ForkServer — POST /v1/view proxy", () => {
 
     expect(status).toBe(410);
     expect(body.error_code).toBe("fork_snapshot_pruned");
+    expect(body.message).toMatch(/recreate.*overwrite/i);
+    expect(body.message).toMatch(/resetState.*cannot/i);
   });
 
   it("redacts upstream view errors before logging or returning them", async () => {

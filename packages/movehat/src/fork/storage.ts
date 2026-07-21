@@ -75,6 +75,23 @@ function readJsonFile<T>(path: string, label: string): T {
   }
 }
 
+function readLegacyResourceMap(path: string): Record<string, unknown> {
+  const resources = readJsonFile<Record<string, unknown>>(path, 'fork resources');
+  for (const [resourceType, data] of Object.entries(resources)) {
+    if (
+      resourceType.length === 0 ||
+      data === null ||
+      typeof data !== 'object' ||
+      Array.isArray(data)
+    ) {
+      throw new Error(
+        `Invalid legacy fork resources at ${path}. Expected an object-shaped resource map.`
+      );
+    }
+  }
+  return resources;
+}
+
 /**
  * Storage system for fork state
  * Manages the file structure and I/O for fork data
@@ -149,10 +166,7 @@ export class ForkStorage {
       for (const file of readdirSync(resourcesDir).sort()) {
         if (!/^0x[0-9a-fA-F]{1,64}\.json$/.test(file)) continue;
         // Validate legacy JSON before declaring it complete.
-        readJsonFile<Record<string, unknown>>(
-          join(resourcesDir, file),
-          'fork resources'
-        );
+        readLegacyResourceMap(join(resourcesDir, file));
         const address = file.slice(0, -'.json'.length);
         const marker = this.getAllResourcesMarkerPath(address);
         if (!existsSync(marker)) writePrivateFile(marker, 'complete\n');

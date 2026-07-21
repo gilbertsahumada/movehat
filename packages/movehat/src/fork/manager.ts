@@ -9,6 +9,7 @@ import {
   ForkAlreadyExistsError,
   ForkDataNotFoundError,
   ForkSnapshotPrunedError,
+  FORK_SNAPSHOT_PRUNED_GUIDANCE,
   isMovementApiHttpError,
   isPrunedSnapshotError,
 } from './errors.js';
@@ -81,7 +82,7 @@ export class ForkManager {
   private translateReadError(error: unknown, notFoundMessage: string): never {
     if (isPrunedSnapshotError(error)) {
       throw new ForkSnapshotPrunedError(
-        `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream`,
+        `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
         { cause: error }
       );
     }
@@ -119,7 +120,11 @@ export class ForkManager {
     apiKey?: string,
     options: ForkInitializeOptions = {}
   ): Promise<void> {
-    if (apiKey !== undefined) this.apiKey = apiKey;
+    if (apiKey === undefined) {
+      delete this.apiKey;
+    } else {
+      this.apiKey = apiKey;
+    }
 
     const apiClient = new MovementApiClient(nodeUrl, this.apiKey);
     const ledgerInfo = await apiClient.getLedgerInfo();
@@ -326,7 +331,7 @@ export class ForkManager {
     } catch (error) {
       if (isPrunedSnapshotError(error)) {
         throw new ForkSnapshotPrunedError(
-          `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream`,
+          `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
           { cause: error }
         );
       }

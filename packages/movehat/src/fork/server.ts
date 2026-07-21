@@ -3,7 +3,11 @@ import { URL } from 'url';
 import { ForkManager } from './manager.js';
 import { logger } from '../ui/index.js';
 import { redactSecrets } from '../utils/redact.js';
-import { ForkDataNotFoundError, ForkSnapshotPrunedError } from './errors.js';
+import {
+  FORK_SNAPSHOT_PRUNED_GUIDANCE,
+  ForkDataNotFoundError,
+  ForkSnapshotPrunedError,
+} from './errors.js';
 
 export interface ForkServerOptions {
   /**
@@ -108,7 +112,7 @@ export class ForkServer {
 
   private sendSnapshotPruned(res: http.ServerResponse): void {
     this.sendJSON(res, 410, {
-      message: 'The pinned fork snapshot is no longer available upstream',
+      message: `The pinned fork snapshot is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
       error_code: 'fork_snapshot_pruned',
       vm_error_code: null
     });
