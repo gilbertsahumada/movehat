@@ -103,7 +103,7 @@ const harness = await Harness.createFork("testnet");
 // harness.deployCodeObject / upgradeCodeObject / runMoveScript throw a clear error
 ```
 
-> The `apiKey` parameter is reserved — wiring into the `MovementApiClient` Authorization header is a TODO for an upcoming sub-PR. Passing it today is a silent no-op.
+> The `apiKey` argument is sent as an `Authorization: Bearer <apiKey>` header on upstream reads — pass it explicitly (e.g. `Harness.createFork("mainnet", process.env.MOVEMENT_API_KEY)`); Movehat does not read `MOVEMENT_API_KEY` from the environment on its own.
 
 > **Fork-mode view caveat:** the fork server proxies `/v1/accounts/<addr>` and `/v1/accounts/<addr>/resource/...` but **not** `/v1/accounts/<addr>/module/<name>`. SDK paths that call `getAccountModule` under the hood (which includes `aptos.view` for some payload shapes) raise `endpoint_not_found`. For full-fidelity view-function reads against testnet/mainnet state, prefer `createLive(network)` or point the SDK directly at the upstream RPC. Fork mode remains the right choice for resource reads and write-attempt rejection tests.
 
@@ -112,8 +112,13 @@ const harness = await Harness.createFork("testnet");
 Binds to a real running network. No local process is spawned; transactions hit the configured RPC. Use for testnet / mainnet deployments and real-network reads/writes.
 
 ```typescript
-const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
-if (!network) throw new Error("Select a live network explicitly");
+const network =
+  process.env.MH_CLI_NETWORK ??
+  process.env.MOVEHAT_NETWORK ??
+  process.env.MH_DEFAULT_NETWORK;
+if (!network || network === "local" || network === "movelite") {
+  throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
+}
 const harness = await Harness.createLive(network);
 ```
 
