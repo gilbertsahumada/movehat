@@ -12,7 +12,7 @@ movehat run <script> [options]
 
 Execute a TypeScript/JavaScript script with the Movehat Runtime Environment.
 
-> ⚠️ Scripts invoked via `movehat run` may use `Harness.createLive(network)` and submit real transactions to testnet or mainnet, spending real MOVE from the configured `PRIVATE_KEY`. The generated script is local by default. Its precedence is `--network`, `MOVEHAT_NETWORK`, `MH_DEFAULT_NETWORK`, then `defaultNetwork` in `movehat.config.ts`.
+> ⚠️ Scripts invoked via `movehat run` may use `Harness.createLive(network)` and submit real transactions to testnet or mainnet, spending real MOVE from the configured `PRIVATE_KEY`. The generated script is local by default. Its precedence is `--network` / `MH_CLI_NETWORK`, `MOVEHAT_NETWORK`, `MH_DEFAULT_NETWORK`, then `defaultNetwork` in `movehat.config.ts`.
 
 ## Options
 

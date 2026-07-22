@@ -47,8 +47,10 @@ export default {
 
 ### Key Design Decisions
 
-- **One account for all networks** — Just like Hardhat, your `PRIVATE_KEY` works across testnet, mainnet, and local
-- **Simpler configuration** — Networks only need their RPC URL
+- **Explicit public signing** — Testnet and mainnet transactions use your
+  configured account; Movehat never injects its deterministic development key
+- **Credential-free local default** — Loopback local/movelite networks receive
+  a deterministic development account automatically
 - **Flexible** — You can still specify different accounts per network if needed
 
 ## Environment Variables
@@ -72,7 +74,8 @@ Movehat looks for accounts in this order:
 
 ## Environment Setup
 
-**For testing only?** Skip environment setup! Tests use auto-generated accounts.
+**For local testing only?** Skip environment setup. Local/movelite tests use
+safe deterministic development accounts; public networks never do.
 
 **For real deployment?** Configure your private key:
 
@@ -88,7 +91,7 @@ PRIVATE_KEY=0x<YOUR_PRIVATE_KEY>
 
 **Security notes:**
 - Public testnet and mainnet transactions require an explicit `PRIVATE_KEY`
-- Tests automatically use safe, auto-generated test accounts (no configuration needed)
+- Local tests automatically use safe development accounts (no configuration needed)
 
 ## Network Options
 

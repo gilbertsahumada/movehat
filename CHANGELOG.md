@@ -50,6 +50,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (which has nothing durable to snapshot), preserving the 0.6.0 no-flag fork
   behavior for the new local-first scaffold.
 
+### Fixed
+
+- Network documentation and live-script examples now match the local-first
+  scaffold: public transaction examples require an explicit network and
+  signing credentials, while read-only public forks remain credential-free.
+  Network-precedence examples include CLI, environment, and config selectors.
+  Closes #384. Tracks #371.
+
 ## [0.6.0] - 2026-07-12
 
 ### Changed
