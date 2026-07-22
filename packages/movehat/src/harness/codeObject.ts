@@ -1,5 +1,4 @@
 import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
-import { resolve } from "node:path";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   DeployCodeObjectOptions,
@@ -10,6 +9,10 @@ import { extractNamedAddresses } from "../commands/compile.js";
 import {
   saveDeployment,
   loadDeployment,
+  assertDeploymentEnvironment,
+  fingerprintRpcUrl,
+  tryHashBuildArtifacts,
+  sanitizeRpcUrl,
   validateSafeName,
   type DeploymentInfo,
 } from "../core/deployments.js";
@@ -18,6 +21,7 @@ import {
   CliExecutionError,
   ModuleAlreadyDeployedError,
   PostPublishError,
+  TransactionOutcomeUnknownError,
 } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
@@ -30,6 +34,17 @@ import {
   cleanupCallbacks,
 } from "../core/movementProfile.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
+import { withFileLocks } from "../utils/fileLock.js";
+import { isHexAddress, normalizeAddress } from "../utils/address.js";
+import { deploymentLockKeys } from "../utils/deploymentLockKeys.js";
+
+function validateMoveIdentifier(value: string, label: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(
+      `${label} '${value}' is not a valid Move identifier; expected [A-Za-z_][A-Za-z0-9_]*`,
+    );
+  }
+}
 
 /**
  * Deploy a Move package as a code object via `movement move deploy-object`.
@@ -134,7 +149,11 @@ async function executeMovementMoveObject(
   const { runtime, moduleName } = opts;
   const config = runtime.config;
 
+  // moduleName is only the record label + lock key (validateSafeName allows
+  // hyphens, matching 0.6.0); the identifier check applies to the value the
+  // CLI actually receives via --address-name.
   validateSafeName(moduleName, "module");
+  validateMoveIdentifier(opts.addressName ?? moduleName, "Address name");
 
   const dir = opts.packageDir || config.moveDir;
   const safeDir = validatePathSafety(dir, "package directory");
@@ -144,8 +163,18 @@ async function executeMovementMoveObject(
   // deploy of the same package (through either path) could publish
   // bytecode compiled for the other deploy's address. Upgrade builds
   // too, so it takes the lock as well.
-  return withKeyedLock(resolve(safeDir), () =>
-    executeMovementMoveObjectLocked(opts, dir, safeDir),
+  const chainIdentity = config.networkConfig.chainId ?? config.network;
+  const lockScope = deploymentLockKeys({
+    packageDir: safeDir,
+    chainIdentity,
+    moduleName,
+  });
+  return withKeyedLock(lockScope.canonicalPackageDir, () =>
+    withFileLocks(
+      lockScope.keys,
+      () => executeMovementMoveObjectLocked(opts, dir, safeDir),
+      { timeoutMs: 360_000, onWait: (message) => logger.info(message) },
+    ),
   );
 }
 
@@ -162,8 +191,28 @@ async function executeMovementMoveObjectLocked(
   // Upgrade does not check this (the whole point is to overwrite).
   const forceRedeploy =
     opts.redeploy ?? process.env.MH_CLI_REDEPLOY === "true";
+  const existing = loadDeployment(config.network, moduleName, {
+    quarantineCorrupt: forceRedeploy,
+  });
+  if (existing) {
+    assertDeploymentEnvironment(existing, {
+      ...(config.networkConfig.chainId !== undefined
+        ? { chainId: config.networkConfig.chainId }
+        : {}),
+      rpc: config.rpc,
+      allowRpcMismatch: forceRedeploy,
+    });
+  }
+  if (
+    subcommand === "upgrade-object" &&
+    existing &&
+    normalizeAddress(existing.address) !== normalizeAddress(opts.fixedAddress ?? "")
+  ) {
+    throw new Error(
+      `Upgrade object '${opts.fixedAddress}' does not match recorded deployment '${existing.address}'`,
+    );
+  }
   if (opts.checkIdempotency) {
-    const existing = loadDeployment(config.network, moduleName);
     if (existing && !forceRedeploy) {
       const errorDetails = [
         `Module "${moduleName}" is already deployed on ${config.network}`,
@@ -196,9 +245,20 @@ async function executeMovementMoveObjectLocked(
     }
   }
 
+  logger.section("Transaction preflight");
+  logger.kv("Operation", subcommand, 2);
+  logger.kv("Network", config.network, 2);
+  logger.kv("Chain ID", config.networkConfig.chainId ?? "unknown", 2);
+  logger.kv("RPC", sanitizeRpcUrl(config.rpc), 2);
+  logger.kv("Signer", account.accountAddress.toString(), 2);
+  logger.kv("Module", moduleName, 2);
+  if (opts.fixedAddress) logger.kv("Object", opts.fixedAddress, 2);
+  logger.newline();
+
   logger.step(
     `${subcommand === "deploy-object" ? "Deploying" : "Upgrading"} module "${moduleName}" from ${dir}...`
   );
+  const rpcFingerprint = fingerprintRpcUrl(config.rpc);
 
   try {
     const deployerAddress = account.accountAddress.toString();
@@ -211,6 +271,14 @@ async function executeMovementMoveObjectLocked(
     for (const name of detectedAddresses) addrMap.set(name, deployerAddress);
     if (opts.namedAddresses) {
       for (const [k, v] of Object.entries(opts.namedAddresses)) addrMap.set(k, v);
+    }
+    for (const [name, address] of addrMap) {
+      validateMoveIdentifier(name, "Named address");
+      if (!isHexAddress(address)) {
+        throw new Error(
+          `Named address '${name}' must be a 1-64 digit hexadecimal address`,
+        );
+      }
     }
     const namedAddrArgs: string[] =
       addrMap.size > 0
@@ -317,10 +385,12 @@ async function executeMovementMoveObjectLocked(
     const txHash = parseTxHash(deployOut);
 
     if (!objectAddress) {
-      throw new Error(
-        `Could not parse object address from '${subcommand}' output. ` +
-          `Expected a line containing 'object address 0x...' or a JSON ` +
-          `'Result' block with an 'object_address' field. Captured stdout:\n${deployOut.slice(0, 1000)}`
+      throw new TransactionOutcomeUnknownError(
+        `'movement move ${subcommand}' exited successfully, but the object address could not be parsed. ` +
+          `Do not retry automatically; inspect the transaction on-chain first.`,
+        subcommand,
+        txHash,
+        deployOut
       );
     }
 
@@ -331,6 +401,9 @@ async function executeMovementMoveObjectLocked(
     // Publish/upgrade succeeded. Everything below this point that throws
     // is a local-side bookkeeping failure, not an on-chain failure.
 
+    const artifactHash = tryHashBuildArtifacts(safeDir, (error) => {
+      logger.warning(`Module is on-chain, but build artifacts could not be inspected: ${error.message}`);
+    });
     const deployment: DeploymentInfo = {
       address: objectAddress,
       moduleName,
@@ -338,6 +411,16 @@ async function executeMovementMoveObjectLocked(
       deployer: deployerAddress,
       timestamp: Date.now(),
       ...(txHash !== undefined ? { txHash } : {}),
+      schemaVersion: 2,
+      ...(config.networkConfig.chainId !== undefined
+        ? { chainId: config.networkConfig.chainId }
+        : {}),
+      rpcFingerprint,
+      ...(artifactHash !== undefined ? { artifactHash } : {}),
+      kind: subcommand === "deploy-object" ? "code-object" : "upgrade-object",
+      ...(subcommand === "upgrade-object" && existing?.txHash !== undefined
+        ? { previousTxHash: existing.txHash }
+        : {}),
     };
 
     try {
@@ -363,6 +446,12 @@ async function executeMovementMoveObjectLocked(
       logger.warning(
         `   To recover, manually write the deployment to deployments/${error.deployment.network}/${error.deployment.moduleName}.json.`
       );
+      throw error;
+    }
+    if (error instanceof TransactionOutcomeUnknownError) {
+      logger.warning(error.message);
+      if (error.txHash) logger.warning(`   Transaction: ${error.txHash}`);
+      logger.warning("   Do not retry automatically; inspect the transaction on-chain first.");
       throw error;
     }
     if (error instanceof CliExecutionError) {

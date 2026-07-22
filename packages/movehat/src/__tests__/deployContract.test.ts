@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import * as yaml from "js-yaml";
-import { CliExecutionError, ModuleAlreadyDeployedError } from "../errors.js";
+import { CliExecutionError, ModuleAlreadyDeployedError, TransactionOutcomeUnknownError } from "../errors.js";
 import { initRuntime } from "../runtime.js";
 import { Publisher } from "../core/Publisher.js";
 import type { ChildProcessAdapter, RunInput, RunResult } from "../utils/childProcessAdapter.js";
@@ -721,6 +722,51 @@ describe("Publisher — SDK publish path (movelite backend)", () => {
     expect(existsSync(join(tmpCwd, "deployments", "testnet", "counter.json"))).toBe(true);
   });
 
+  it("reports an unknown outcome with tx hash when SDK confirmation fails", async () => {
+    stageBuildArtifacts({ counter: new Uint8Array([1]) }, new Uint8Array([2]));
+    const HASH = "0x" + "d".repeat(64);
+    const mocked = makeMockAptos(HASH);
+    const secret = "0x" + "9".repeat(64);
+    mocked.waitForTransaction.mockRejectedValueOnce(new Error(`confirmation timeout private_key=${secret}`));
+    const { adapter } = makeBuildOnlyAdapter();
+    const { config, account } = await initRuntime();
+
+    let caught: TransactionOutcomeUnknownError | undefined;
+    try {
+      await new Publisher({ adapter }).deploy({
+        moduleName: "counter", config, account, packageDir: join(tmpCwd, "move"),
+        sdkPublish: true, aptos: mocked.aptos,
+      });
+    } catch (error) {
+      caught = error as TransactionOutcomeUnknownError;
+    }
+    expect(caught).toMatchObject({ name: "TransactionOutcomeUnknownError", txHash: HASH, operation: "publish" });
+    expect(caught?.message).not.toContain(secret);
+    expect(caught?.cause?.message).not.toContain(secret);
+    expect(mocked.submitSimple).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists an SDK publish when post-submit artifact hashing fails", async () => {
+    stageBuildArtifacts({ counter: new Uint8Array([1]) }, new Uint8Array([2]));
+    const HASH = "0x" + "c".repeat(64);
+    const mocked = makeMockAptos(HASH);
+    mocked.waitForTransaction.mockImplementationOnce(async () => {
+      const build = join(tmpCwd, "move", "build");
+      rmSync(build, { recursive: true, force: true });
+      writeFileSync(build, "not a directory");
+      return { success: true, hash: HASH };
+    });
+    const { adapter } = makeBuildOnlyAdapter();
+    const { config, account } = await initRuntime();
+    const deployment = await new Publisher({ adapter }).deploy({
+      moduleName: "counter", config, account, packageDir: join(tmpCwd, "move"),
+      sdkPublish: true, aptos: mocked.aptos,
+    });
+    expect(deployment.txHash).toBe(HASH);
+    expect(deployment.artifactHash).toBeUndefined();
+    expect(existsSync(join(tmpCwd, "deployments", "testnet", "counter.json"))).toBe(true);
+  });
+
   it("throws when sdkPublish is set without an Aptos client", async () => {
     const { adapter } = makeBuildOnlyAdapter();
     const { config, account } = await initRuntime();
@@ -853,13 +899,15 @@ describe("Publisher — per-package-dir deploy serialization", () => {
     const { config, account } = await initRuntime();
     const a = makeMockAptos("0x" + "a".repeat(64));
     const b = makeMockAptos("0x" + "b".repeat(64));
+    const alias = join(tmpCwd, "move-alias");
+    symlinkSync(join(tmpCwd, "move"), alias, "dir");
 
     await Promise.all([
       new Publisher({ adapter: makeMarkingAdapter(0xaa) }).deploy({
         moduleName: "stomp_a",
         config,
         account,
-        packageDir: join(tmpCwd, "move"),
+        packageDir: alias,
         sdkPublish: true,
         aptos: a.aptos,
       }),
