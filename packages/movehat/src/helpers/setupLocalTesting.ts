@@ -189,6 +189,13 @@ async function setupWithLocalNode(
   let localNode: NodeProvider;
   let ownsNode: boolean;
   let nodeInfo: LocalNodeInfo;
+  // Resolve once per setup. A missing automatic candidate falls back to the
+  // full node; an explicitly invalid MOVELITE_PATH remains a configuration
+  // error and is intentionally propagated.
+  const moveliteBinary =
+    !options.localNode && resolveUseMovelite(options.useMovelite)
+      ? findMoveliteBinary()
+      : null;
 
   if (options.localNode) {
     localNode = options.localNode;
@@ -200,8 +207,8 @@ async function setupWithLocalNode(
       );
     }
     nodeInfo = localNode.getNodeInfo();
-  } else if (resolveUseMovelite(options.useMovelite) && findMoveliteBinary()) {
-    const binary = findMoveliteBinary()!;
+  } else if (moveliteBinary) {
+    const binary = moveliteBinary;
     if (hasExplicitNodeOptions(options)) {
       localNode = new MoveliteManager(binary);
       nodeInfo = await localNode.start();

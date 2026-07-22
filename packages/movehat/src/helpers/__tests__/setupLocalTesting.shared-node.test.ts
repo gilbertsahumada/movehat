@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * private spawn, and that Harness.cleanup() never stops a shared node.
  */
 
-const { NODE_INFO, moveliteInstances, localNodeInstances, FakeMovelite, FakeLocalNode } =
+const { NODE_INFO, moveliteInstances, localNodeInstances, discovery, FakeMovelite, FakeLocalNode } =
   vi.hoisted(() => {
     const NODE_INFO = {
       rpcUrl: "http://127.0.0.1:8090",
@@ -63,13 +63,17 @@ const { NODE_INFO, moveliteInstances, localNodeInstances, FakeMovelite, FakeLoca
 
     const moveliteInstances: InstanceType<typeof FakeMovelite>[] = [];
     const localNodeInstances: InstanceType<typeof FakeLocalNode>[] = [];
+    const discovery = { calls: 0 };
 
-    return { NODE_INFO, moveliteInstances, localNodeInstances, FakeMovelite, FakeLocalNode };
+    return { NODE_INFO, moveliteInstances, localNodeInstances, discovery, FakeMovelite, FakeLocalNode };
   });
 
 vi.mock("../../node/MoveliteManager.js", () => ({
   MoveliteManager: FakeMovelite,
-  findMoveliteBinary: () => "/fake/movelite",
+  findMoveliteBinary: () => {
+    discovery.calls++;
+    return "/fake/movelite";
+  },
 }));
 
 vi.mock("../../node/LocalNodeManager.js", () => ({
@@ -111,6 +115,7 @@ describe("setupLocalTesting — implicit shared movelite node", () => {
     _resetSharedMoveliteNode();
     moveliteInstances.length = 0;
     localNodeInstances.length = 0;
+    discovery.calls = 0;
     envBackup = process.env.MOVEHAT_USE_MOVELITE;
     delete process.env.MOVEHAT_USE_MOVELITE;
     for (const method of [
@@ -146,6 +151,11 @@ describe("setupLocalTesting — implicit shared movelite node", () => {
     await ctxB.teardown();
     expect(moveliteInstances[0]!.stopCalls).toBe(0);
     expect(moveliteInstances[0]!.isRunning()).toBe(true);
+  });
+
+  it("discovers movelite exactly once per setup", async () => {
+    await setupLocalTesting({ accountLabels: ["deployer"] });
+    expect(discovery.calls).toBe(1);
   });
 
   it.each([

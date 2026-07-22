@@ -9,8 +9,14 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadUserConfig, resolveNetworkConfig, _resetConfigCache } from "../config.js";
+import {
+  loadUserConfig,
+  resolveNetworkConfig,
+  resolveNetworkEndpoint,
+  _resetConfigCache,
+} from "../config.js";
 import type { MovehatUserConfig } from "../../types/config.js";
+import { NetworkConflictError } from "../../errors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -218,9 +224,11 @@ describe("resolveNetworkConfig", () => {
   beforeEach(() => {
     envSnapshot.PRIVATE_KEY = process.env.PRIVATE_KEY;
     envSnapshot.MH_CLI_NETWORK = process.env.MH_CLI_NETWORK;
+    envSnapshot.MOVEHAT_NETWORK = process.env.MOVEHAT_NETWORK;
     envSnapshot.MH_DEFAULT_NETWORK = process.env.MH_DEFAULT_NETWORK;
     delete process.env.PRIVATE_KEY;
     delete process.env.MH_CLI_NETWORK;
+    delete process.env.MOVEHAT_NETWORK;
     delete process.env.MH_DEFAULT_NETWORK;
   });
 
@@ -267,11 +275,58 @@ describe("resolveNetworkConfig", () => {
     expect(resolved.network).toBe("b");
   });
 
+  it("uses CLI > legacy env > default env > config precedence", async () => {
+    const user = baseUserConfig({
+      cli: { url: "https://cli.example/v1", accounts: [TEST_KEY] },
+      legacy: { url: "https://legacy.example/v1", accounts: [TEST_KEY] },
+      envDefault: { url: "https://env.example/v1", accounts: [TEST_KEY] },
+      configured: { url: "https://config.example/v1", accounts: [TEST_KEY] },
+    });
+    user.defaultNetwork = "configured";
+    process.env.MH_DEFAULT_NETWORK = "envDefault";
+    process.env.MOVEHAT_NETWORK = "legacy";
+    expect((await resolveNetworkConfig(user)).network).toBe("legacy");
+    process.env.MH_CLI_NETWORK = "cli";
+    expect((await resolveNetworkConfig(user)).network).toBe("cli");
+  });
+
+  it("throws a typed error when the API and CLI selectors conflict", async () => {
+    process.env.MH_CLI_NETWORK = "b";
+    const user = baseUserConfig({
+      a: { url: "https://a.example/v1", accounts: [TEST_KEY] },
+      b: { url: "https://b.example/v1", accounts: [TEST_KEY] },
+    });
+    await expect(resolveNetworkConfig(user, "a")).rejects.toBeInstanceOf(
+      NetworkConflictError
+    );
+  });
+
+  it("does not treat --network movelite as conflicting with an internal 'local' resolution", async () => {
+    process.env.MH_CLI_NETWORK = "movelite";
+    const user = baseUserConfig({
+      local: { url: "http://localhost:8080/v1", chainId: "local" },
+    });
+    const config = await resolveNetworkConfig(user, "local");
+    expect(config.network).toBe("local");
+  });
+
+  it("resolves read-only testnet endpoints without credentials", () => {
+    const endpoint = resolveNetworkEndpoint(baseUserConfig({}), "testnet");
+    expect(endpoint.networkConfig.url).toBe("https://testnet.movementnetwork.xyz/v1");
+  });
+
+  it("does not auto-synthesize mainnet", async () => {
+    await expect(
+      resolveNetworkConfig(baseUserConfig({}), "mainnet")
+    ).rejects.toThrow(/Network 'mainnet' not found/);
+  });
+
   it("auto-generates a testnet config when 'testnet' is missing from user networks", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const user = baseUserConfig({
       a: { url: "https://a.example.com/v1", chainId: "a", accounts: [TEST_KEY] },
     });
+    process.env.PRIVATE_KEY = TEST_KEY;
     const resolved = await resolveNetworkConfig(user, "testnet");
     expect(resolved.network).toBe("testnet");
     expect(resolved.rpc).toBe("https://testnet.movementnetwork.xyz/v1");
@@ -308,20 +363,16 @@ describe("resolveNetworkConfig", () => {
     expect(resolved.allAccounts).toEqual([TEST_KEY]);
   });
 
-  it("auto-generates a deterministic test key for testnet when no accounts are anywhere", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  it("requires explicit credentials for public testnet", async () => {
     const user = baseUserConfig({
       testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
     });
-    const resolved = await resolveNetworkConfig(user, "testnet");
-    // The auto-generated key is the canonical Hardhat-style test key.
-    expect(resolved.privateKey).toBe(
-      "0x0000000000000000000000000000000000000000000000000000000000000001"
+    await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+      /requires explicit account configuration/
     );
-    logSpy.mockRestore();
   });
 
-  it("rejects a non-testnet/local network with no accounts (security gate)", async () => {
+  it("rejects a public network with no accounts (security gate)", async () => {
     const user = baseUserConfig({
       mainnet: { url: "https://mainnet.movementnetwork.xyz/v1", chainId: "mainnet" },
     });
@@ -456,16 +507,15 @@ describe("resolveNetworkConfig", () => {
       warnSpy.mockRestore();
     });
 
-    it("injects test key for 'testnet' network with canonical Movement testnet URL", async () => {
+    it("does not inject a test key for public Movement testnet", async () => {
       const user = baseUserConfig({
         testnet: {
           url: "https://testnet.movementnetwork.xyz/v1",
           chainId: "testnet",
         },
       });
-      const resolved = await resolveNetworkConfig(user, "testnet");
-      expect(resolved.privateKey).toBe(
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+        /requires explicit account configuration/
       );
     });
 
@@ -486,10 +536,9 @@ describe("resolveNetworkConfig", () => {
       await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
         /has no accounts configured/
       );
-      const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));
-      expect(
-        warningMessages.some((m) => /not a recognized test endpoint/i.test(m))
-      ).toBe(true);
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("Using a deterministic development account")
+      );
     });
 
     it("REFUSES to inject test key when 'local' name points at a remote URL", async () => {
@@ -504,12 +553,12 @@ describe("resolveNetworkConfig", () => {
     it("sanitizes URL credentials and query params in the warning (CR #265)", async () => {
       // URLs with userinfo or API keys should never leak into logs.
       const user = baseUserConfig({
-        testnet: {
+        local: {
           url: "https://alice:s3cr3t@prod.example.com/v1?apiKey=sk-private",
-          chainId: "testnet",
+          chainId: "local",
         },
       });
-      await expect(resolveNetworkConfig(user, "testnet")).rejects.toThrow(
+      await expect(resolveNetworkConfig(user, "local")).rejects.toThrow(
         /has no accounts configured/
       );
       const warningMessages = warnSpy.mock.calls.map((c) => c.join(" "));

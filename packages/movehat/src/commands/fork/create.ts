@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import prompts from 'prompts';
-import { loadUserConfig, resolveNetworkConfig } from '../../core/config.js';
+import { loadUserConfig, resolveNetworkEndpoint, sanitizeUrlForLog } from '../../core/config.js';
 import { ForkManager } from '../../fork/manager.js';
 import { logger, withSpinner, createKVTable, formatCommand } from '../../ui/index.js';
 
@@ -62,16 +62,16 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     // Load MoveHat config
     const userConfig = await loadUserConfig();
     const explicitNetwork = options.network || process.env.MH_CLI_NETWORK;
-    let networkName = explicitNetwork || userConfig.defaultNetwork || 'testnet';
-    if (!explicitNetwork && (networkName === 'local' || networkName === 'movelite')) {
+    let endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    if (!explicitNetwork && (endpoint.network === 'local' || endpoint.network === 'movelite')) {
       // Forking snapshots a remote network; the disposable local chain has
       // nothing durable to snapshot.
       logger.info(
-        `defaultNetwork '${networkName}' is a disposable local chain; forking 'testnet' instead (pass --network to override)`
+        `defaultNetwork '${endpoint.network}' is a disposable local chain; forking 'testnet' instead (pass --network to override)`
       );
-      networkName = 'testnet';
+      endpoint = resolveNetworkEndpoint(userConfig, 'testnet');
     }
-    const networkConfig = await resolveNetworkConfig(userConfig, networkName);
+    const networkName = endpoint.network;
 
     // Determine fork name and path
     const forkName = validateForkName(options.name || `${networkName}-fork`);
@@ -79,7 +79,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
 
     logger.newline();
     logger.info(`Creating fork of ${networkName}`);
-    logger.kv('Network', networkConfig.rpc, 2);
+    logger.kv('Network', sanitizeUrlForLog(endpoint.networkConfig.url), 2);
     logger.kv('Fork path', forkPath, 2);
     logger.newline();
 
@@ -105,7 +105,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     const metadata = await withSpinner(
       'Initializing fork...',
       async () => {
-        await forkManager.initialize(networkConfig.rpc, networkName);
+        await forkManager.initialize(endpoint.networkConfig.url, networkName);
         return forkManager.getMetadata();
       },
       'Fork initialized successfully!'

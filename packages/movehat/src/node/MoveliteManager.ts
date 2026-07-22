@@ -1,6 +1,5 @@
-import { execSync } from "child_process";
-import { existsSync } from "fs";
-import { join } from "path";
+import { accessSync, constants, realpathSync, statSync } from "fs";
+import { delimiter, join, resolve } from "path";
 import { createRequire } from "module";
 import type { Account } from "@aptos-labs/ts-sdk";
 import { CRITICAL_NODE_OUTPUT, type LocalNodeInfo } from "./LocalNodeManager.js";
@@ -12,6 +11,7 @@ import {
 } from "../utils/childProcessAdapter.js";
 import { cleanupCallbacks, ensureSignalHandler } from "../core/movementProfile.js";
 import { logger, isVerbose, colors, symbols } from "../ui/index.js";
+import { sanitizeMovementEnv } from "../utils/movementCli.js";
 
 const READY_TIMEOUT_MS = 15_000;
 const READY_POLL_INTERVAL_MS = 200;
@@ -60,6 +60,7 @@ export class MoveliteManager implements NodeProvider {
     const spawned = this.adapter.spawn({
       command: binary,
       args: ["start", "--port", String(this.port), "--no-auth"],
+      env: sanitizeMovementEnv(),
       stdio: "pipe",
     });
     this.spawned = spawned;
@@ -275,11 +276,48 @@ export class MoveliteManager implements NodeProvider {
   }
 }
 
-export function findMoveliteBinary(): string | null {
-  if (process.env.MOVELITE_PATH) {
-    return existsSync(process.env.MOVELITE_PATH)
-      ? process.env.MOVELITE_PATH
-      : null;
+/** @internal Test seam; not re-exported from the public helpers surface. */
+export interface FindMoveliteBinaryOptions {
+  env?: Record<string, string | undefined>;
+  projectRoot?: string;
+  /** Test-only switch for isolating package resolution from PATH. */
+  includePackage?: boolean;
+}
+
+function executableFile(pathname: string): string | null {
+  try {
+    const canonical = realpathSync(pathname);
+    if (!statSync(canonical).isFile()) return null;
+    accessSync(canonical, constants.X_OK);
+    return canonical;
+  } catch {
+    return null;
+  }
+}
+
+function findOnPath(pathValue: string | undefined): string | null {
+  for (const directory of (pathValue ?? "").split(delimiter)) {
+    if (!directory) continue;
+    const executable = executableFile(resolve(directory, "movelite"));
+    if (executable) return executable;
+  }
+  return null;
+}
+
+export function findMoveliteBinary(
+  options: FindMoveliteBinaryOptions = {}
+): string | null {
+  const env = options.env ?? process.env;
+  const projectRoot = options.projectRoot ?? process.cwd();
+
+  if (env.MOVELITE_PATH) {
+    const executable = executableFile(resolve(projectRoot, env.MOVELITE_PATH));
+    if (!executable) {
+      throw new Error(
+        `MOVELITE_PATH does not point to an executable file: ${env.MOVELITE_PATH}`
+      );
+    }
+    return executable;
   }
 
   const platforms: Record<string, string> = {
@@ -291,7 +329,7 @@ export function findMoveliteBinary(): string | null {
 
   const key = `${process.platform}-${process.arch}`;
   const pkg = platforms[key];
-  if (pkg) {
+  if (pkg && options.includePackage !== false) {
     try {
       // Resolve through the `movelite` shim (movehat's direct dependency),
       // then resolve the platform package from movelite's own context. The
@@ -302,18 +340,12 @@ export function findMoveliteBinary(): string | null {
       const moveliteReq = createRequire(movelitePkg);
       const pkgPath = moveliteReq.resolve(`${pkg}/package.json`);
       const binPath = join(pkgPath, "..", "bin", "movelite");
-      if (existsSync(binPath)) return binPath;
+      const executable = executableFile(binPath);
+      if (executable) return executable;
     } catch {
       // package not installed
     }
   }
 
-  try {
-    const found = execSync("which movelite", { encoding: "utf-8" }).trim();
-    if (found && existsSync(found)) return found;
-  } catch {
-    // not in PATH
-  }
-
-  return null;
+  return findOnPath(env.PATH);
 }

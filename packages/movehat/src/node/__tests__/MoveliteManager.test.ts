@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PassThrough } from "node:stream";
-import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -145,6 +152,7 @@ describe("MoveliteManager — start / stop / lifecycle", () => {
     expect(calls[0]!.command).toBe("/bin/movelite");
     expect(calls[0]!.args).toEqual(["start", "--port", "8090", "--no-auth"]);
     expect(calls[0]!.stdio).toBe("pipe");
+    expect(calls[0]!.env?.PRIVATE_KEY).toBeUndefined();
     // Both pipes must have consumers or the child blocks on a full buffer.
     expect(spawned[0]!.stdout!.listenerCount("data")).toBeGreaterThan(0);
     expect(spawned[0]!.stderr!.listenerCount("data")).toBeGreaterThan(0);
@@ -675,12 +683,58 @@ describe("findMoveliteBinary — MOVELITE_PATH override", () => {
   it("returns the env path when it points at an existing file", () => {
     const bin = join(tmpDir, "movelite");
     writeFileSync(bin, "#!/bin/sh\n");
+    chmodSync(bin, 0o755);
     process.env.MOVELITE_PATH = bin;
-    expect(findMoveliteBinary()).toBe(bin);
+    expect(findMoveliteBinary()).toBe(realpathSync(bin));
   });
 
-  it("returns null when the env path does not exist", () => {
+  it("throws when explicit MOVELITE_PATH does not exist", () => {
     process.env.MOVELITE_PATH = join(tmpDir, "nope");
-    expect(findMoveliteBinary()).toBeNull();
+    expect(() => findMoveliteBinary()).toThrow(/MOVELITE_PATH.*executable/);
+  });
+
+  it("supports a relative explicit MOVELITE_PATH", () => {
+    const bin = join(tmpDir, "movelite");
+    writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
+    expect(
+      findMoveliteBinary({
+        env: { MOVELITE_PATH: "./movelite", PATH: "" },
+        projectRoot: tmpDir,
+        includePackage: false,
+      })
+    ).toBe(realpathSync(bin));
+  });
+
+  it("accepts node_modules/.bin and globally installed PATH binaries", () => {
+    const project = join(tmpDir, "project");
+    const localBinDir = join(project, "node_modules", ".bin");
+    const globalBinDir = join(tmpDir, "global-bin");
+    mkdirSync(localBinDir, { recursive: true });
+    mkdirSync(globalBinDir);
+    const localBin = join(localBinDir, "movelite");
+    const globalBin = join(globalBinDir, "movelite");
+    writeFileSync(localBin, "#!/bin/sh\n", { mode: 0o755 });
+    writeFileSync(globalBin, "#!/bin/sh\n", { mode: 0o755 });
+
+    expect(findMoveliteBinary({ env: { PATH: localBinDir }, includePackage: false }))
+      .toBe(realpathSync(localBin));
+    expect(findMoveliteBinary({ env: { PATH: globalBinDir }, includePackage: false }))
+      .toBe(realpathSync(globalBin));
+  });
+
+  it("skips invalid automatic PATH candidates and keeps searching", () => {
+    const invalidDir = join(tmpDir, "invalid");
+    const validDir = join(tmpDir, "valid");
+    mkdirSync(invalidDir);
+    mkdirSync(validDir);
+    writeFileSync(join(invalidDir, "movelite"), "not executable", { mode: 0o600 });
+    const valid = join(validDir, "movelite");
+    writeFileSync(valid, "#!/bin/sh\n", { mode: 0o755 });
+    expect(
+      findMoveliteBinary({
+        env: { PATH: `${invalidDir}${require("node:path").delimiter}${validDir}` },
+        includePackage: false,
+      })
+    ).toBe(realpathSync(valid));
   });
 });

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Public testnet and mainnet transactions no longer receive Movehat's known
+  deterministic development key. Projects created with 0.6.0 that keep
+  `defaultNetwork: "testnet"` must either switch their default to `"local"`
+  for the credential-free development flow, or configure `PRIVATE_KEY`, global
+  `accounts`, or `networks.<name>.accounts` before submitting transactions.
+  Mainnet must also be declared explicitly in `movehat.config.ts`. Read-only
+  public forks still need no signing key; an RPC API key is independent from a
+  signing account. Closes #373. Tracks #371.
+
 ### Changed
 
 - `movehat init` now pins the exact installed Movehat version and generates a
@@ -16,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an explicit public/custom network. Release, E2E, and dogfood gates install
   the candidate tarball before dependency resolution, so normal and
   prerelease versions are testable before publication. Closes #372.
+- Deterministic development credentials are now limited to loopback
+  local/movelite networks. Network selector conflicts are typed, read-only fork
+  creation resolves endpoints without signing accounts, and Movelite discovery
+  supports explicit relative/absolute paths, package installs, local or global
+  npm bins, and safe fallback to Movement node. Local-node state is protected
+  by ownership markers with conservative migration of recognized 0.6 layouts.
+- An explicit `MOVELITE_PATH` that points at a missing or non-executable file
+  now fails with a clear error instead of silently falling back to the slow
+  Movement node; automatic discovery candidates (PATH shims, package installs)
+  still fall back. `MOVEHAT_NETWORK` is now honored by the core network
+  resolver (between `--network`/`MH_CLI_NETWORK` and `MH_DEFAULT_NETWORK`) and
+  logs which selector chose the network; previously only generated scripts
+  read it. `--network movelite` is recognized as the local backend family, so
+  local fixtures run under it without a selector-conflict error.
 - Scaffolded `Move.toml` now pins the AptosFramework dependency to an exact
   `movement`-branch commit instead of the moving branch ref, so fresh projects
   compile reproducibly regardless of upstream framework changes. The pin is

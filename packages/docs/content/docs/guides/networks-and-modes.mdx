@@ -109,6 +109,11 @@ await counter.call(harness.runtime.account, "increment", []);
 
 > ⚠️ **`createLive` writes real transactions with the configured `PRIVATE_KEY`. Use it only inside `scripts/*.ts` files invoked explicitly via `movehat run`. Never in `tests/*.test.ts`.** A test file in your suite — even one your IDE or CI accidentally picks up — can send real txs the moment it instantiates a live harness. The cost surface is your wallet balance plus the irreversibility of mainnet writes.
 
+Both public testnet and mainnet require an explicit `PRIVATE_KEY` or configured
+`accounts` entry. Movehat only supplies its deterministic development key for
+`local` or `movelite` networks whose RPC hostname is loopback. Testnet may use
+the built-in RPC URL; mainnet must always be declared in `movehat.config.ts`.
+
 **When to reach for it**: deploy scripts, upgrade scripts, one-shot maintenance scripts. Everything the `examples/counter-example/scripts/` directory contains is a `createLive`-style script.
 
 The canonical deploy pattern is in [`scripts/deploy-counter.ts`](https://github.com/gilbertsahumada/movehat/blob/main/examples/counter-example/scripts/deploy-counter.ts). The harness also includes a duplicate-detection guard — if the module is already deployed on the target network, the deploy will refuse to redeploy unless you pass `--redeploy` explicitly.

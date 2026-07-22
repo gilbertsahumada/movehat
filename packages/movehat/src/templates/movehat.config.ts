@@ -15,7 +15,7 @@ export default {
   // Default network to use when no --network flag is provided
   // "local" = self-contained local chain (movelite when available,
   // otherwise Movement node); no credentials required
-  // "testnet" = Movement testnet (public, requires an explicit account)
+  // "testnet" = Movement testnet (public, requires PRIVATE_KEY in .env)
   // "mainnet" = Movement mainnet (requires PRIVATE_KEY in .env)
   defaultNetwork: "local",
 
