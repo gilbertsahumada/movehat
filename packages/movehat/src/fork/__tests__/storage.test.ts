@@ -275,6 +275,66 @@ describe('ForkStorage', () => {
       expect(vol.existsSync(`${forkPath}/resources/0x1.json`)).toBe(false);
       expect(vol.existsSync(`${forkPath}/resources/0x2.json`)).toBe(false);
     });
+
+    it('migrates legacy resource files offline, including an empty snapshot', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: '{}',
+        [`${forkPath}/resources/0x2.json`]: JSON.stringify({ '0x1::a::A': { value: 1 } }),
+      });
+      const storage = new ForkStorage(forkPath);
+
+      storage.migrateLegacyResourceCache();
+
+      expect(storage.hasAllResources('0x1')).toBe(true);
+      expect(storage.hasAllResources('0x2')).toBe(true);
+      expect(storage.getAllResources('0x1')).toEqual({});
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+      expect(storage.getCacheGeneration()).toMatch(/^[0-9a-f-]{36}$/i);
+    });
+
+    it('resumes an interrupted legacy migration idempotently', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: '{}',
+        [`${forkPath}/cache/0x1.all-resources`]: 'complete\n',
+      });
+      const storage = new ForkStorage(forkPath);
+
+      expect(() => {
+        storage.migrateLegacyResourceCache();
+        storage.migrateLegacyResourceCache();
+      }).not.toThrow();
+      expect(storage.hasAllResources('0x1')).toBe(true);
+    });
+
+    it('quarantines malformed legacy resource maps instead of failing the fork', () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: JSON.stringify({
+          '0x1::a::A': ['not', 'resource', 'data'],
+        }),
+      });
+      const storage = new ForkStorage(forkPath);
+
+      storage.migrateLegacyResourceCache();
+
+      expect(storage.hasAllResources('0x1')).toBe(false);
+      expect(vol.existsSync(`${forkPath}/resources/0x1.json`)).toBe(false);
+      const quarantined = (vol.readdirSync(`${forkPath}/resources`) as string[])
+        .filter((name) => name.startsWith('0x1.json.corrupt-'));
+      expect(quarantined).toHaveLength(1);
+      // Migration completes so healthy addresses keep their cache.
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
+
+    it('advances cache generations without clearing migration state', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const first = storage.getCacheGeneration();
+      const second = storage.advanceCacheGeneration();
+
+      expect(second).not.toBe(first);
+      expect(storage.getCacheGeneration()).toBe(second);
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
   });
 
   describe('address sanitization', () => {

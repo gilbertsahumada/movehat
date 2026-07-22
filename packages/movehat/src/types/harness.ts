@@ -1,6 +1,19 @@
 import type { DeploymentInfo } from "../core/deployments.js";
 import type { ChildProcessAdapter } from "../utils/childProcessAdapter.js";
 
+/** Options-object form of `Harness.createFork` (positional calls remain supported). */
+export interface CreateForkOptions {
+  network?: string;
+  apiKey?: string;
+  rpcUrl?: string;
+  name?: string;
+  port?: number;
+  resetState?: boolean;
+  /** Recreate an existing fork, after the replacement RPC preflight succeeds. */
+  overwrite?: boolean;
+  accountLabels?: readonly string[];
+}
+
 /**
  * Options for `harness.deployCodeObject(options)`.
  *

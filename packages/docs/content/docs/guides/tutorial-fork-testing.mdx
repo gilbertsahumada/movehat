@@ -4,11 +4,11 @@ description: Read real mainnet account state in your tests without spending gas
 icon: GitFork
 ---
 
-This tutorial walks through using `Harness.createFork()` to read live Movement mainnet state from a TypeScript test. The fork system caches **accounts and resources** locally on first fetch, so subsequent runs hit the cache for those reads. **View functions** are always proxied to upstream on each call — they reflect current upstream state and require network access every time.
+This tutorial walks through using `Harness.createFork()` to read Movement mainnet state from a TypeScript test. The fork system caches **accounts and resources** locally on first fetch, so subsequent runs hit the cache for those reads. **View functions** are proxied to upstream on each call, pinned to the fork's recorded ledger version — they reflect the snapshot the fork was created at (deterministic across runs) and require network access every time.
 
 ## What fork mode is good for today
 
-The fork system caches **accounts and resources** from a remote network and serves them from a local proxy; **view functions** are proxied to upstream on every call (not cached, so they always reflect upstream state). Useful for:
+The fork system caches **accounts and resources** from a remote network and serves them from a local proxy; **view functions** are proxied to upstream on every call, pinned to the fork's snapshot ledger version (not cached, deterministic for a given fork). Useful for:
 
 - Asserting against the real on-chain shape of framework types (e.g. `0x1::coin::CoinInfo`).
 - Running view functions against real mainnet state without spending gas — e.g., "what's the current total MOVE supply?" or "what does this DEX's `get_price` view return right now?".

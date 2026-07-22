@@ -18,22 +18,24 @@ import { EventEmitter } from "node:events";
 
 interface FakeReq extends EventEmitter {
   end(): void;
+  write(data: string): void;
   destroy(err?: Error): void;
   setTimeout(ms: number, cb?: () => void): void;
   destroyed: boolean;
 }
 
-const httpsGet = vi.fn();
-const httpGet = vi.fn();
+const httpsRequest = vi.fn();
+const httpRequest = vi.fn();
 
-vi.mock("https", () => ({ default: { get: httpsGet }, get: httpsGet }));
-vi.mock("http", () => ({ default: { get: httpGet }, get: httpGet }));
+vi.mock("https", () => ({ default: { request: httpsRequest }, request: httpsRequest }));
+vi.mock("http", () => ({ default: { request: httpRequest }, request: httpRequest }));
 
 function makeFakeReq(): FakeReq {
   const req = new EventEmitter() as FakeReq;
   req.destroyed = false;
   let timeoutHandle: NodeJS.Timeout | undefined;
   req.end = () => {};
+  req.write = () => {};
   req.destroy = (err?: Error) => {
     req.destroyed = true;
     if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -84,8 +86,8 @@ function makeStreamingResponse(
 
 describe("F3 — MovementApiClient timeouts and byte cap", () => {
   beforeEach(() => {
-    httpsGet.mockReset();
-    httpGet.mockReset();
+    httpsRequest.mockReset();
+    httpRequest.mockReset();
   });
 
   afterEach(() => {
@@ -94,7 +96,7 @@ describe("F3 — MovementApiClient timeouts and byte cap", () => {
 
   it("rejects with a timeout error when the upstream never responds", async () => {
     const fakeReq = makeFakeReq();
-    httpGet.mockImplementation(
+    httpRequest.mockImplementation(
       (
         _url: string,
         options: unknown,
@@ -119,9 +121,50 @@ describe("F3 — MovementApiClient timeouts and byte cap", () => {
     expect(fakeReq.destroyed).toBe(true);
   });
 
+  it("enforces an absolute deadline even while the upstream trickles bytes", async () => {
+    const fakeReq = makeFakeReq();
+    httpRequest.mockImplementation((_url, _options, callback) => {
+      const res = makeUnresolvableResponse();
+      callback?.(res);
+      const interval = setInterval(() => {
+        (res as unknown as EventEmitter).emit("data", Buffer.from(" "));
+      }, 5);
+      interval.unref?.();
+      (res as unknown as EventEmitter).once("aborted", () => clearInterval(interval));
+      fakeReq.once("error", () => clearInterval(interval));
+      return fakeReq as unknown as ClientRequest;
+    });
+
+    const { MovementApiClient } = await import("../../fork/api.js");
+    const client = new MovementApiClient("http://slow.example/v1", undefined, {
+      timeoutMs: 30,
+      maxBytes: 1024,
+    });
+
+    await expect(client.getLedgerInfo()).rejects.toThrow(/timed out/i);
+    expect(fakeReq.destroyed).toBe(true);
+  });
+
+  it("rejects when the response is aborted before end", async () => {
+    const fakeReq = makeFakeReq();
+    httpRequest.mockImplementation((_url, _options, callback) => {
+      const res = makeUnresolvableResponse();
+      callback?.(res);
+      setImmediate(() => (res as unknown as EventEmitter).emit("aborted"));
+      return fakeReq as unknown as ClientRequest;
+    });
+
+    const { MovementApiClient } = await import("../../fork/api.js");
+    const client = new MovementApiClient("http://aborted.example/v1", undefined, {
+      timeoutMs: 1000,
+    });
+
+    await expect(client.getLedgerInfo()).rejects.toThrow(/aborted/i);
+  });
+
   it("rejects and destroys the request when the response exceeds maxBytes", async () => {
     const fakeReq = makeFakeReq();
-    httpGet.mockImplementation(
+    httpRequest.mockImplementation(
       (
         _url: string,
         options: unknown,

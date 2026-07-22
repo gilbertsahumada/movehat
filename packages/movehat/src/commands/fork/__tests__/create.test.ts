@@ -82,7 +82,9 @@ describe("forkCreateCommand", () => {
     expect(forkManagerInitialize).toHaveBeenCalledTimes(1);
     expect(forkManagerInitialize).toHaveBeenCalledWith(
       "https://testnet.movementnetwork.xyz/v1",
-      "testnet"
+      "testnet",
+      undefined,
+      { overwrite: false }
     );
     expect(promptsMock).not.toHaveBeenCalled();
   });

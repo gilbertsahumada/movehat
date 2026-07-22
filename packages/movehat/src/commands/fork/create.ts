@@ -84,6 +84,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     logger.newline();
 
     // Check if fork already exists
+    let overwriteExisting = false;
     if (existsSync(forkPath)) {
       const { overwrite } = await prompts({
         type: 'confirm',
@@ -96,6 +97,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
         logger.warning('Fork creation cancelled');
         return;
       }
+      overwriteExisting = true;
     }
 
     // Create fork manager
@@ -105,7 +107,12 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
     const metadata = await withSpinner(
       'Initializing fork...',
       async () => {
-        await forkManager.initialize(endpoint.networkConfig.url, networkName);
+        await forkManager.initialize(
+          endpoint.networkConfig.url,
+          networkName,
+          undefined,
+          { overwrite: overwriteExisting }
+        );
         return forkManager.getMetadata();
       },
       'Fork initialized successfully!'

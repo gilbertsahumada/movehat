@@ -3,6 +3,11 @@ import { URL } from 'url';
 import { ForkManager } from './manager.js';
 import { logger } from '../ui/index.js';
 import { redactSecrets } from '../utils/redact.js';
+import {
+  FORK_SNAPSHOT_PRUNED_GUIDANCE,
+  ForkDataNotFoundError,
+  ForkSnapshotPrunedError,
+} from './errors.js';
 
 export interface ForkServerOptions {
   /**
@@ -101,6 +106,14 @@ export class ForkServer {
     this.sendJSON(res, 403, {
       message: 'Origin is not allowed to access this fork server',
       error_code: 'cors_origin_forbidden',
+      vm_error_code: null
+    });
+  }
+
+  private sendSnapshotPruned(res: http.ServerResponse): void {
+    this.sendJSON(res, 410, {
+      message: `The pinned fork snapshot is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
+      error_code: 'fork_snapshot_pruned',
       vm_error_code: null
     });
   }
@@ -371,9 +384,10 @@ export class ForkServer {
         authentication_key: account.authenticationKey
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Account not found: ${address}`);
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -396,9 +410,10 @@ export class ForkServer {
         data: resource
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Resource not found: ${resourceType}`, 'resource_not_found');
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -423,9 +438,10 @@ export class ForkServer {
 
       this.sendJSON(res, 200, resourcesArray);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes('not found')) {
+      if (error instanceof ForkDataNotFoundError) {
         this.send404(res, `Account not found: ${address}`);
+      } else if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
       } else {
         throw error;
       }
@@ -449,6 +465,16 @@ export class ForkServer {
     res: http.ServerResponse
   ): Promise<void> {
     const MAX_VIEW_BODY_BYTES = 1 * 1024 * 1024; // 1 MiB
+
+    const accept = req.headers.accept;
+    if (typeof accept === 'string' && accept.toLowerCase().includes('application/x-bcs')) {
+      this.sendJSON(res, 406, {
+        message: 'BCS view responses are not supported by the JSON fork server',
+        error_code: 'unsupported_response_format',
+        vm_error_code: null
+      });
+      return;
+    }
 
     let body: string;
     try {
@@ -501,9 +527,9 @@ export class ForkServer {
       return;
     }
 
-    // Forward a narrow set of client headers to upstream so that
-    // BCS-encoded responses (`Accept: application/x-bcs`) and client
-    // identification (`X-Aptos-Client`) round-trip through the proxy.
+    // Forward a narrow set of client headers to upstream (e.g. client
+    // identification via `X-Aptos-Client`). BCS responses are rejected
+    // above with 406 — this JSON server cannot represent them.
     // Hop-by-hop and connection-level headers (host, connection,
     // content-length, etc.) are deliberately not forwarded.
     const forwardableHeaders: Record<string, string> = {};
@@ -520,6 +546,10 @@ export class ForkServer {
       const result = await this.forkManager.forwardView(payload, forwardableHeaders);
       this.sendJSON(res, 200, result);
     } catch (error) {
+      if (error instanceof ForkSnapshotPrunedError) {
+        this.sendSnapshotPruned(res);
+        return;
+      }
       const rawMsg = error instanceof Error ? error.message : String(error);
       // Sanitize: reuse the existing log-injection guard from
       // sanitizePathname (control chars, length cap).

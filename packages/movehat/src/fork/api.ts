@@ -1,6 +1,6 @@
-import https from 'https';
-import http from 'http';
-import { URL } from 'url';
+import https from 'node:https';
+import http from 'node:http';
+import { URL } from 'node:url';
 import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js';
 import { normalizeAddressShort } from '../utils/address.js';
 import {
@@ -9,318 +9,269 @@ import {
   assertAccountResource,
   assertAccountResourceArray,
 } from './validation.js';
+import { MovementApiError } from './errors.js';
 
 export interface MovementApiClientOptions {
-  /** Abort the request after this many ms (default: 30_000). */
   timeoutMs?: number;
-  /** Reject responses larger than this many bytes (default: 16 MiB). */
   maxBytes?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
+const MAX_ERROR_BYTES = 64 * 1024;
 
-/**
- * Client for interacting with Movement L1 JSON API.
- *
- * When constructed with an `apiKey`, every outgoing request carries
- * an `Authorization: Bearer <apiKey>` header. Use this for rate-
- * limited public endpoints (e.g. Movement testnet under load) or
- * auth-gated nodes.
- */
 export class MovementApiClient {
-  private nodeUrl: string;
+  private readonly nodeUrl: string;
   private readonly apiKey?: string;
   private readonly timeoutMs: number;
   private readonly maxBytes: number;
 
-  constructor(
-    nodeUrl: string,
-    apiKey?: string,
-    options: MovementApiClientOptions = {}
-  ) {
-    // Remove trailing slash
-    let normalized = nodeUrl.replace(/\/$/, '');
-
-    // If URL already ends with /v1, use as is
-    // Otherwise, assume it's the base URL
-    if (!normalized.endsWith('/v1')) {
-      // Base URL without /v1, we'll add it in requests
+  constructor(nodeUrl: string, apiKey?: string, options: MovementApiClientOptions = {}) {
+    let parsed: URL;
+    try {
+      parsed = new URL(nodeUrl.replace(/\/$/, ''));
+    } catch (cause) {
+      throw new MovementApiError('Movement API URL is invalid', 'invalid_argument', { cause });
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new MovementApiError(
+        `Unsupported Movement API protocol: ${parsed.protocol}`,
+        'invalid_argument'
+      );
+    }
+    if (parsed.username !== '' || parsed.password !== '') {
+      throw new MovementApiError(
+        'Movement API URL must not contain embedded credentials',
+        'invalid_argument'
+      );
+    }
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+      throw new RangeError('timeoutMs must be a positive safe integer');
+    }
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+      throw new RangeError('maxBytes must be a positive safe integer');
     }
 
-    this.nodeUrl = normalized;
+    this.nodeUrl = parsed.toString().replace(/\/$/, '');
     if (apiKey !== undefined) this.apiKey = apiKey;
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+    this.timeoutMs = timeoutMs;
+    this.maxBytes = maxBytes;
   }
 
-  /**
-   * Make a GET request to the API.
-   *
-   * Adds `Authorization: Bearer <apiKey>` when the client was
-   * constructed with an `apiKey`. The header is omitted otherwise
-   * to preserve backwards-compatible behavior for unauthenticated
-   * public endpoints.
-   */
-  private async get<T>(path: string): Promise<T> {
-    const fullUrl = `${this.nodeUrl}${path}`;
-    const parsedUrl = new URL(fullUrl);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const client = isHttps ? https : http;
-
-    const requestOptions: {
-      method: 'GET';
-      headers?: Record<string, string>;
-    } = { method: 'GET' };
-    if (this.apiKey !== undefined) {
-      requestOptions.headers = { Authorization: `Bearer ${this.apiKey}` };
-    }
-
-    const timeoutMs = this.timeoutMs;
-    const maxBytes = this.maxBytes;
-
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const settle = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        fn();
-      };
-
-      const req = client.get(fullUrl, requestOptions, (res) => {
-        const chunks: Buffer[] = [];
-        let totalBytes = 0;
-
-        res.on('data', (chunk: Buffer | string) => {
-          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-          totalBytes += buf.length;
-          if (totalBytes > maxBytes) {
-            req.destroy();
-            settle(() =>
-              reject(
-                new Error(
-                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
-                )
-              )
-            );
-            return;
-          }
-          chunks.push(buf);
-        });
-
-        res.on('end', () => {
-          if (settled) return;
-          const data = Buffer.concat(chunks).toString('utf8');
-          if (res.statusCode !== 200) {
-            settle(() =>
-              reject(
-                new Error(
-                  `API request failed with status ${res.statusCode}: ${data}`
-                )
-              )
-            );
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(data);
-            settle(() => resolve(parsed));
-          } catch (err) {
-            settle(() =>
-              reject(new Error(`Failed to parse JSON response: ${err}`))
-            );
-          }
-        });
-      });
-
-      req.setTimeout(timeoutMs, () => {
-        req.destroy();
-        settle(() =>
-          reject(new Error(`API request timed out after ${timeoutMs}ms`))
-        );
-      });
-
-      req.on('error', (err) => {
-        settle(() => reject(new Error(`API request failed: ${err.message}`)));
-      });
-
-      req.end();
-    });
-  }
-
-  /**
-   * Make a POST request to the API with a JSON body.
-   *
-   * Mirrors `get<T>` for TLS/timeout/maxBytes/error-wrapping; differs
-   * only in `method: 'POST'`, the `Content-Type: application/json`
-   * header, and writing `body` to the request stream before `end()`.
-   *
-   * `extraHeaders` are merged in last and override defaults — used by
-   * the fork-server view proxy to forward client headers like
-   * `Accept` or `X-Aptos-Client` through to the upstream node.
-   */
-  private async post<T>(
+  private async request<T>(
+    method: 'GET' | 'POST',
     path: string,
-    body: unknown,
+    body?: unknown,
     extraHeaders: Record<string, string> = {}
   ): Promise<T> {
-    const fullUrl = `${this.nodeUrl}${path}`;
-    const parsedUrl = new URL(fullUrl);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const client = isHttps ? https : http;
-
-    const payload = JSON.stringify(body);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload).toString(),
-    };
-    if (this.apiKey !== undefined) {
-      headers.Authorization = `Bearer ${this.apiKey}`;
+    const url = new URL(`${this.nodeUrl}${path}`);
+    const client = url.protocol === 'https:' ? https : http;
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const headers: Record<string, string> = {};
+    if (payload !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = String(Buffer.byteLength(payload));
     }
-    for (const [k, v] of Object.entries(extraHeaders)) {
-      // Don't let callers override Content-Length — we just computed it.
-      if (k.toLowerCase() === 'content-length') continue;
-      headers[k] = v;
+    if (this.apiKey !== undefined) headers.Authorization = `Bearer ${this.apiKey}`;
+    for (const [name, value] of Object.entries(extraHeaders)) {
+      if (name.toLowerCase() !== 'content-length') headers[name] = value;
     }
 
-    const timeoutMs = this.timeoutMs;
-    const maxBytes = this.maxBytes;
-
-    return new Promise((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       let settled = false;
-      const settle = (fn: () => void) => {
+      let deadline: NodeJS.Timeout | undefined;
+      const settle = (fn: () => void): void => {
         if (settled) return;
         settled = true;
+        if (deadline !== undefined) clearTimeout(deadline);
         fn();
       };
+      let req: http.ClientRequest;
+      deadline = setTimeout(() => {
+        req?.destroy();
+        settle(() => reject(new MovementApiError(
+          `Movement API request timed out after ${this.timeoutMs}ms`,
+          'timeout'
+        )));
+      }, this.timeoutMs);
 
-      const req = client.request(fullUrl, { method: 'POST', headers }, (res) => {
+      req = client.request(url, { method, headers }, (res) => {
         const chunks: Buffer[] = [];
         let totalBytes = 0;
+        const statusCode = res.statusCode ?? 0;
+        const limit = statusCode === 200 ? this.maxBytes : Math.min(this.maxBytes, MAX_ERROR_BYTES);
 
         res.on('data', (chunk: Buffer | string) => {
-          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-          totalBytes += buf.length;
-          if (totalBytes > maxBytes) {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += buffer.length;
+          if (totalBytes > limit) {
             req.destroy();
-            settle(() =>
-              reject(
-                new Error(
-                  `Response exceeded maxBytes (${maxBytes}); ${totalBytes} bytes received before abort`
+            settle(() => reject(statusCode === 200
+              ? new MovementApiError(
+                  `Movement API response exceeded ${limit} bytes`,
+                  'response_too_large'
                 )
-              )
-            );
+              : new MovementApiError(
+                  `Movement API request failed with status ${statusCode}`,
+                  'http_error',
+                  { statusCode }
+                )));
             return;
           }
-          chunks.push(buf);
+          chunks.push(buffer);
         });
-
         res.on('end', () => {
           if (settled) return;
-          const data = Buffer.concat(chunks).toString('utf8');
-          if (res.statusCode !== 200) {
-            settle(() =>
-              reject(
-                new Error(
-                  `API request failed with status ${res.statusCode}: ${data}`
-                )
-              )
-            );
+          const text = Buffer.concat(chunks).toString('utf8');
+          if (statusCode !== 200) {
+            let upstreamErrorCode: string | undefined;
+            try {
+              const value: unknown = JSON.parse(text);
+              if (
+                typeof value === 'object' && value !== null &&
+                typeof (value as { error_code?: unknown }).error_code === 'string' &&
+                /^[a-zA-Z0-9_.:-]{1,128}$/.test((value as { error_code: string }).error_code)
+              ) {
+                upstreamErrorCode = (value as { error_code: string }).error_code;
+              }
+            } catch {
+              // Error bodies are untrusted diagnostics; never expose them.
+            }
+            settle(() => reject(new MovementApiError(
+              `Movement API request failed with status ${statusCode}`,
+              'http_error',
+              { statusCode, ...(upstreamErrorCode === undefined ? {} : { upstreamErrorCode }) }
+            )));
             return;
           }
-
           try {
-            const parsed = JSON.parse(data);
-            settle(() => resolve(parsed));
-          } catch (err) {
-            settle(() =>
-              reject(new Error(`Failed to parse JSON response: ${err}`))
-            );
+            settle(() => resolve(JSON.parse(text) as T));
+          } catch (cause) {
+            settle(() => reject(new MovementApiError(
+              'Movement API returned invalid JSON',
+              'invalid_response',
+              { cause }
+            )));
           }
+        });
+        res.once('aborted', () => {
+          settle(() => reject(new MovementApiError(
+            'Movement API response was aborted',
+            'network_error'
+          )));
+        });
+        res.once('error', (cause) => {
+          settle(() => reject(new MovementApiError(
+            'Movement API response failed',
+            'network_error',
+            { cause }
+          )));
         });
       });
 
-      req.setTimeout(timeoutMs, () => {
-        req.destroy();
-        settle(() =>
-          reject(new Error(`API request timed out after ${timeoutMs}ms`))
-        );
+      // This is an absolute request deadline, not a socket-idle timeout.
+      // A peer that trickles bytes must not keep a pinned fork read alive
+      // indefinitely.
+      req.on('error', (cause) => {
+        settle(() => reject(new MovementApiError(
+          'Movement API request failed',
+          'network_error',
+          { cause }
+        )));
       });
-
-      req.on('error', (err) => {
-        settle(() => reject(new Error(`API request failed: ${err.message}`)));
-      });
-
-      req.write(payload);
+      if (payload !== undefined) req.write(payload);
       req.end();
     });
   }
 
-  /**
-   * Build API path with proper prefix
-   */
   private apiPath(suffix: string): string {
-    // If nodeUrl already ends with /v1, just add the suffix
-    // Otherwise add /v1 prefix
     return this.nodeUrl.endsWith('/v1') ? suffix : `/v1${suffix}`;
   }
 
-  /**
-   * Get ledger information
-   */
+  private atLedgerVersion(path: string, ledgerVersion?: string): string {
+    if (ledgerVersion === undefined) return path;
+    if (!/^\d+$/.test(ledgerVersion)) {
+      throw new MovementApiError(
+        'ledgerVersion must be an unsigned integer string',
+        'invalid_argument'
+      );
+    }
+    return `${path}${path.includes('?') ? '&' : '?'}ledger_version=${encodeURIComponent(ledgerVersion)}`;
+  }
+
+  private validate<T>(raw: unknown, validator: (value: unknown) => T): T {
+    try {
+      return validator(raw);
+    } catch (cause) {
+      throw new MovementApiError(
+        'Movement API response failed schema validation',
+        'invalid_response',
+        { cause }
+      );
+    }
+  }
+
   async getLedgerInfo(): Promise<LedgerInfo> {
-    const raw = await this.get<unknown>(this.apiPath('/'));
-    return assertLedgerInfo(raw);
+    return this.validate(
+      await this.request<unknown>('GET', this.apiPath('/')),
+      assertLedgerInfo
+    );
   }
 
-  /**
-   * Get account information
-   */
-  async getAccount(address: string): Promise<AccountData> {
-    const normalizedAddress = normalizeAddressShort(address);
-
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}`));
-    return assertAccountData(raw);
+  async getAccount(address: string, ledgerVersion?: string): Promise<AccountData> {
+    const normalized = normalizeAddressShort(address);
+    return this.validate(
+      await this.request<unknown>('GET', this.atLedgerVersion(
+        this.apiPath(`/accounts/${normalized}`), ledgerVersion
+      )),
+      assertAccountData
+    );
   }
 
-  /**
-   * Get a specific account resource
-   */
-  async getAccountResource(address: string, resourceType: string): Promise<AccountResource> {
-    const normalizedAddress = normalizeAddressShort(address);
-
-    // URL encode the resource type
+  async getAccountResource(
+    address: string,
+    resourceType: string,
+    ledgerVersion?: string
+  ): Promise<AccountResource> {
+    const normalized = normalizeAddressShort(address);
     const encodedType = encodeURIComponent(resourceType);
-
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resource/${encodedType}`));
-    return assertAccountResource(raw);
+    return this.validate(
+      await this.request<unknown>('GET', this.atLedgerVersion(
+        this.apiPath(`/accounts/${normalized}/resource/${encodedType}`), ledgerVersion
+      )),
+      assertAccountResource
+    );
   }
 
-  /**
-   * Get all resources for an account
-   */
-  async getAccountResources(address: string): Promise<AccountResource[]> {
-    const normalizedAddress = normalizeAddressShort(address);
-
-    const raw = await this.get<unknown>(this.apiPath(`/accounts/${normalizedAddress}/resources`));
-    return assertAccountResourceArray(raw);
+  async getAccountResources(address: string, ledgerVersion?: string): Promise<AccountResource[]> {
+    const normalized = normalizeAddressShort(address);
+    return this.validate(
+      await this.request<unknown>('GET', this.atLedgerVersion(
+        this.apiPath(`/accounts/${normalized}/resources`), ledgerVersion
+      )),
+      assertAccountResourceArray
+    );
   }
 
-  /**
-   * Execute a Move view function via the upstream node's POST /v1/view.
-   *
-   * Stateless passthrough — view results are not cached. Returns the raw
-   * array the upstream API returns (single-value views still come back as
-   * a one-element tuple).
-   *
-   * `extraHeaders` are forwarded to upstream — used by the fork server's
-   * view proxy to relay client headers (`Accept`, `X-Aptos-Client`, …)
-   * so downstream behavior such as BCS-encoded responses is preserved.
-   */
   async view(
     payload: unknown,
-    extraHeaders: Record<string, string> = {}
+    extraHeaders: Record<string, string> = {},
+    ledgerVersion?: string
   ): Promise<unknown[]> {
-    return this.post<unknown[]>(this.apiPath('/view'), payload, extraHeaders);
+    const raw = await this.request<unknown>(
+      'POST',
+      this.atLedgerVersion(this.apiPath('/view'), ledgerVersion),
+      payload,
+      extraHeaders
+    );
+    if (!Array.isArray(raw)) {
+      throw new MovementApiError(
+        'Movement API response failed schema validation',
+        'invalid_response'
+      );
+    }
+    return raw;
   }
 }

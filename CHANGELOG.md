@@ -57,6 +57,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signing credentials, while read-only public forks remain credential-free.
   Network-precedence examples include CLI, environment, and config selectors.
   Closes #384. Tracks #371.
+- Fork snapshots now pin every account, resource, and view read to their
+  recorded ledger version. Typed API/domain errors distinguish missing data
+  from pruned snapshots without exposing upstream bodies; legacy 0.6 resource
+  caches migrate offline and atomically, including empty snapshots. Fork
+  writes are atomic and cross-process locked, and `Harness.createFork` keeps
+  its positional API while adding an options form with explicit overwrite.
+  The 0.6.0 contracts are preserved: `initialize()` on an existing fork
+  refreshes its snapshot metadata in place (the documented mocha before-hook
+  pattern keeps working; `overwrite: true` resets cached state), unreadable
+  legacy resource-cache files are quarantined with a warning instead of
+  failing the whole fork, funding accepts any non-negative integral amount,
+  and a fork whose stored `nodeUrl` embeds credentials fails at `load()` with
+  edit-the-metadata guidance. Caller-input validation now reports the
+  `invalid_argument` error code (`invalid_response` remains for malformed
+  upstream responses). Fork views and reads are pinned to the fork's snapshot
+  ledger version, so results are deterministic for a given fork rather than
+  tracking the upstream's current state. Closes #375.
 - Cross-process publish locks now share a per-user namespace, reclaim dead
   owners immediately (including PIDs recycled by another user's process),
   preserve live owners, and clean up on signals; a lock-wait timeout names the

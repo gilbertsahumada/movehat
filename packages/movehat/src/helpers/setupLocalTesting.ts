@@ -369,10 +369,15 @@ async function setupWithFork(
 
   const forkExists = existsSync(join(forkPath, "metadata.json"));
 
-  if (!forkExists) {
+  if (!forkExists || options.forkOverwrite === true) {
     logger.step(`Creating fork from ${forkNetwork}...`);
     const rpcUrl = resolveForkRpcUrl(forkNetwork, options.forkRpcUrl);
-    await forkManager.initialize(rpcUrl, forkNetwork, options.forkApiKey);
+    await forkManager.initialize(
+      rpcUrl,
+      forkNetwork,
+      options.forkApiKey,
+      { overwrite: options.forkOverwrite === true }
+    );
     logger.success(`Fork created at ${forkPath}`);
     logger.newline();
   } else {
