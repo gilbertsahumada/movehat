@@ -42,13 +42,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Network-precedence examples include CLI, environment, and config selectors.
   Closes #384. Tracks #371.
 - Cross-process publish locks now share a per-user namespace, reclaim dead
-  owners immediately, preserve live owners, and clean up on signals. Deployment
+  owners immediately (including PIDs recycled by another user's process),
+  preserve live owners, and clean up on signals; a lock-wait timeout names the
+  lock file to delete if no other Movehat process is running. Deployment
   identity prefers chain ID, while `--redeploy` can quarantine corrupt records
   and bypass only legacy RPC mismatches. Artifact inspection after an on-chain
   success is best-effort; only persistence failure raises `PostPublishError`.
   Submitted transactions whose final status cannot be confirmed now raise a
   typed, non-retryable unknown-outcome error carrying the transaction hash.
-  Closes #374.
+  The 0.6.0 read contracts are preserved: `loadDeployment` still returns
+  `null` for unreadable records (with a warning) so the documented
+  `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
+  recovery records without `deployer`/`timestamp` still parse, and detected
+  named addresses still bind to the deployer's address. Closes #374.
 
 ## [0.6.0] - 2026-07-12
 

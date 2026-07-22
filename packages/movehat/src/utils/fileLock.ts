@@ -70,8 +70,12 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+  } catch {
+    // EPERM means the PID exists but belongs to another user. The lock
+    // namespace is per-uid and same-uid signaling is always permitted, so an
+    // EPERM PID cannot be the record's owner — it died and the PID was
+    // recycled. Treat it as dead or the lock is unreclaimable until reboot.
+    return false;
   }
 }
 
@@ -129,11 +133,15 @@ function removeObservedLock(
 
   const moved = parseLock(movedPath);
   if (!recordsEqual(observed, moved)) {
-    // Never rename back into the canonical path: POSIX rename would overwrite
-    // a successor that acquired during the gap. Under the reclaim-intent
-    // protocol this mismatch is unreachable for cooperating processes, so
-    // preserve the tombstone and fail closed for diagnosis.
-    throw new Error(`Operation lock changed while being removed: ${path}`);
+    // Reachable when two reclaimers race a dead owner: the loser's stale
+    // rename can move a record published after its revalidation. Any such
+    // record belongs to an acquirer that saw the winner's intent and backed
+    // off (the post-linkSync intent check), so the moved file is retracted
+    // ownership — discard it and report the reclaim as lost. Never rename
+    // back into the canonical path: POSIX rename would overwrite a successor
+    // that acquired during the gap.
+    try { unlinkSync(movedPath); } catch { /* tombstone cleanup is best-effort */ }
+    return false;
   }
 
   try {
@@ -156,13 +164,19 @@ function intentPaths(path: string): string[] {
 }
 
 function parseIntent(path: string): ReclaimIntent | null {
-  const record = parseLock(path);
-  if (record === null) return null;
   try {
     const value = JSON.parse(readFileSync(path, "utf8")) as Partial<ReclaimIntent>;
-    return typeof value.observedToken === "string" && value.observedToken.length > 0
-      ? (value as ReclaimIntent)
-      : null;
+    if (
+      typeof value.token !== "string" ||
+      value.token.length === 0 ||
+      !Number.isSafeInteger(value.pid) ||
+      !Number.isFinite(value.createdAt) ||
+      typeof value.observedToken !== "string" ||
+      value.observedToken.length === 0
+    ) {
+      return null;
+    }
+    return value as ReclaimIntent;
   } catch {
     return null;
   }
@@ -332,8 +346,6 @@ export async function withFileLock<T>(
       try {
         writeFileSync(candidateFd, JSON.stringify(record), "utf8");
         fsyncSync(candidateFd);
-      } catch (error) {
-        throw error;
       } finally {
         closeSync(candidateFd);
         candidateFd = undefined;
@@ -348,7 +360,9 @@ export async function withFileLock<T>(
       if (await removeIfReclaimable(path)) continue;
       const now = Date.now();
       if (now >= deadline)
-        throw new Error(`Timed out waiting for operation lock '${key}'`);
+        throw new Error(
+          `Timed out waiting for operation lock '${key}'. If no other Movehat process is running, delete the stale lock file: ${path}`
+        );
       if (now >= nextNoticeAt) {
         onWait(`Waiting for another Movehat process to finish '${key}'...`);
         nextNoticeAt = now + WAIT_PROGRESS_MS;
@@ -370,7 +384,9 @@ export async function withFileLock<T>(
       releaseOwnedLock({ path, token });
       const now = Date.now();
       if (now >= deadline)
-        throw new Error(`Timed out waiting for operation lock '${key}'`);
+        throw new Error(
+          `Timed out waiting for operation lock '${key}'. If no other Movehat process is running, delete the stale lock file: ${path}`
+        );
       await sleep(Math.min(pollMs, Math.max(0, deadline - now)));
       continue;
     }
