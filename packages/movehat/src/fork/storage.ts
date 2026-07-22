@@ -13,6 +13,7 @@ import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
 import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
+import { logger } from '../ui/index.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -193,8 +194,23 @@ export class ForkStorage {
     if (existsSync(resourcesDir)) {
       for (const file of readdirSync(resourcesDir).sort()) {
         if (!/^0x[0-9a-fA-F]{1,64}\.json$/.test(file)) continue;
-        // Validate legacy JSON before declaring it complete.
-        readLegacyResourceMap(join(resourcesDir, file));
+        const legacyPath = join(resourcesDir, file);
+        // Validate legacy JSON before declaring it complete. 0.6.0 wrote these
+        // files non-atomically, so a crash can leave truncated JSON behind —
+        // quarantine such files instead of failing the whole fork (0.6.0's
+        // resetState flow deleted them unread).
+        try {
+          readLegacyResourceMap(legacyPath);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          const quarantinePath = `${legacyPath}.corrupt-${Date.now()}-${randomUUID()}.bak`;
+          renameSync(legacyPath, quarantinePath);
+          logger.warning(
+            `Skipping unreadable legacy fork resource cache ${file}: ${msg} ` +
+              `Moved to ${quarantinePath}; the address will be refetched on demand.`
+          );
+          continue;
+        }
         const address = file.slice(0, -'.json'.length);
         const marker = this.getAllResourcesMarkerPath(address);
         if (!existsSync(marker)) writePrivateFile(marker, 'complete\n');

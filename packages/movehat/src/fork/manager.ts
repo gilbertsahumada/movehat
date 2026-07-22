@@ -6,10 +6,10 @@ import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
 import { assertCoinStore } from './validation.js';
 import {
-  ForkAlreadyExistsError,
   ForkDataNotFoundError,
   ForkSnapshotPrunedError,
   FORK_SNAPSHOT_PRUNED_GUIDANCE,
+  MovementApiError,
   isMovementApiHttpError,
   isPrunedSnapshotError,
 } from './errors.js';
@@ -151,11 +151,7 @@ export class ForkManager {
     const cacheGeneration = await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
-        if (this.storage.exists() && !options.overwrite) {
-          throw new ForkAlreadyExistsError(
-            `Fork already exists at ${this.forkPath}; pass overwrite: true to replace it`
-          );
-        }
+        const existing = this.storage.exists();
         this.storage.initialize();
         if (options.overwrite) {
           const generation = this.storage.advanceCacheGeneration();
@@ -163,6 +159,16 @@ export class ForkManager {
           this.storage.clearResources();
           this.storage.saveMetadata(metadata);
           return generation;
+        }
+        if (existing) {
+          // 0.6.0 contract: re-initializing an existing fork refreshes its
+          // snapshot metadata and keeps cached state (the documented mocha
+          // before-hook pattern re-initializes on every run).
+          logger.info(
+            `Fork already exists at ${this.forkPath}; refreshing snapshot metadata ` +
+              `(pass overwrite: true to reset cached state)`
+          );
+          this.storage.migrateLegacyResourceCache();
         }
         this.storage.saveMetadata(metadata);
         return this.storage.getCacheGeneration();
@@ -188,7 +194,20 @@ export class ForkManager {
     this.metadata = this.storage.loadMetadata();
     this.storage.migrateLegacyResourceCache();
     this.cacheGeneration = this.storage.getCacheGeneration();
-    this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
+    try {
+      this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
+    } catch (error) {
+      if (error instanceof MovementApiError) {
+        throw new MovementApiError(
+          `${error.message}. This fork's metadata.json predates the credential ` +
+            `rules — edit ${this.forkPath}/metadata.json to remove credentials from ` +
+            `nodeUrl (pass an API key via setApiKey instead), or recreate the fork.`,
+          error.code,
+          { cause: error }
+        );
+      }
+      throw error;
+    }
   }
 
   getMetadata(): ForkMetadata {
@@ -329,17 +348,17 @@ export class ForkManager {
   }
 
   /**
-   * Stateless passthrough of `POST /v1/view` to the upstream RPC.
+   * Proxy of `POST /v1/view` to the upstream RPC, pinned to the fork's
+   * recorded ledger version so results reflect the snapshot, not the
+   * upstream's current state.
    *
-   * View results are not cached — they depend on ledger version and
-   * arguments, so any caching layer would need version-aware
-   * invalidation that the fork system does not implement today. The
-   * payload is forwarded verbatim and the upstream response array is
-   * returned unchanged.
+   * View results are not cached — they depend on arguments, so any
+   * caching layer would need argument-aware invalidation that the fork
+   * system does not implement today. The response must be a JSON array;
+   * BCS responses are rejected at the server layer with 406.
    *
-   * `extraHeaders` are forwarded to upstream so that client headers
-   * such as `Accept: application/x-bcs` (for BCS-encoded view results)
-   * or `X-Aptos-Client` round-trip through the proxy.
+   * `extraHeaders` forwards a narrow set of client headers upstream
+   * (e.g. `X-Aptos-Client`).
    */
   async forwardView(
     payload: unknown,
@@ -375,8 +394,10 @@ export class ForkManager {
 
   /** Adds to the existing balance rather than replacing it. */
   async fundAccount(address: string, amount: number, coinType: string = '0x1::aptos_coin::AptosCoin'): Promise<void> {
-    if (!Number.isSafeInteger(amount) || amount < 0) {
-      throw new RangeError('amount must be a non-negative safe integer');
+    // Integral values above MAX_SAFE_INTEGER (e.g. defaultBalance: 1e16) are
+    // accepted as on 0.6.0; BigInt(amount) converts them exactly.
+    if (!Number.isInteger(amount) || amount < 0) {
+      throw new RangeError('amount must be a non-negative integer');
     }
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;

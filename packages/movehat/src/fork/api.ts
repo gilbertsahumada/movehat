@@ -31,18 +31,18 @@ export class MovementApiClient {
     try {
       parsed = new URL(nodeUrl.replace(/\/$/, ''));
     } catch (cause) {
-      throw new MovementApiError('Movement API URL is invalid', 'invalid_response', { cause });
+      throw new MovementApiError('Movement API URL is invalid', 'invalid_argument', { cause });
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new MovementApiError(
         `Unsupported Movement API protocol: ${parsed.protocol}`,
-        'invalid_response'
+        'invalid_argument'
       );
     }
     if (parsed.username !== '' || parsed.password !== '') {
       throw new MovementApiError(
         'Movement API URL must not contain embedded credentials',
-        'invalid_response'
+        'invalid_argument'
       );
     }
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -195,7 +195,7 @@ export class MovementApiClient {
     if (!/^\d+$/.test(ledgerVersion)) {
       throw new MovementApiError(
         'ledgerVersion must be an unsigned integer string',
-        'invalid_response'
+        'invalid_argument'
       );
     }
     return `${path}${path.includes('?') ? '&' : '?'}ledger_version=${encodeURIComponent(ledgerVersion)}`;

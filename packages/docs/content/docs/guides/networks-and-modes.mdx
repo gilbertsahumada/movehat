@@ -76,7 +76,7 @@ try {
 
 **What "read-only" means in practice today**:
 
-- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call (not cached, so they always reflect current upstream state).
+- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call, pinned to the fork's snapshot ledger version (not cached, deterministic for a given fork).
 - **Rejected at the harness layer**: `deployCodeObject`, `upgradeCodeObject`, `runMoveScript` — all throw synchronously with a clear error message.
 - **Not supported yet**: `MoveContract.call` and any direct transaction submission. The fork server has no `/v1/transactions` handler; these fail with HTTP 404. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 

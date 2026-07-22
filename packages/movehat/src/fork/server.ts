@@ -527,9 +527,9 @@ export class ForkServer {
       return;
     }
 
-    // Forward a narrow set of client headers to upstream so that
-    // BCS-encoded responses (`Accept: application/x-bcs`) and client
-    // identification (`X-Aptos-Client`) round-trip through the proxy.
+    // Forward a narrow set of client headers to upstream (e.g. client
+    // identification via `X-Aptos-Client`). BCS responses are rejected
+    // above with 406 — this JSON server cannot represent them.
     // Hop-by-hop and connection-level headers (host, connection,
     // content-length, etc.) are deliberately not forwarded.
     const forwardableHeaders: Record<string, string> = {};

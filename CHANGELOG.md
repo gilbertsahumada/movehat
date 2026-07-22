@@ -47,7 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   caches migrate offline and atomically, including empty snapshots. Fork
   writes are atomic and cross-process locked, and `Harness.createFork` keeps
   its positional API while adding an options form with explicit overwrite.
-  Closes #375.
+  The 0.6.0 contracts are preserved: `initialize()` on an existing fork
+  refreshes its snapshot metadata in place (the documented mocha before-hook
+  pattern keeps working; `overwrite: true` resets cached state), unreadable
+  legacy resource-cache files are quarantined with a warning instead of
+  failing the whole fork, funding accepts any non-negative integral amount,
+  and a fork whose stored `nodeUrl` embeds credentials fails at `load()` with
+  edit-the-metadata guidance. Caller-input validation now reports the
+  `invalid_argument` error code (`invalid_response` remains for malformed
+  upstream responses). Fork views and reads are pinned to the fork's snapshot
+  ledger version, so results are deterministic for a given fork rather than
+  tracking the upstream's current state. Closes #375.
 - Cross-process publish locks now share a per-user namespace, reclaim dead
   owners immediately, preserve live owners, and clean up on signals. Deployment
   identity prefers chain ID, while `--redeploy` can quarantine corrupt records

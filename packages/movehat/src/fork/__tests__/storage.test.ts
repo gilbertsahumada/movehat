@@ -306,7 +306,7 @@ describe('ForkStorage', () => {
       expect(storage.hasAllResources('0x1')).toBe(true);
     });
 
-    it('does not mark malformed legacy resource maps complete', () => {
+    it('quarantines malformed legacy resource maps instead of failing the fork', () => {
       vol.fromJSON({
         [`${forkPath}/resources/0x1.json`]: JSON.stringify({
           '0x1::a::A': ['not', 'resource', 'data'],
@@ -314,10 +314,15 @@ describe('ForkStorage', () => {
       });
       const storage = new ForkStorage(forkPath);
 
-      expect(() => storage.migrateLegacyResourceCache())
-        .toThrow(/object-shaped resource map/);
+      storage.migrateLegacyResourceCache();
+
       expect(storage.hasAllResources('0x1')).toBe(false);
-      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(false);
+      expect(vol.existsSync(`${forkPath}/resources/0x1.json`)).toBe(false);
+      const quarantined = (vol.readdirSync(`${forkPath}/resources`) as string[])
+        .filter((name) => name.startsWith('0x1.json.corrupt-'));
+      expect(quarantined).toHaveLength(1);
+      // Migration completes so healthy addresses keep their cache.
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
     });
 
     it('advances cache generations without clearing migration state', () => {
