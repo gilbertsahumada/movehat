@@ -16,22 +16,37 @@ export async function resolveMovePackageDir(): Promise<string> {
   return validatePathSafety(packageDir, "Move directory");
 }
 
+/** True when the configured Move package directory exists. */
+export async function moveDirExists(): Promise<boolean> {
+  const config = await loadUserConfig();
+  return existsSync(resolve(process.cwd(), config.moveDir || "./move"));
+}
+
 export interface RunMovementMoveCommandOptions {
+  /** Tool flags placed after `--package-dir` (e.g. `--dev --coverage`). */
+  args?: readonly string[];
+  /** Subcommand words placed before `--package-dir` (e.g. coverage `summary`). */
+  verbArgs?: readonly string[];
   /** `Infinity` disables the timer for intentionally long-running tools. */
   timeoutMs?: number;
 }
 
 export async function runMovementMoveCommand(
   verb: string,
-  extraArgs: readonly string[] = [],
-  verbArgs: readonly string[] = [],
   options: RunMovementMoveCommandOptions = {}
 ): Promise<void> {
   const packageDir = await resolveMovePackageDir();
   const timeoutMs = options.timeoutMs ?? DEFAULT_MOVE_TOOL_TIMEOUT_MS;
   const input = {
     command: "movement",
-    args: ["move", verb, ...verbArgs, "--package-dir", packageDir, ...extraArgs],
+    args: [
+      "move",
+      verb,
+      ...(options.verbArgs ?? []),
+      "--package-dir",
+      packageDir,
+      ...(options.args ?? []),
+    ],
     cwd: process.cwd(),
     inheritStdio: true,
     timeoutMs,

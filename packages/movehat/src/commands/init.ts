@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import prompts from "prompts";
 import { printMovehatBanner } from "../helpers/banner.js";
 import { logger, createSpinnerChain, formatCommand } from "../ui/index.js";
+import { isInteractiveSession } from "../utils/interactive.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,8 +98,7 @@ export default async function initCommand(
 
   // if name is not given
   if (!projectName) {
-    const interactive =
-      options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const interactive = isInteractiveSession(options.interactive);
     if (!interactive) {
       throw new Error(
         "Project name is required in non-interactive mode: movehat init <project-name>"
@@ -154,8 +154,7 @@ export default async function initCommand(
       });
 
     if (destinationExists && !options.force) {
-      const interactive =
-        options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+      const interactive = isInteractiveSession(options.interactive);
       if (!interactive) {
         throw new Error(
           `Destination already exists: ${projectPath}. Re-run with --force to overwrite template files.`

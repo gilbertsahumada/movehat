@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Mainnet must also be declared explicitly in `movehat.config.ts`. Read-only
   public forks still need no signing key; an RPC API key is independent from a
   signing account. Closes #373. Tracks #371.
+- Non-interactive `movehat init` now requires an explicit project name and
+  refuses to overwrite an existing destination without `--force`. 0.6.0
+  automation that piped the name to a flagless `movehat init` or refreshed
+  template files into an existing directory must pass the name as an argument
+  and add `--force`. Closes #376. Tracks #371.
 
 ### Added
 
@@ -38,9 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supports explicit relative/absolute paths, package installs, local or global
   npm bins, and safe fallback to Movement node. Local-node state is protected
   by ownership markers with conservative migration of recognized 0.6 layouts.
-- CLI actions are awaited, non-interactive `movehat test` runs all suites, and
-  `movehat init` requires an explicit project name and `--force` before it can
-  overwrite template files in automation.
+- CLI actions are awaited and non-interactive `movehat test` runs all suites.
 - Intentional long-running commands can opt out of process timeouts explicitly:
   the prover and TypeScript watch mode run until completion or Ctrl+C, while
   compile, lint, coverage, and normal test commands retain finite limits.

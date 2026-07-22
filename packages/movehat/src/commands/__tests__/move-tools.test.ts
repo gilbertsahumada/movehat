@@ -10,9 +10,6 @@ const { loadUserConfigMock, runCliMock, runCliUntilInterruptedMock } = vi.hoiste
 }));
 
 vi.mock("../../core/config.js", () => ({ loadUserConfig: loadUserConfigMock }));
-vi.mock("../../core/shell.js", () => ({
-  validatePathSafety: (value: string) => value,
-}));
 vi.mock("../../utils/runCli.js", () => ({
   runCli: runCliMock,
   runCliUntilInterrupted: runCliUntilInterruptedMock,
@@ -27,8 +24,8 @@ describe("Movement CLI quality commands", () => {
   let packageDir: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), "movehat-tools-$()-"));
-    packageDir = join(root, "move package (safe)");
+    root = mkdtempSync(join(tmpdir(), "movehat-tools-"));
+    packageDir = join(root, "move package safe");
     mkdirSync(packageDir);
     loadUserConfigMock.mockReset();
     loadUserConfigMock.mockResolvedValue({ moveDir: packageDir });
@@ -44,7 +41,7 @@ describe("Movement CLI quality commands", () => {
     vi.restoreAllMocks();
   });
 
-  it("passes a metacharacter-containing package path as one lint argument", async () => {
+  it("passes a space-containing package path as one lint argument", async () => {
     await lintCommand();
 
     expect(runCliMock).toHaveBeenCalledWith(
@@ -55,6 +52,15 @@ describe("Movement CLI quality commands", () => {
       }),
       { throwOnNonZeroExit: false }
     );
+  });
+
+  it("fails closed on a package path containing shell metacharacters", async () => {
+    const unsafeDir = join(root, "move package (unsafe)");
+    mkdirSync(unsafeDir);
+    loadUserConfigMock.mockResolvedValue({ moveDir: unsafeDir });
+
+    await expect(lintCommand()).rejects.toThrow(/dangerous characters/);
+    expect(runCliMock).not.toHaveBeenCalled();
   });
 
   it("runs the Move Prover without a timeout", async () => {

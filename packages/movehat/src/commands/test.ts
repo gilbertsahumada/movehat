@@ -4,7 +4,9 @@ import prompts from "prompts";
 import { runMoveTests } from "../helpers/move-tests.js";
 import { logger, colors, symbols } from "../ui/index.js";
 import { runCli, runCliUntilInterrupted } from "../utils/runCli.js";
+import { isInteractiveSession } from "../utils/interactive.js";
 import coverageCommand from "./coverage.js";
+import { moveDirExists } from "./move-tool.js";
 
 interface TestOptions {
   move?: boolean;
@@ -51,8 +53,7 @@ export default async function testCommand(options: TestOptions = {}) {
 
   // If no flags provided, show interactive menu
   if (!testType) {
-    const interactive =
-      options.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const interactive = isInteractiveSession(options.interactive);
     testType = interactive ? await showTestMenu() : "all";
     if (!testType) {
       // User cancelled
@@ -170,7 +171,15 @@ async function runAllTests(filter?: string, coverage = false): Promise<void> {
 
   try {
     if (coverage) {
-      await coverageCommand(filter);
+      if (await moveDirExists()) {
+        await coverageCommand(filter);
+      } else {
+        // Mirror runMoveTests' skipIfMissing grace: a TypeScript-only
+        // project still runs its mocha suite below.
+        logger.info("No Move directory found (./move not found)");
+        logger.plain("   Skipping Move tests...");
+        logger.newline();
+      }
     } else {
       await runMoveTests({
         filter,
@@ -232,9 +241,6 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
   // Watch mode is awaited so Commander keeps the action alive. The child
   // shares the inherited terminal, so Ctrl+C reaches both processes and
   // cannot leave a detached Mocha process behind.
-  /* c8 ignore start -- watch mode launches a long-running mocha process and
-     never returns; not testable as a unit. Behaviour is covered by the
-     integration suite and by manual smoke. */
   if (watch) {
     logger.plain(`${colors.info(symbols.info)} Watch mode active. Press Ctrl+C to exit.`);
     logger.newline();
@@ -256,7 +262,6 @@ async function runTypeScriptTests(watch: boolean = false): Promise<void> {
     }
     return;
   }
-  /* c8 ignore stop */
 
   // Non-watch mode: await the run, surface the exit code as a thrown error
   // so the orchestrator above can summarize the failure.
