@@ -44,6 +44,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Intentional long-running commands can opt out of process timeouts explicitly:
   the prover and TypeScript watch mode run until completion or Ctrl+C, while
   compile, lint, coverage, and normal test commands retain finite limits.
+- An explicit `MOVELITE_PATH` that points at a missing or non-executable file
+  now fails with a clear error instead of silently falling back to the slow
+  Movement node; automatic discovery candidates (PATH shims, package installs)
+  still fall back. `MOVEHAT_NETWORK` is now honored by the core network
+  resolver (between `--network`/`MH_CLI_NETWORK` and `MH_DEFAULT_NETWORK`) and
+  logs which selector chose the network; previously only generated scripts
+  read it. `--network movelite` is recognized as the local backend family, so
+  local fixtures run under it without a selector-conflict error.
+- Scaffolded `Move.toml` now pins the AptosFramework dependency to an exact
+  `movement`-branch commit instead of the moving branch ref, so fresh projects
+  compile reproducibly regardless of upstream framework changes. The pin is
+  bumped deliberately alongside Movement CLI upgrades.
+- `movehat fork create` / `fork serve` without `--network` fall back to
+  `testnet` when the project's `defaultNetwork` is the disposable local chain
+  (which has nothing durable to snapshot), preserving the 0.6.0 no-flag fork
+  behavior for the new local-first scaffold.
 
 ### Fixed
 
@@ -58,15 +74,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   caches migrate offline and atomically, including empty snapshots. Fork
   writes are atomic and cross-process locked, and `Harness.createFork` keeps
   its positional API while adding an options form with explicit overwrite.
-  Closes #375.
+  The 0.6.0 contracts are preserved: `initialize()` on an existing fork
+  refreshes its snapshot metadata in place (the documented mocha before-hook
+  pattern keeps working; `overwrite: true` resets cached state), unreadable
+  legacy resource-cache files are quarantined with a warning instead of
+  failing the whole fork, funding accepts any non-negative integral amount,
+  and a fork whose stored `nodeUrl` embeds credentials fails at `load()` with
+  edit-the-metadata guidance. Caller-input validation now reports the
+  `invalid_argument` error code (`invalid_response` remains for malformed
+  upstream responses). Fork views and reads are pinned to the fork's snapshot
+  ledger version, so results are deterministic for a given fork rather than
+  tracking the upstream's current state. Closes #375.
 - Cross-process publish locks now share a per-user namespace, reclaim dead
-  owners immediately, preserve live owners, and clean up on signals. Deployment
+  owners immediately (including PIDs recycled by another user's process),
+  preserve live owners, and clean up on signals; a lock-wait timeout names the
+  lock file to delete if no other Movehat process is running. Deployment
   identity prefers chain ID, while `--redeploy` can quarantine corrupt records
   and bypass only legacy RPC mismatches. Artifact inspection after an on-chain
   success is best-effort; only persistence failure raises `PostPublishError`.
   Submitted transactions whose final status cannot be confirmed now raise a
   typed, non-retryable unknown-outcome error carrying the transaction hash.
-  Closes #374.
+  The 0.6.0 read contracts are preserved: `loadDeployment` still returns
+  `null` for unreadable records (with a warning) so the documented
+  `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
+  recovery records without `deployer`/`timestamp` still parse, and detected
+  named addresses still bind to the deployer's address. Closes #374.
 
 ## [0.6.0] - 2026-07-12
 

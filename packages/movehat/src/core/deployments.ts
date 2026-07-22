@@ -149,14 +149,21 @@ export function parseDeploymentInfo(
   expected?: { network: string; moduleName: string },
 ): DeploymentInfo {
   if (!isRecord(value)) throw new Error("Deployment record must be a JSON object");
-  const required = ["address", "moduleName", "network", "deployer"] as const;
+  const required = ["address", "moduleName", "network"] as const;
   for (const key of required) {
     if (typeof value[key] !== "string" || value[key].length === 0) {
       throw new Error(`Deployment record field '${key}' must be a non-empty string`);
     }
   }
+  // 0.6.0 records and the hand-written recovery shape from PostPublishError
+  // carry neither deployer nor timestamp — default them instead of rejecting.
+  if (!isOptionalString(value.deployer)) {
+    throw new Error("Deployment record field 'deployer' must be a string when present");
+  }
+  if (value.deployer === undefined || value.deployer.length === 0) value.deployer = "";
+  if (value.timestamp === undefined) value.timestamp = 0;
   if (!Number.isFinite(value.timestamp) || (value.timestamp as number) < 0) {
-    throw new Error("Deployment record field 'timestamp' must be a non-negative number");
+    throw new Error("Deployment record field 'timestamp' must be a non-negative number when present");
   }
   if (value.schemaVersion !== undefined && value.schemaVersion !== 2) {
     throw new Error(`Unsupported deployment schema version '${String(value.schemaVersion)}'`);
@@ -336,21 +343,26 @@ export function loadDeployment(network: string, moduleName: string, options: { q
     return parseDeploymentInfo(JSON.parse(content) as unknown, { network, moduleName });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    logger.error(`Failed to load deployment for ${moduleName} on ${network}: ${msg}`);
-    const invalid = new InvalidPersistedStateError(
-      `Invalid deployment record for ${moduleName} on ${network}: ${msg}`,
-      filePath,
-      error instanceof Error ? { cause: error } : undefined,
-    );
-    if (!options.quarantineCorrupt) throw invalid;
-    const quarantinePath = join(networkDir, `${moduleName}.corrupt-${Date.now()}-${randomUUID()}.bak`);
-    try {
-      renameSync(filePath, quarantinePath);
-      logger.warning(`Moved corrupt deployment record to ${quarantinePath}`);
-      return null;
-    } catch (quarantineError) {
-      throw new InvalidPersistedStateError(`${invalid.message}; failed to quarantine it`, filePath, { cause: quarantineError });
+    if (options.quarantineCorrupt) {
+      const quarantinePath = join(networkDir, `${moduleName}.corrupt-${Date.now()}-${randomUUID()}.bak`);
+      try {
+        renameSync(filePath, quarantinePath);
+        logger.warning(`Moved corrupt deployment record to ${quarantinePath}`);
+        return null;
+      } catch (quarantineError) {
+        throw new InvalidPersistedStateError(
+          `Invalid deployment record for ${moduleName} on ${network}: ${msg}; failed to quarantine it`,
+          filePath,
+          { cause: quarantineError },
+        );
+      }
     }
+    // 0.6.0 contract: an unreadable record reads as "no deployment", so the
+    // documented `if (!loadDeployment(...)) deploy()` flow self-heals it.
+    logger.warning(
+      `Skipping invalid deployment record for ${moduleName} on ${network} (${filePath}): ${msg}`
+    );
+    return null;
   }
 }
 
@@ -373,14 +385,10 @@ export function getAllDeployments(network: string): Record<string, DeploymentInf
 
   for (const file of files) {
     const moduleName = file.replace(".json", "");
-    // loadDeployment will validate moduleName internally
-    try {
-      const deployment = loadDeployment(network, moduleName);
-      if (deployment) deployments[moduleName] = deployment;
-    } catch (error) {
-      if (!(error instanceof InvalidPersistedStateError)) throw error;
-      logger.warning(`Skipping corrupt deployment record '${error.path}': ${error.message}`);
-    }
+    // loadDeployment validates moduleName internally and warns + returns
+    // null for invalid records, so a corrupt file skips its own entry only.
+    const deployment = loadDeployment(network, moduleName);
+    if (deployment) deployments[moduleName] = deployment;
   }
 
   return deployments;

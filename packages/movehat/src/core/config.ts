@@ -46,7 +46,8 @@ function isKnownTestEndpoint(url: string): boolean {
 // or query strings (`?apiKey=…`). Returns the protocol + host + pathname
 // only, which is enough for the operator to identify the endpoint
 // without leaking embedded credentials to CI logs.
-function sanitizeUrlForLog(url: string): string {
+/** @internal Shared by CLI commands that print endpoint URLs. */
+export function sanitizeUrlForLog(url: string): string {
   try {
     const parsed = new URL(url);
     return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
@@ -171,10 +172,7 @@ export function _resetConfigCache(): void {
   inFlightLoads.clear();
 }
 
-/**
- * Resolve configuration for a specific network
- * Merges global settings with network-specific settings
- */
+/** Network name + endpoint config selected by the resolution policy. */
 export interface ResolvedNetworkEndpoint {
   network: string;
   networkConfig: MovehatUserConfig["networks"][string];
@@ -188,6 +186,14 @@ export function resolveNetworkEndpoint(
   return resolveNetworkEndpointWithPolicy(userConfig, networkName, true);
 }
 
+// "movelite" is a selector for the local backend, not a distinct chain:
+// a fixture that resolves "local" under `--network movelite` is honoring
+// the flag, not conflicting with it.
+function isSameNetworkFamily(a: string, b: string): boolean {
+  const normalize = (name: string) => (name === "movelite" ? "local" : name);
+  return normalize(a) === normalize(b);
+}
+
 function resolveNetworkEndpointWithPolicy(
   userConfig: MovehatUserConfig,
   networkName: string | undefined,
@@ -195,7 +201,12 @@ function resolveNetworkEndpointWithPolicy(
 ): ResolvedNetworkEndpoint {
   const cliNetwork = process.env.MH_CLI_NETWORK;
   const legacyNetwork = process.env.MOVEHAT_NETWORK;
-  if (enforceCliConflict && networkName && cliNetwork && networkName !== cliNetwork) {
+  if (
+    enforceCliConflict &&
+    networkName &&
+    cliNetwork &&
+    !isSameNetworkFamily(networkName, cliNetwork)
+  ) {
     throw new NetworkConflictError(networkName, cliNetwork);
   }
   if (enforceCliConflict && cliNetwork && legacyNetwork && cliNetwork !== legacyNetwork) {
@@ -204,11 +215,16 @@ function resolveNetworkEndpointWithPolicy(
         `--network selected '${cliNetwork}'.`
     );
   }
+  if (enforceCliConflict && !networkName && !cliNetwork && legacyNetwork) {
+    logger.info(`Using network '${legacyNetwork}' from MOVEHAT_NETWORK.`);
+  }
 
+  // The enforceCliConflict=false caller (switchNetwork) always passes
+  // networkName, so the env-var terms only ever apply under enforcement.
   const selectedNetwork =
     networkName ||
-    (enforceCliConflict ? cliNetwork : undefined) ||
-    (enforceCliConflict ? legacyNetwork : undefined) ||
+    cliNetwork ||
+    legacyNetwork ||
     process.env.MH_DEFAULT_NETWORK ||
     userConfig.defaultNetwork ||
     "testnet";
@@ -246,6 +262,10 @@ function resolveNetworkEndpointWithPolicy(
   return { network: selectedNetwork, networkConfig };
 }
 
+/**
+ * Resolve configuration for a specific network.
+ * Merges global settings with network-specific settings.
+ */
 export async function resolveNetworkConfig(
   userConfig: MovehatUserConfig,
   networkName?: string

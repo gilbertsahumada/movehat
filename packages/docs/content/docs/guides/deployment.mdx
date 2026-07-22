@@ -11,13 +11,17 @@ live-only deployment script uses the **Hardhat-style `Harness` API** with an
 explicit public network and signing account:
 
 ```typescript
-// scripts/deploy-counter.ts
+// scripts/deploy-live.ts — adapted from the generated scripts/deploy-counter.ts,
+// which is local-first; this variant refuses to run without a live network.
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
-  if (!network) {
-    throw new Error("Select a live network with --network or MOVEHAT_NETWORK");
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK;
+  if (!network || network === "local" || network === "movelite") {
+    throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
   }
   const harness = await Harness.createLive(network);
   try {
@@ -154,9 +158,12 @@ harness.runtime.getDeploymentAddress // Get deployed address
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
-  if (!network) {
-    throw new Error("Select testnet or mainnet explicitly");
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK;
+  if (!network || network === "local" || network === "movelite") {
+    throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
   }
   const harness = await Harness.createLive(network);
   try {

@@ -29,15 +29,21 @@ The default `movehat init` template reads `PRIVATE_KEY` from `.env` and derives 
 
 ## Step 1 — Inspect the deploy script
 
-The canonical script lives at `scripts/deploy-counter.ts` after `movehat init`. The shape:
+The generated `scripts/deploy-counter.ts` is local-first — with no network
+selected it deploys to a disposable local chain. For this tutorial, adapt it
+into a live-only variant that refuses to run without an explicit public
+network:
 
 ```typescript
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MH_CLI_NETWORK ?? process.env.MOVEHAT_NETWORK;
-  if (network !== "testnet" && network !== "mainnet") {
-    throw new Error("Set MOVEHAT_NETWORK=testnet or mainnet explicitly");
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK;
+  if (!network || network === "local" || network === "movelite") {
+    throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
   }
   const harness = await Harness.createLive(network);
   try {

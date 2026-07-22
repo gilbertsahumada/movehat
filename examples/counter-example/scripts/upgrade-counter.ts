@@ -6,16 +6,18 @@ import config from "../movehat.config.js";
  * compiled Move package into an existing code object on-chain.
  *
  * Prerequisite: a prior run of `scripts/deploy-counter.ts` against the
- * same network. That run writes `deployments/{network}/counter.json`
+ * same live network. That run writes `deployments/{network}/counter.json`
  * with the object address; this script reads it back to derive the
- * `objectAddress` argument.
+ * `objectAddress` argument. The default `npm run deploy` targets a
+ * disposable local chain, which an upgrade cannot reach afterwards —
+ * both commands must select the same public network.
  *
  * The `addressName: "hello_blockchain"` mirrors `deploy-counter.ts` —
  * Move.toml's named address slot differs from the on-chain module id,
  * so the upgrade has to bind the same way the original deploy did.
  *
- * Run: `MOVEHAT_NETWORK=testnet npm run upgrade` after deploying to the same
- * live network with `MOVEHAT_NETWORK=testnet npm run deploy`.
+ * Run: `MOVEHAT_NETWORK=testnet npm run upgrade`
+ * (after `MOVEHAT_NETWORK=testnet npm run deploy`).
  */
 async function main() {
   console.log("Upgrading Counter contract...\n");
@@ -28,9 +30,10 @@ async function main() {
     "local";
   if (network === "local" || network === "movelite") {
     throw new Error(
-      "upgrade-counter.ts requires an explicit live network. " +
-        "Set MOVEHAT_NETWORK=testnet (or use --network testnet), configure " +
-        "PRIVATE_KEY, and deploy to that same network before upgrading.",
+      "Upgrades need a persistent network, and the default local chain is " +
+      "disposable. Deploy and upgrade against the same live network:\n" +
+      "  MOVEHAT_NETWORK=testnet npm run deploy\n" +
+      "  MOVEHAT_NETWORK=testnet npm run upgrade"
     );
   }
   const harness = await Harness.createLive(network);
@@ -39,7 +42,8 @@ async function main() {
     if (!objectAddress) {
       throw new Error(
         `No prior deployment found for "counter" on ${network}. ` +
-        `Run \`npm run deploy\` first.`
+        `Run \`MOVEHAT_NETWORK=${network} npm run deploy\` first ` +
+        `(deploy and upgrade must target the same network).`
       );
     }
 

@@ -25,6 +25,7 @@ vi.mock("../../../fork/manager.js", () => ({
 vi.mock("../../../core/config.js", () => ({
   loadUserConfig: loadUserConfigMock,
   resolveNetworkEndpoint: resolveNetworkEndpointMock,
+  sanitizeUrlForLog: (url: string) => url,
 }));
 
 const { default: forkCreateCommand, validateForkName } = await import("../create.js");
@@ -86,6 +87,31 @@ describe("forkCreateCommand", () => {
       { overwrite: false }
     );
     expect(promptsMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to testnet when defaultNetwork is the disposable local chain", async () => {
+    loadUserConfigMock.mockResolvedValue({
+      defaultNetwork: "local",
+      networks: {
+        testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+        local: { url: "http://localhost:8080/v1", chainId: "local" },
+      },
+    });
+    resolveNetworkEndpointMock.mockImplementation((_cfg, name) =>
+      name === "testnet"
+        ? {
+            network: "testnet",
+            networkConfig: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+          }
+        : { network: "local", networkConfig: { url: "http://localhost:8080/v1", chainId: "local" } }
+    );
+
+    await forkCreateCommand({});
+
+    expect(resolveNetworkEndpointMock).toHaveBeenLastCalledWith(expect.anything(), "testnet");
+    expect(ForkManagerCtor).toHaveBeenCalledWith(
+      join(process.cwd(), ".movehat", "forks", "testnet-fork")
+    );
   });
 
   it("uses a custom fork name and path when provided", async () => {

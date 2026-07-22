@@ -41,7 +41,6 @@ vi.mock("../api.js", () => ({
 // Static import after the mock declaration — vi hoists vi.mock calls.
 import { ForkManager } from "../manager.js";
 import {
-  ForkAlreadyExistsError,
   ForkSnapshotPrunedError,
   MovementApiError,
 } from "../errors.js";
@@ -133,7 +132,7 @@ describe("ForkManager — initialize / load", () => {
     expect(mgr.getMetadata().network).toBe("bardock-testnet");
   });
 
-  it("preflights before refusing or overwriting an existing fork", async () => {
+  it("preflights before overwriting, and re-initialize refreshes an existing fork", async () => {
     fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
     const mgr = new ForkManager(forkPath);
     await mgr.initialize(TEST_NODE_URL, "original");
@@ -144,8 +143,11 @@ describe("ForkManager — initialize / load", () => {
     ).rejects.toThrow("replacement RPC unavailable");
     expect(mgr.getMetadata().network).toBe("original");
 
+    // 0.6.0 contract: re-initialize without overwrite refreshes metadata in
+    // place (the documented mocha before-hook pattern runs it every time).
     fakeApi.getLedgerInfo.mockResolvedValueOnce(ledgerInfoFixture());
-    await expect(mgr.initialize(TEST_NODE_URL)).rejects.toBeInstanceOf(ForkAlreadyExistsError);
+    await mgr.initialize(TEST_NODE_URL, "refreshed");
+    expect(mgr.getMetadata().network).toBe("refreshed");
   });
 
   it("load throws when the fork directory doesn't exist", () => {

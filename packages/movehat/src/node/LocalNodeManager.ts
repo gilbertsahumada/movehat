@@ -162,7 +162,8 @@ function prepareManagedDirectory(pathname: string): string {
 
 function removeManagedDirectory(pathname: string): void {
   const directory = assertSafeNodeDirectory(pathname);
-  if (!hasValidMarker(directory)) {
+  const empty = !existsSync(directory) || readdirSync(directory).length === 0;
+  if (!empty && !hasValidMarker(directory) && !isRecognizedLegacyLayout(directory)) {
     throw new UnsafePathError(`Refusing to remove unowned local-node directory: ${directory}`, directory);
   }
   rmSync(directory, { recursive: true, force: true });
@@ -510,7 +511,6 @@ export class LocalNodeManager {
 
     if (existsSync(this.options.testDir)) {
       logger.step(`Cleaning node data at ${this.options.testDir}...`);
-      this.options.testDir = prepareManagedDirectory(this.options.testDir);
       removeManagedDirectory(this.options.testDir);
       logger.success("Node data cleaned");
     }

@@ -68,6 +68,18 @@ async function benchCreateLocal(): Promise<Sample> {
 async function benchCreateFork(): Promise<Sample> {
   const forkName = `movehat-bench-fork-${Date.now()}`;
   const forkDir = join(process.cwd(), '.movehat', 'forks', forkName);
+  // Hydrate outside the measured loop so every sampled iteration is a
+  // warm-cache access; otherwise the cold hydrate dominates the median.
+  const warm = await Harness.createFork({
+    network: 'testnet',
+    name: forkName,
+    resetState: false,
+  });
+  try {
+    await warm.forkManager?.getAllResources('0x1');
+  } finally {
+    await warm.cleanup();
+  }
   return measure(
     'Harness.createFork cached read (testnet)',
     async () => {
@@ -77,8 +89,6 @@ async function benchCreateFork(): Promise<Sample> {
         resetState: false,
       });
       try {
-        // The first iteration hydrates this pinned read; the second measures
-        // an actual warm-cache access rather than setup alone.
         await h.forkManager?.getAllResources('0x1');
       } finally {
         await h.cleanup();

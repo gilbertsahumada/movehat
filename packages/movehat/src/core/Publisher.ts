@@ -30,7 +30,6 @@ import { parseTxHash } from "../utils/parseCliOutput.js";
 import { redactSecrets } from "../utils/redact.js";
 import { withKeyedLock } from "../utils/keyedMutex.js";
 import { withFileLocks } from "../utils/fileLock.js";
-import { isHexAddress } from "../utils/address.js";
 import { deploymentLockKeys } from "../utils/deploymentLockKeys.js";
 
 /** @internal */
@@ -184,8 +183,9 @@ export class Publisher {
       // Detect named addresses from Move files
       const detectedAddresses = extractNamedAddresses(dir);
 
-      // Build named addresses argument. Explicit runtime configuration wins;
-      // unresolved names retain the legacy deployer-address default.
+      // Build named addresses argument: every detected name is bound to the
+      // deployer's address (the 0.6.0 contract; config.namedAddresses is for
+      // test fixtures, not deploys).
       // Stored as a pre-split args fragment so the spawn path never has to parse
       // shell tokens; an empty fragment becomes a no-op via spread.
       const namedAddrArgs: string[] =
@@ -193,15 +193,7 @@ export class Publisher {
           ? [
               "--named-addresses",
               Array.from(detectedAddresses)
-                .map((name) => {
-                  const address = config.namedAddresses[name] ?? deployerAddress;
-                  if (!isHexAddress(address)) {
-                    throw new Error(
-                      `Named address '${name}' must be a 1-64 digit hexadecimal address`,
-                    );
-                  }
-                  return `${name}=${address}`;
-                })
+                .map((name) => `${name}=${deployerAddress}`)
                 .join(","),
             ]
           : [];

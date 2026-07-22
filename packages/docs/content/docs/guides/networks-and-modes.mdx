@@ -76,13 +76,15 @@ try {
 
 **What "read-only" means in practice today**:
 
-- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call (not cached, so they always reflect current upstream state).
+- **Supported**: account / resource reads (`aptos.getAccountInfo`, `aptos.getAccountResource`, `aptos.getAccountResources`), ledger info, and view functions (`harness.runViewFunction`, `MoveContract.view`). Account / resource reads cache locally on first fetch; view results are proxied to upstream every call, pinned to the fork's snapshot ledger version (not cached, deterministic for a given fork).
 - **Rejected at the harness layer**: `deployCodeObject`, `upgradeCodeObject`, `runMoveScript` — all throw synchronously with a clear error message.
 - **Not supported yet**: `MoveContract.call` and any direct transaction submission. The fork server has no `/v1/transactions` handler; these fail with HTTP 404. A **writable** fork (Foundry-style: fork mainnet then deploy + call into it) is tracked in [#192](https://github.com/gilbertsahumada/movehat/issues/192).
 
 Because a fork never signs or submits a transaction, reading public testnet or
-mainnet does not require `PRIVATE_KEY`. `MOVEMENT_API_KEY`, when provided, only
-authenticates RPC reads and is not a signing account.
+mainnet does not require `PRIVATE_KEY`. An RPC API key only authenticates
+reads and is never a signing account — and it must be passed explicitly, e.g.
+`Harness.createFork("mainnet", process.env.MOVEMENT_API_KEY)`; Movehat does
+not read `MOVEMENT_API_KEY` from the environment on its own.
 
 **Important gotcha for view functions**: view calls are proxied to *upstream* — they reflect the upstream network's state, not any local mutations you made via `forkManager.setResource` or `forkManager.fundAccount`. For the dominant use case ("read a real mainnet view"), this is what you want. For "deploy to a fork, then view the result", you need a writable fork (#192).
 

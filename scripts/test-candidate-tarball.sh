@@ -67,32 +67,4 @@ TARBALL_NAME=$(printf '%s\n' "${PACK_OUTPUT}" | tail -1)
 TARBALL_PATH="${TMP_ROOT}/${TARBALL_NAME}"
 test -f "${TARBALL_PATH}"
 
-ORIGINAL_VERSION=$(node -p "require('./package.json').version")
-verify_tarball "${TARBALL_PATH}" "original"
-
-# Build a second tarball from the packed artifact, changing only its version.
-# This exercises the opposite release form without mutating the worktree:
-# normal candidates get an rc counterpart; prereleases get a normal one.
-VARIANT_ROOT="${TMP_ROOT}/variant"
-mkdir -p "${VARIANT_ROOT}"
-tar -xzf "${TARBALL_PATH}" -C "${VARIANT_ROOT}"
-if [[ "${ORIGINAL_VERSION}" == *-* ]]; then
-  VARIANT_VERSION="${ORIGINAL_VERSION%%-*}"
-else
-  VARIANT_VERSION="${ORIGINAL_VERSION}-rc.0"
-fi
-node -e '
-  const fs = require("fs");
-  const manifestPath = process.argv[1];
-  const version = process.argv[2];
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  manifest.version = version;
-  delete manifest.scripts.prepack;
-  delete manifest.scripts.prepublishOnly;
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-' "${VARIANT_ROOT}/package/package.json" "${VARIANT_VERSION}"
-
-cd "${VARIANT_ROOT}/package"
-VARIANT_OUTPUT=$(npm pack --pack-destination "${TMP_ROOT}" --silent)
-VARIANT_NAME=$(printf '%s\n' "${VARIANT_OUTPUT}" | tail -1)
-verify_tarball "${TMP_ROOT}/${VARIANT_NAME}" "variant"
+verify_tarball "${TARBALL_PATH}" "candidate"

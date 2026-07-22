@@ -21,8 +21,8 @@ export default {
 
   // Network configurations
   networks: {
-  // Movement Testnet - Public test network. Set PRIVATE_KEY before
-  // selecting this network; the default workflow never contacts it.
+    // Movement Testnet - Public test network. Set PRIVATE_KEY before
+    // selecting this network; the default workflow never contacts it.
     testnet: {
       url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",

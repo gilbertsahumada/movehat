@@ -3,6 +3,7 @@ export type MovementApiErrorCode =
   | 'timeout'
   | 'response_too_large'
   | 'invalid_response'
+  | 'invalid_argument'
   | 'network_error';
 
 /** A typed, redacted failure at the Movement JSON API boundary. */
@@ -46,13 +47,6 @@ export class ForkSnapshotPrunedError extends Error {
 
 export const FORK_SNAPSHOT_PRUNED_GUIDANCE =
   'Recreate the fork at a fresh ledger version (CLI: run movehat fork create again and confirm overwrite; API: initialize with overwrite: true). resetState() only clears local cache and cannot restore a pruned upstream snapshot.';
-
-export class ForkAlreadyExistsError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ForkAlreadyExistsError';
-  }
-}
 
 export function isMovementApiHttpError(
   error: unknown,

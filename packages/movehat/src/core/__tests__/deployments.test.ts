@@ -20,7 +20,6 @@ const {
   loadDeployment,
   getAllDeployments,
   getDeployedAddress,
-  InvalidPersistedStateError,
   fingerprintRpcUrl,
   assertDeploymentEnvironment,
   tryHashBuildArtifacts,
@@ -116,16 +115,30 @@ describe('saveDeployment and loadDeployment', () => {
     expect(vol.existsSync('/project/deployments')).toBe(false);
   });
 
-  it('rejects corrupt or path-mismatched records instead of treating them as absent', () => {
+  it('treats corrupt or path-mismatched records as absent, preserving the 0.6.0 null contract', () => {
     vol.fromJSON({
       '/project/deployments/testnet/counter.json': '{not-json',
     });
-    expect(() => loadDeployment('testnet', 'counter')).toThrow(InvalidPersistedStateError);
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
 
     vol.writeFileSync('/project/deployments/testnet/counter.json', JSON.stringify({
       address: '0x1', moduleName: 'other', network: 'testnet', deployer: '0x2', timestamp: 1,
     }));
-    expect(() => loadDeployment('testnet', 'counter')).toThrow('identity does not match');
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
+    // The invalid file stays in place for inspection; only quarantine moves it.
+    expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(true);
+  });
+
+  it('parses minimal hand-written recovery records without deployer or timestamp', () => {
+    vol.fromJSON({
+      '/project/deployments/testnet/counter.json': JSON.stringify({
+        address: '0xabc', moduleName: 'counter', network: 'testnet',
+      }),
+    });
+    const record = loadDeployment('testnet', 'counter');
+    expect(record?.address).toBe('0xabc');
+    expect(record?.deployer).toBe('');
+    expect(record?.timestamp).toBe(0);
   });
 
   it('persists additive v2 metadata and leaves no temporary file', () => {
@@ -151,7 +164,8 @@ describe('saveDeployment and loadDeployment', () => {
 
   it('quarantines corrupt records only when requested', () => {
     vol.fromJSON({ '/project/deployments/testnet/counter.json': '{bad' });
-    expect(() => loadDeployment('testnet', 'counter')).toThrow(InvalidPersistedStateError);
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
+    expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(true);
     expect(loadDeployment('testnet', 'counter', { quarantineCorrupt: true })).toBeNull();
     expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(false);
   });

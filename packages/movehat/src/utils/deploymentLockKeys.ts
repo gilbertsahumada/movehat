@@ -9,7 +9,6 @@ export interface DeploymentLockKeyInput {
 
 export interface DeploymentLockKeys {
   canonicalPackageDir: string;
-  canonicalProjectDir: string;
   keys: readonly [string, string];
 }
 
@@ -22,7 +21,6 @@ export function deploymentLockKeys(input: DeploymentLockKeyInput): DeploymentLoc
   const canonicalProjectDir = realpathSync(input.projectDir ?? process.cwd());
   return {
     canonicalPackageDir,
-    canonicalProjectDir,
     keys: [
       JSON.stringify(["package", canonicalPackageDir]),
       JSON.stringify([

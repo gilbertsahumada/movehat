@@ -26,7 +26,6 @@ export {
   MovementApiError,
   ForkDataNotFoundError,
   ForkSnapshotPrunedError,
-  ForkAlreadyExistsError,
 } from "./fork/errors.js";
 export type { MovementApiErrorCode } from "./fork/errors.js";
 export type { ForkInitializeOptions } from "./fork/manager.js";

@@ -17,7 +17,6 @@ const initModule = await import("../init.js");
 const {
   default: initCommand,
   resolveProjectNames,
-  resolveTemplateMovehatVersion,
   InvalidProjectNameError,
 } = initModule;
 
@@ -57,24 +56,6 @@ describe("resolveProjectNames", () => {
     "rejects %j as an invalid project name",
     (input) => {
       expect(() => resolveProjectNames(input)).toThrow(InvalidProjectNameError);
-    }
-  );
-});
-
-describe("resolveTemplateMovehatVersion", () => {
-  it.each(["0.7.0", "0.7.0-rc.1", "1.0.0-beta.2", "1.0.0+build.7"])(
-    "keeps the installed version exact for %s",
-    (version) => {
-      expect(resolveTemplateMovehatVersion(version)).toBe(version);
-    }
-  );
-
-  it.each(["latest", "^0.7.0", "v0.7.0", "0.7"])(
-    "rejects a non-exact package version %s",
-    (version) => {
-      expect(() => resolveTemplateMovehatVersion(version)).toThrow(
-        "Invalid Movehat package version"
-      );
     }
   );
 });

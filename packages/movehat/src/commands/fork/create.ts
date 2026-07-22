@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import prompts from 'prompts';
-import { loadUserConfig, resolveNetworkEndpoint } from '../../core/config.js';
+import { loadUserConfig, resolveNetworkEndpoint, sanitizeUrlForLog } from '../../core/config.js';
 import { ForkManager } from '../../fork/manager.js';
 import { logger, withSpinner, createKVTable, formatCommand } from '../../ui/index.js';
 
@@ -35,15 +35,6 @@ export function validateForkName(name: string): string {
   return name;
 }
 
-function displayRpcUrl(rpc: string): string {
-  try {
-    const parsed = new URL(rpc);
-    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
-  } catch {
-    return '<invalid-url>';
-  }
-}
-
 /**
  * Create a local fork of a Movement network
  *
@@ -70,7 +61,16 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
   try {
     // Load MoveHat config
     const userConfig = await loadUserConfig();
-    const endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    const explicitNetwork = options.network || process.env.MH_CLI_NETWORK;
+    let endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    if (!explicitNetwork && (endpoint.network === 'local' || endpoint.network === 'movelite')) {
+      // Forking snapshots a remote network; the disposable local chain has
+      // nothing durable to snapshot.
+      logger.info(
+        `defaultNetwork '${endpoint.network}' is a disposable local chain; forking 'testnet' instead (pass --network to override)`
+      );
+      endpoint = resolveNetworkEndpoint(userConfig, 'testnet');
+    }
     const networkName = endpoint.network;
 
     // Determine fork name and path
@@ -79,7 +79,7 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
 
     logger.newline();
     logger.info(`Creating fork of ${networkName}`);
-    logger.kv('Network', displayRpcUrl(endpoint.networkConfig.url), 2);
+    logger.kv('Network', sanitizeUrlForLog(endpoint.networkConfig.url), 2);
     logger.kv('Fork path', forkPath, 2);
     logger.newline();
 

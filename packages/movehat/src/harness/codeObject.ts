@@ -149,8 +149,10 @@ async function executeMovementMoveObject(
   const { runtime, moduleName } = opts;
   const config = runtime.config;
 
+  // moduleName is only the record label + lock key (validateSafeName allows
+  // hyphens, matching 0.6.0); the identifier check applies to the value the
+  // CLI actually receives via --address-name.
   validateSafeName(moduleName, "module");
-  validateMoveIdentifier(moduleName, "Module name");
   validateMoveIdentifier(opts.addressName ?? moduleName, "Address name");
 
   const dir = opts.packageDir || config.moveDir;
@@ -266,9 +268,7 @@ async function executeMovementMoveObjectLocked(
     // Caller-supplied `namedAddresses` overlay on top.
     const detectedAddresses = extractNamedAddresses(dir);
     const addrMap = new Map<string, string>();
-    for (const name of detectedAddresses) {
-      addrMap.set(name, config.namedAddresses[name] ?? deployerAddress);
-    }
+    for (const name of detectedAddresses) addrMap.set(name, deployerAddress);
     if (opts.namedAddresses) {
       for (const [k, v] of Object.entries(opts.namedAddresses)) addrMap.set(k, v);
     }
