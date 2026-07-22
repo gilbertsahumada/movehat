@@ -54,6 +54,7 @@ export async function runMoveTests(options: RunMoveTestsOptions = {}): Promise<v
         args,
         cwd: process.cwd(),
         inheritStdio: true,
+        timeoutMs: 30 * 60 * 1000,
       },
       { throwOnNonZeroExit: false }
     );
@@ -71,5 +72,10 @@ export async function runMoveTests(options: RunMoveTestsOptions = {}): Promise<v
     return;
   }
 
-  throw new Error("Move tests failed");
+  const termination = result.signal
+    ? `terminated by ${result.signal}`
+    : `exited with code ${result.exitCode}`;
+  throw new Error(
+    `movement move test ${termination}. The compiler output was streamed above.`
+  );
 }

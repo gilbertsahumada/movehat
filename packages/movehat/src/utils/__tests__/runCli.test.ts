@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { describe, it, expect } from 'vitest';
 import { CliExecutionError } from '../../errors.js';
 import type {
@@ -5,7 +6,7 @@ import type {
   RunInput,
   RunResult,
 } from '../childProcessAdapter.js';
-import { redactSecrets, runCli } from '../runCli.js';
+import { redactSecrets, runCli, runCliUntilInterrupted } from '../runCli.js';
 
 function makeAdapter(result: RunResult, capture?: { last?: RunInput }): ChildProcessAdapter {
   return {
@@ -278,5 +279,109 @@ describe('runCli', () => {
     expect(result.exitCode).toBe(-1);
     expect(result.signal).toBe('SIGTERM');
     expect(elapsed).toBeLessThan(500);
+  });
+});
+
+describe('runCliUntilInterrupted', () => {
+  it('forwards SIGINT, awaits child shutdown, and records a clean shell status', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    let childClosed = false;
+    const adapter: ChildProcessAdapter = {
+      run(input) {
+        return new Promise((resolve) => {
+          input.signal?.addEventListener('abort', () => {
+            childClosed = true;
+            resolve({ exitCode: -1, stdout: '', stderr: '', signal: 'SIGTERM' });
+          });
+        });
+      },
+      spawn() {
+        throw new Error('spawn not used');
+      },
+    };
+
+    const pending = runCliUntilInterrupted(
+      { command: 'mocha', args: ['--watch'], timeoutMs: Infinity },
+      { adapter },
+      signalProcess
+    );
+    signalProcess.emit('SIGINT');
+    const result = await pending;
+
+    expect(childClosed).toBe(true);
+    expect(result.signal).toBe('SIGTERM');
+    expect(result.interruptedByParent).toBe('SIGINT');
+    expect(signalProcess.exitCode).toBe(130);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
+  });
+
+  it('preserves an explicit throwOnNonZeroExit override', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    const adapter = makeAdapter({ exitCode: 7, stdout: '', stderr: 'failed' });
+
+    await expect(
+      runCliUntilInterrupted(
+        { command: 'movement', args: ['move', 'test'], timeoutMs: Infinity },
+        { adapter, throwOnNonZeroExit: true },
+        signalProcess
+      )
+    ).rejects.toBeInstanceOf(CliExecutionError);
+
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
+  });
+
+  it('keeps intercepting repeated signals until the child has closed', async () => {
+    const signalProcess = Object.assign(new EventEmitter(), {
+      exitCode: undefined as number | undefined,
+    });
+    let finishShutdown!: () => void;
+    let abortEvents = 0;
+    const adapter: ChildProcessAdapter = {
+      run(input) {
+        return new Promise((resolve) => {
+          input.signal?.addEventListener('abort', () => {
+            abortEvents += 1;
+            finishShutdown = () =>
+              resolve({ exitCode: -1, stdout: '', stderr: '', signal: 'SIGTERM' });
+          });
+        });
+      },
+      spawn() {
+        throw new Error('spawn not used');
+      },
+    };
+
+    let settled = false;
+    const pending = runCliUntilInterrupted(
+      { command: 'mocha', args: ['--watch'], timeoutMs: Infinity },
+      { adapter, throwOnNonZeroExit: false },
+      signalProcess
+    ).finally(() => {
+      settled = true;
+    });
+
+    signalProcess.emit('SIGINT');
+    signalProcess.emit('SIGINT');
+    signalProcess.emit('SIGTERM');
+    await Promise.resolve();
+
+    expect(abortEvents).toBe(1);
+    expect(settled).toBe(false);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(1);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(1);
+
+    finishShutdown();
+    const result = await pending;
+
+    expect(result.interruptedByParent).toBe('SIGINT');
+    expect(signalProcess.exitCode).toBe(130);
+    expect(signalProcess.listenerCount('SIGINT')).toBe(0);
+    expect(signalProcess.listenerCount('SIGTERM')).toBe(0);
   });
 });

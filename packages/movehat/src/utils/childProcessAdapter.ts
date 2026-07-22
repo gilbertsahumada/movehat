@@ -23,6 +23,11 @@ export interface RunInput {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdin?: string;
+  /**
+   * Maximum runtime in milliseconds. Omit it to use the adapter default.
+   * Pass `Infinity` for commands that intentionally run until interrupted,
+   * such as a prover or test watcher. Finite values must be greater than 0.
+   */
   timeoutMs?: number;
   signal?: AbortSignal;
   /**
@@ -64,6 +69,12 @@ export interface RunResult {
    * during shutdown). `undefined` for normal exits.
    */
   signal?: NodeJS.Signals;
+  /**
+   * Set by `runCliUntilInterrupted` when Movehat received the signal and
+   * forwarded shutdown to the child. A child-only signal leaves this unset,
+   * allowing callers to distinguish user cancellation from a crashed tool.
+   */
+  interruptedByParent?: "SIGINT" | "SIGTERM";
 }
 
 /**
@@ -118,6 +129,12 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
     const timeoutMs =
       input.timeoutMs ??
       (input.inheritStdio ? DEFAULT_INHERIT_STDIO_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+
+    if (Number.isNaN(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(
+        new TypeError('timeoutMs must be a positive number or Infinity')
+      );
+    }
 
     if (input.signal?.aborted) {
       return Promise.reject(new Error('Command aborted before start'));
@@ -189,7 +206,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         if (timeoutHandle) clearTimeout(timeoutHandle);
       };
 
-      if (timeoutMs !== undefined) {
+      if (Number.isFinite(timeoutMs)) {
         timeoutHandle = setTimeout(() => {
           requestTermination(
             new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`)

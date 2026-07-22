@@ -7,6 +7,9 @@ A working Movehat project scaffolded around several Move modules under the `hell
 | Script | Demonstrates | Network |
 |---|---|---|
 | `npm run compile` | `movehat compile` — Movement CLI build wrapper. | n/a |
+| `npm run lint` | `movehat lint` — lint the Move package. | n/a |
+| `npm run prove` | `movehat prove` — run the Move Prover without an artificial time limit. | n/a |
+| `npm run test:coverage` | Run Move tests with coverage and print the summary. | n/a |
 | `npm test` | `Harness.createLocal` + `runViewFunction` + auto-deploy in tests. | local-node |
 | `npm run deploy` | `Harness.createLocal` by default; set `MOVEHAT_NETWORK` to opt into `Harness.createLive`. | local (default) or live |
 | `MOVEHAT_NETWORK=testnet npm run upgrade` | `harness.upgradeCodeObject` — re-publishes the package into the existing code object (requires a prior `npm run deploy` on the same live network, e.g. `MOVEHAT_NETWORK=testnet` for both). | explicit live network |

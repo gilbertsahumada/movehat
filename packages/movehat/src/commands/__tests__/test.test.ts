@@ -5,7 +5,9 @@ import { join } from "node:path";
 
 const runMoveTestsMock = vi.fn();
 const runCliMock = vi.fn();
+const runCliUntilInterruptedMock = vi.fn();
 const promptsMock = vi.fn();
+const coverageCommandMock = vi.fn();
 
 vi.mock("../../helpers/move-tests.js", () => ({
   runMoveTests: runMoveTestsMock,
@@ -13,10 +15,15 @@ vi.mock("../../helpers/move-tests.js", () => ({
 
 vi.mock("../../utils/runCli.js", () => ({
   runCli: runCliMock,
+  runCliUntilInterrupted: runCliUntilInterruptedMock,
 }));
 
 vi.mock("prompts", () => ({
   default: promptsMock,
+}));
+
+vi.mock("../coverage.js", () => ({
+  default: coverageCommandMock,
 }));
 
 const { default: testCommand } = await import("../test.js");
@@ -29,7 +36,9 @@ describe("testCommand — flag dispatch", () => {
   beforeEach(() => {
     runMoveTestsMock.mockReset();
     runCliMock.mockReset();
+    runCliUntilInterruptedMock.mockReset();
     promptsMock.mockReset();
+    coverageCommandMock.mockReset();
     origCwd = process.cwd();
     tmpCwd = mkdtempSync(join(tmpdir(), "movehat-testcmd-"));
     process.chdir(tmpCwd);
@@ -103,6 +112,24 @@ describe("testCommand — flag dispatch", () => {
     await testCommand({ move: true, filter: "counter" });
     expect(runMoveTestsMock.mock.calls[0]![0].filter).toBe("counter");
   });
+
+  it("--coverage runs Move coverage and forwards the filter", async () => {
+    coverageCommandMock.mockResolvedValueOnce(undefined);
+
+    await testCommand({ coverage: true, filter: "counter" });
+
+    expect(coverageCommandMock).toHaveBeenCalledWith("counter");
+    expect(runMoveTestsMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects incompatible coverage modes", async () => {
+    await expect(testCommand({ coverage: true, watch: true })).rejects.toThrow(
+      "--coverage cannot be combined with --watch"
+    );
+    await expect(testCommand({ coverage: true, ts: true })).rejects.toThrow(
+      "--coverage applies to Move tests"
+    );
+  });
 });
 
 describe("testCommand — interactive menu", () => {
@@ -113,7 +140,9 @@ describe("testCommand — interactive menu", () => {
   beforeEach(() => {
     runMoveTestsMock.mockReset();
     runCliMock.mockReset();
+    runCliUntilInterruptedMock.mockReset();
     promptsMock.mockReset();
+    coverageCommandMock.mockReset();
     origCwd = process.cwd();
     tmpCwd = mkdtempSync(join(tmpdir(), "movehat-testcmd-"));
     process.chdir(tmpCwd);
@@ -134,7 +163,7 @@ describe("testCommand — interactive menu", () => {
     // Ctrl+C — prompt returns {}.
     promptsMock.mockResolvedValueOnce({});
 
-    await testCommand();
+    await testCommand({ interactive: true });
 
     expect(promptsMock).toHaveBeenCalledTimes(1);
     expect(exitSpy).toHaveBeenCalledWith(0);
@@ -144,9 +173,20 @@ describe("testCommand — interactive menu", () => {
     promptsMock.mockResolvedValueOnce({ testType: "move" });
     runMoveTestsMock.mockResolvedValueOnce(undefined);
 
-    await testCommand();
+    await testCommand({ interactive: true });
 
     expect(runMoveTestsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults to all tests without prompting when stdin is non-interactive", async () => {
+    runMoveTestsMock.mockResolvedValueOnce(undefined);
+
+    await testCommand({ interactive: false });
+
+    expect(promptsMock).not.toHaveBeenCalled();
+    expect(runMoveTestsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ skipIfMissing: true })
+    );
   });
 });
 
@@ -158,7 +198,9 @@ describe("testCommand — TypeScript path with tests/ + node_modules", () => {
   beforeEach(() => {
     runMoveTestsMock.mockReset();
     runCliMock.mockReset();
+    runCliUntilInterruptedMock.mockReset();
     promptsMock.mockReset();
+    coverageCommandMock.mockReset();
     origCwd = process.cwd();
     tmpCwd = mkdtempSync(join(tmpdir(), "movehat-testcmd-"));
     process.chdir(tmpCwd);
@@ -188,6 +230,7 @@ describe("testCommand — TypeScript path with tests/ + node_modules", () => {
 
     expect(runCliMock).toHaveBeenCalledTimes(1);
     expect(runCliMock.mock.calls[0]![0].command).toContain("mocha");
+    expect(runCliMock.mock.calls[0]![0].timeoutMs).toBe(30 * 60 * 1000);
   });
 
   it("--ts exits 1 when mocha's exit code is non-zero", async () => {
@@ -198,6 +241,37 @@ describe("testCommand — TypeScript path with tests/ + node_modules", () => {
     });
 
     await testCommand({ ts: true });
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("awaits watch mode without a timer and treats Ctrl+C termination as clean", async () => {
+    runCliUntilInterruptedMock.mockResolvedValueOnce({
+      exitCode: -1,
+      signal: "SIGINT",
+      interruptedByParent: "SIGINT",
+      stdout: "",
+      stderr: "",
+    });
+
+    await testCommand({ ts: true, watch: true });
+
+    expect(runCliUntilInterruptedMock).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: Infinity, inheritStdio: true }),
+      { throwOnNonZeroExit: false }
+    );
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails watch mode when only the child receives a signal", async () => {
+    runCliUntilInterruptedMock.mockResolvedValueOnce({
+      exitCode: -1,
+      signal: "SIGTERM",
+      stdout: "",
+      stderr: "",
+    });
+
+    await testCommand({ ts: true, watch: true });
 
     expect(exitSpy).toHaveBeenCalledWith(1);
   });

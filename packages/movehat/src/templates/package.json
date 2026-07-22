@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "compile": "movehat compile",
+    "lint": "movehat lint",
+    "prove": "movehat prove",
     "test": "movehat test",
     "test:move": "movehat test:move",
     "test:ts": "movehat test:ts",
     "test:watch": "movehat test:ts --watch",
+    "test:coverage": "movehat test --coverage",
     "deploy": "movehat run scripts/deploy-counter.ts"
   },
   "dependencies": {
