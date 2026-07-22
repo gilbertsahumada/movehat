@@ -61,7 +61,16 @@ export default async function forkCreateCommand(options: ForkCreateOptions = {})
   try {
     // Load MoveHat config
     const userConfig = await loadUserConfig();
-    const endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    const explicitNetwork = options.network || process.env.MH_CLI_NETWORK;
+    let endpoint = resolveNetworkEndpoint(userConfig, options.network);
+    if (!explicitNetwork && (endpoint.network === 'local' || endpoint.network === 'movelite')) {
+      // Forking snapshots a remote network; the disposable local chain has
+      // nothing durable to snapshot.
+      logger.info(
+        `defaultNetwork '${endpoint.network}' is a disposable local chain; forking 'testnet' instead (pass --network to override)`
+      );
+      endpoint = resolveNetworkEndpoint(userConfig, 'testnet');
+    }
     const networkName = endpoint.network;
 
     // Determine fork name and path
