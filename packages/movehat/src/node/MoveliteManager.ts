@@ -276,6 +276,7 @@ export class MoveliteManager implements NodeProvider {
   }
 }
 
+/** @internal Test seam; not re-exported from the public helpers surface. */
 export interface FindMoveliteBinaryOptions {
   env?: Record<string, string | undefined>;
   projectRoot?: string;

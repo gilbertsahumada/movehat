@@ -25,6 +25,7 @@ vi.mock("../../../fork/manager.js", () => ({
 vi.mock("../../../core/config.js", () => ({
   loadUserConfig: loadUserConfigMock,
   resolveNetworkEndpoint: resolveNetworkEndpointMock,
+  sanitizeUrlForLog: (url: string) => url,
 }));
 
 const { default: forkCreateCommand, validateForkName } = await import("../create.js");

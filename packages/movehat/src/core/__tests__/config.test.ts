@@ -301,6 +301,15 @@ describe("resolveNetworkConfig", () => {
     );
   });
 
+  it("does not treat --network movelite as conflicting with an internal 'local' resolution", async () => {
+    process.env.MH_CLI_NETWORK = "movelite";
+    const user = baseUserConfig({
+      local: { url: "http://localhost:8080/v1", chainId: "local" },
+    });
+    const config = await resolveNetworkConfig(user, "local");
+    expect(config.network).toBe("local");
+  });
+
   it("resolves read-only testnet endpoints without credentials", () => {
     const endpoint = resolveNetworkEndpoint(baseUserConfig({}), "testnet");
     expect(endpoint.networkConfig.url).toBe("https://testnet.movementnetwork.xyz/v1");

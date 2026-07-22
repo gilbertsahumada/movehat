@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supports explicit relative/absolute paths, package installs, local or global
   npm bins, and safe fallback to Movement node. Local-node state is protected
   by ownership markers with conservative migration of recognized 0.6 layouts.
+- An explicit `MOVELITE_PATH` that points at a missing or non-executable file
+  now fails with a clear error instead of silently falling back to the slow
+  Movement node; automatic discovery candidates (PATH shims, package installs)
+  still fall back. `MOVEHAT_NETWORK` is now honored by the core network
+  resolver (between `--network`/`MH_CLI_NETWORK` and `MH_DEFAULT_NETWORK`) and
+  logs which selector chose the network; previously only generated scripts
+  read it. `--network movelite` is recognized as the local backend family, so
+  local fixtures run under it without a selector-conflict error.
 
 ## [0.6.0] - 2026-07-12
 
