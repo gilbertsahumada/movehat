@@ -119,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the pinned Movement CLI archive and extracted binary and can no longer fall
   back to a mock executable; its Node 20/22 base now uses Debian Trixie to
   satisfy the verified binary's glibc/libstdc++ ABI. Closes #377. Tracks #371.
+- The install-verification gates (`test:e2e`, `test:smoke`, `test-e2e.sh`) now
+  select the freshly packed tarball from `npm pack` output instead of
+  `ls movehat-*.tgz | head -1`, which sorted alphabetically and could pick a
+  stale lower-version `.tgz` left in `packages/movehat/` — silently validating
+  an old build in place of the current one. Closes #387.
 
 ### Security
 
