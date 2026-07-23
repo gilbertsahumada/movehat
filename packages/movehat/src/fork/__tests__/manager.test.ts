@@ -132,22 +132,79 @@ describe("ForkManager — initialize / load", () => {
     expect(mgr.getMetadata().network).toBe("bardock-testnet");
   });
 
-  it("preflights before overwriting, and re-initialize refreshes an existing fork", async () => {
+  it("preflights before overwriting, and re-initialize re-adopts the pinned snapshot", async () => {
     fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
     const mgr = new ForkManager(forkPath);
     await mgr.initialize(TEST_NODE_URL, "original");
 
+    // overwrite fetches upstream; a failed fetch leaves the old snapshot intact.
     fakeApi.getLedgerInfo.mockRejectedValueOnce(new Error("replacement RPC unavailable"));
     await expect(
       mgr.initialize("https://replacement.example/v1", "replacement", undefined, { overwrite: true })
     ).rejects.toThrow("replacement RPC unavailable");
     expect(mgr.getMetadata().network).toBe("original");
+    expect(mgr.getMetadata().ledgerVersion).toBe("100");
 
-    // 0.6.0 contract: re-initialize without overwrite refreshes metadata in
-    // place (the documented mocha before-hook pattern runs it every time).
-    fakeApi.getLedgerInfo.mockResolvedValueOnce(ledgerInfoFixture());
-    await mgr.initialize(TEST_NODE_URL, "refreshed");
+    // Non-overwrite re-init re-adopts the pinned snapshot: no upstream call
+    // (works offline), the pinned ledger is preserved, only labels refresh.
+    fakeApi.getLedgerInfo.mockReset();
+    fakeApi.getLedgerInfo.mockRejectedValue(new Error("must not fetch on re-adopt"));
+    await mgr.initialize("https://relabel.example/v1", "refreshed");
     expect(mgr.getMetadata().network).toBe("refreshed");
+    expect(mgr.getMetadata().nodeUrl).toBe("https://relabel.example/v1");
+    expect(mgr.getMetadata().ledgerVersion).toBe("100");
+    expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+  });
+
+  it("adopts a 0.6 fork through initialize(): migrates its cache and serves it offline", async () => {
+    // Bootstrap a 0.6-style fork: cache a resource, then delete the migration
+    // marker so the on-disk state is {resources present, no cache markers} —
+    // exactly what a fork written by 0.6.x looks like before adoption.
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "42" } });
+    const boot = new ForkManager(forkPath);
+    await boot.initialize(TEST_NODE_URL);
+    await boot.getResource(TEST_ADDR, "0x1::counter::Counter");
+    rmSync(join(forkPath, "cache", ".resource-cache-v1"), { force: true });
+
+    // Adopt it with the upstream unreachable — an existing fork must not fetch.
+    fakeApi.getLedgerInfo.mockReset();
+    fakeApi.getLedgerInfo.mockRejectedValue(new Error("upstream down"));
+    fakeApi.getAccountResources.mockClear();
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL);
+
+    const storage = (mgr as unknown as {
+      storage: { hasAllResources(address: string): boolean };
+    }).storage;
+    expect(storage.hasAllResources(TEST_ADDR)).toBe(true);
+
+    const all = await mgr.getAllResources(TEST_ADDR);
+    expect(all["0x1::counter::Counter"]).toEqual({ value: "42" });
+    expect(fakeApi.getAccountResources).not.toHaveBeenCalled();
+    expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+  });
+
+  it("keeps the pinned ledger version when re-initializing over a cached snapshot", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "7" } });
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL);
+    await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+
+    // Upstream has advanced to 101, but a non-overwrite re-init must not move
+    // the pin out from under the resource cached at 100.
+    fakeApi.getLedgerInfo.mockResolvedValue({ ...ledgerInfoFixture(), ledger_version: "101" });
+    const callsBefore = fakeApi.getLedgerInfo.mock.calls.length;
+    await mgr.initialize(TEST_NODE_URL, "refreshed");
+
+    expect(mgr.getMetadata().ledgerVersion).toBe("100");
+    expect(fakeApi.getLedgerInfo.mock.calls.length).toBe(callsBefore);
+
+    fakeApi.getAccountResource.mockClear();
+    const cached = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    expect(cached).toEqual({ value: "7" });
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
   });
 
   it("load throws when the fork directory doesn't exist", () => {
@@ -442,6 +499,36 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   it("fundAccount rethrows non-404 errors from getResource", async () => {
     fakeApi.getAccountResource.mockRejectedValue(new Error("upstream is angry"));
     await expect(mgr.fundAccount(TEST_ADDR, 100)).rejects.toThrow(/upstream is angry/);
+  });
+
+  it("fundAccount discards a pre-lock balance fetched before a concurrent overwrite", async () => {
+    // The upstream balance resolves only after an overwrite rotates the
+    // snapshot generation; the stale balance must not land in the new snapshot.
+    const pending = deferred<{ data: unknown }>();
+    fakeApi.getAccountResource.mockReturnValueOnce(pending.promise);
+
+    const funding = mgr.fundAccount(TEST_ADDR, 1_000);
+    await vi.waitFor(() => expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1));
+
+    // Concurrent overwrite advances the generation and clears cached state.
+    await mgr.initialize(TEST_NODE_URL, "custom", undefined, { overwrite: true });
+
+    pending.resolve({
+      data: {
+        coin: { value: "5000" },
+        deposit_events: { counter: "0", guid: { id: { addr: TEST_ADDR, creation_num: "0" } } },
+        withdraw_events: { counter: "0", guid: { id: { addr: TEST_ADDR, creation_num: "1" } } },
+        frozen: false,
+      },
+    });
+    await funding;
+
+    // Funded from a zero base (stale 5000 discarded), so the value is the
+    // credited amount alone, not 5000 + 1000.
+    fakeApi.getAccountResource.mockClear();
+    const stored = await mgr.getResource(TEST_ADDR, COIN_TYPE);
+    expect(stored.coin.value).toBe("1000");
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
   });
 
   it("fundMultipleAccounts funds every address in the list", async () => {
