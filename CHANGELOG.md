@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `movehat lint`, `movehat prove`, and Move coverage through
   `movehat test --coverage`, with matching scaffold and example scripts.
+- Enabling the reviewed API-report gate promoted several previously implicit
+  types to the public surface: `MovehatUserConfig`, `MovementApiClientOptions`,
+  `ForkServerOptions`, and the child-process adapter types
+  (`ChildProcessSignal`, `ChildProcessEnvironment`, and the run input/result
+  shapes). Consumers writing typed config or a custom process adapter can now
+  import them directly instead of restating the shapes. Closes #377.
 
 ### Changed
 
