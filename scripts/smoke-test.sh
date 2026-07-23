@@ -32,8 +32,8 @@ echo -e "${GREEN}✓${NC} Build successful"
 
 # Pack
 echo "→ Packing package..."
-npm pack > /dev/null 2>&1
-PACKAGE=$(ls movehat-*.tgz | head -1)
+PACKAGE=$(npm pack 2>/dev/null | tail -1)
+[ -n "$PACKAGE" ] && [ -f "$PACKAGE" ] || { echo -e "${RED}✗${NC} npm pack failed"; exit 1; }
 echo -e "${GREEN}✓${NC} Package created: $PACKAGE"
 
 # Move package to test directory

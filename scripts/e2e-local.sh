@@ -159,8 +159,8 @@ step "Creating npm package (npm pack)"
 cd "$PROJECT_ROOT/packages/movehat"
 
 # Pack
-if npm pack > /dev/null 2>&1; then
-    PACKAGE_FILE=$(ls movehat-*.tgz | head -1)
+PACKAGE_FILE=$(npm pack 2>/dev/null | tail -1)
+if [ -n "$PACKAGE_FILE" ] && [ -f "$PACKAGE_FILE" ]; then
     PACKAGE_PATH="$PROJECT_ROOT/packages/movehat/$PACKAGE_FILE"
     pass "Created: $PACKAGE_FILE"
 else
