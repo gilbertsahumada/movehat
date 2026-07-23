@@ -81,23 +81,13 @@ export class MovementApiClient {
 
     return new Promise<T>((resolve, reject) => {
       let settled = false;
-      let deadline: NodeJS.Timeout | undefined;
       const settle = (fn: () => void): void => {
         if (settled) return;
         settled = true;
-        if (deadline !== undefined) clearTimeout(deadline);
+        clearTimeout(deadline);
         fn();
       };
-      let req: http.ClientRequest;
-      deadline = setTimeout(() => {
-        req?.destroy();
-        settle(() => reject(new MovementApiError(
-          `Movement API request timed out after ${this.timeoutMs}ms`,
-          'timeout'
-        )));
-      }, this.timeoutMs);
-
-      req = client.request(url, { method, headers }, (res) => {
+      const req = client.request(url, { method, headers }, (res) => {
         const chunks: Buffer[] = [];
         let totalBytes = 0;
         const statusCode = res.statusCode ?? 0;
@@ -170,6 +160,14 @@ export class MovementApiClient {
           )));
         });
       });
+
+      const deadline = setTimeout(() => {
+        req.destroy();
+        settle(() => reject(new MovementApiError(
+          `Movement API request timed out after ${this.timeoutMs}ms`,
+          'timeout'
+        )));
+      }, this.timeoutMs);
 
       // This is an absolute request deadline, not a socket-idle timeout.
       // A peer that trickles bytes must not keep a pinned fork read alive

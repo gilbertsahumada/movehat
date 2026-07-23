@@ -224,7 +224,7 @@ export class Harness {
    *
    * The derived object address is bound to `options.moduleName` as a
    * named address at compile time, then captured into the returned
-   * {@link CodeObjectInfo.address} for later use with
+   * `CodeObjectInfo.address` for later use with
    * `harness.runtime.getContract(address, moduleName)`.
    *
    * Not available on fork-mode harnesses (forks are read-only). Calling

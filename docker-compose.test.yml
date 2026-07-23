@@ -3,6 +3,7 @@ version: '3.8'
 services:
   # Test en Node 20 (LTS, minimum supported)
   test-node20:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.test
@@ -18,6 +19,7 @@ services:
 
   # Test en Node 22 (Latest)
   test-node22:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.test
@@ -33,6 +35,7 @@ services:
 
   # Test de instalación global limpia
   test-global-install:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.test
@@ -78,6 +81,7 @@ services:
 
   # Test de integración completa
   test-integration:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.test

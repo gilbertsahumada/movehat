@@ -7,6 +7,7 @@ import type { NodeProvider } from "./NodeProvider.js";
 import {
   defaultChildProcessAdapter,
   type ChildProcessAdapter,
+  type ChildProcessSignal,
   type SpawnedProcess,
 } from "../utils/childProcessAdapter.js";
 import { cleanupCallbacks, ensureSignalHandler } from "../core/movementProfile.js";
@@ -158,7 +159,7 @@ export class MoveliteManager implements NodeProvider {
   private async waitForReady(spawned: SpawnedProcess): Promise<void> {
     const url = `http://127.0.0.1:${this.port}/v1`;
 
-    let exitInfo: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+    let exitInfo: { code: number | null; signal: ChildProcessSignal | null } | null = null;
     void spawned.exited.then((info) => {
       exitInfo = info;
     });
@@ -191,7 +192,7 @@ export class MoveliteManager implements NodeProvider {
 
   private buildBootFailure(exitInfo: {
     code: number | null;
-    signal: NodeJS.Signals | null;
+    signal: ChildProcessSignal | null;
   }): Error {
     let reason: string;
     if (exitInfo.code === null && exitInfo.signal === null) {

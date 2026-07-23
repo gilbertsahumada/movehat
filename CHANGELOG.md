@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `movehat lint`, `movehat prove`, and Move coverage through
   `movehat test --coverage`, with matching scaffold and example scripts.
+- Enabling the reviewed API-report gate promoted several previously implicit
+  types to the public surface: `MovehatUserConfig`, `MovementApiClientOptions`,
+  `ForkServerOptions`, and the child-process adapter types
+  (`ChildProcessSignal`, `ChildProcessEnvironment`, and the run input/result
+  shapes). Consumers writing typed config or a custom process adapter can now
+  import them directly instead of restating the shapes. Closes #377.
 
 ### Changed
 
@@ -102,6 +108,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
   recovery records without `deployer`/`timestamp` still parse, and detected
   named addresses still bind to the deployer's address. Closes #374.
+
+### Internal
+
+- Added reproducible quality gates for lint, manifest/config formatting,
+  dependency cycles, reviewed API reports, docs builds, packed npm contents,
+  frozen installs, and production-critical audits. PRs to `develop` now run
+  deterministic checks; public-testnet and external CLI checks remain
+  advisory on `main` or manual dispatch. The Docker test image verifies both
+  the pinned Movement CLI archive and extracted binary and can no longer fall
+  back to a mock executable; its Node 20/22 base now uses Debian Trixie to
+  satisfy the verified binary's glibc/libstdc++ ABI. Closes #377. Tracks #371.
+
+### Security
+
+- Updated Next.js within major 15, Vitest/coverage within major 4, and
+  `js-yaml` within major 4 to address documented advisories without broad
+  dependency overrides. The full workspace audit is scheduled and
+  informational until accepted advisories have a versioned allowlist.
 
 ## [0.6.0] - 2026-07-12
 

@@ -55,38 +55,26 @@ runtime package to pass. None of these reach the packed `movehat` npm
 artifact; they affect the docs-site dependency tree and related
 workspace build tooling.
 
-Tracked advisories (2026-05-20):
+Tracked state (2026-07-20):
 
 - Current `pnpm audit --prod --audit-level critical`: passes with zero
-  critical advisories.
-- Current full production audit count: 26 non-critical advisories
-  (13 high, 11 moderate, 2 low).
-- The previous workspace-root `http-proxy > follow-redirects` advisory
-  path has been removed; `http-proxy` is no longer declared at the
-  workspace root.
+  critical advisories (14 non-critical production findings remain: 7 high,
+  6 moderate, 1 low).
+- Socket's Next.js warning was actionable. The docs site moved from
+  `next@^15.3.3` to the patched, same-major `next@^15.5.20`; the docs build is
+  a required deterministic gate. No Next.js major upgrade or compatibility
+  override was introduced.
+- Vitest and its coverage plugin moved together from 4.0.16 to 4.1.10 to
+  remove the critical Vitest UI advisory from development dependencies.
+- `js-yaml` moved from 4.1.1 to 4.3.0 to remove its published-package DoS
+  advisory. Other full-workspace findings are primarily transitive docs and
+  test-tool paths; they remain visible in the scheduled informational audit.
 
-- **Next.js** (multiple) — middleware/proxy bypass, DoS, SSRF advisories
-  in `next` ≥ 13.4.6 < 15.5.16. Path:
-  `packages/docs > fumadocs-core@15.8.5 > next@15.5.12`.
-- **Vite** (multiple) — `server.fs.deny` bypass, arbitrary file read.
-  Path: `packages/docs > fumadocs-ui@15.x > vite@5.x` (transitive).
-- **Rollup 4** — arbitrary file write via path traversal. Same path as Vite.
-- **path-to-regexp** — DoS. Transitive via Next.js.
-- **picomatch** — ReDoS via extglob. Transitive via Rollup/Vite.
-
-Resolution path (in order):
-
-1. Next.js ships a release that supports the docs site's
-   static-export configuration (today's Next.js 16 introduces
-   `useEffectEvent` semantics that break static export on Next.js 15
-   APIs).
-2. Fumadocs releases a version that depends on that Next.js.
-3. We upgrade Fumadocs, which pulls in patched Next.js / Vite /
-   Rollup transitively and clears all 13 high advisories above.
-
-The repo cannot shortcut this chain (e.g. pin Next.js via
-`pnpm.overrides`) because Fumadocs has tight version expectations
-that breaking would crash the docs site build.
+The full audit is intentionally not silenced with broad pnpm overrides. Before
+it can block PRs, any accepted advisory must be entered in a versioned allowlist
+with scope, rationale, owner, and expiration. Until that review mechanism
+exists, the exact blocking command remains
+`pnpm audit --prod --audit-level critical`.
 
 The published `packages/movehat` package is also guarded by a pack
 contents check. The npm tarball must not contain raw `src/**`, compiled
