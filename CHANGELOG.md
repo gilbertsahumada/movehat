@@ -124,6 +124,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ls movehat-*.tgz | head -1`, which sorted alphabetically and could pick a
   stale lower-version `.tgz` left in `packages/movehat/` — silently validating
   an old build in place of the current one. Closes #387.
+- CI now scopes advisory to the individual external steps instead of the whole
+  E2E job. The local deterministic gates — the `vi.mock` guard, the Movelite
+  backend gate (#302), and the `test:example` movelite suite — are required on
+  both `develop` and `main`, so a broken canonical local flow fails the PR
+  instead of passing green. Only the genuinely-external steps (`smoke-test`,
+  `test:e2e:quick`, `test:integration`) stay advisory and main-only, so no
+  develop PR depends on live public testnet. Closes #393.
 
 ### Security
 
