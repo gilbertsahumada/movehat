@@ -165,17 +165,10 @@ export interface DeploymentInfo {
     txHash?: string | undefined;
 }
 
+// Warning: (ae-forgotten-export) The symbol "FindMoveliteBinaryOptions" needs to be exported by the entry point index.d.ts
+//
 // @public (undocumented)
 export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
-
-// @public (undocumented)
-export interface FindMoveliteBinaryOptions {
-    // (undocumented)
-    env?: Record<string, string | undefined>;
-    includePackage?: boolean;
-    // (undocumented)
-    projectRoot?: string;
-}
 
 // @public (undocumented)
 export interface ForkInfo {

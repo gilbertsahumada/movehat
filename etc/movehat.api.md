@@ -199,22 +199,10 @@ export interface DeploymentInfo {
     txHash?: string | undefined;
 }
 
+// Warning: (ae-forgotten-export) The symbol "FindMoveliteBinaryOptions" needs to be exported by the entry point index.d.ts
+//
 // @public (undocumented)
 export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
-
-// @public (undocumented)
-export interface FindMoveliteBinaryOptions {
-    // (undocumented)
-    env?: Record<string, string | undefined>;
-    includePackage?: boolean;
-    // (undocumented)
-    projectRoot?: string;
-}
-
-// @public (undocumented)
-export class ForkAlreadyExistsError extends Error {
-    constructor(message: string);
-}
 
 // @public (undocumented)
 export class ForkDataNotFoundError extends Error {
@@ -691,7 +679,7 @@ export class MovementApiError extends Error {
 }
 
 // @public (undocumented)
-export type MovementApiErrorCode = 'http_error' | 'timeout' | 'response_too_large' | 'invalid_response' | 'network_error';
+export type MovementApiErrorCode = 'http_error' | 'timeout' | 'response_too_large' | 'invalid_response' | 'invalid_argument' | 'network_error';
 
 // @public
 export interface MoveScriptResult {
