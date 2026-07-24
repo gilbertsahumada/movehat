@@ -8,7 +8,7 @@ const forkManagerInitialize = vi.fn();
 const forkManagerGetMetadata = vi.fn();
 const ForkManagerCtor = vi.fn();
 const loadUserConfigMock = vi.fn();
-const resolveNetworkConfigMock = vi.fn();
+const resolveNetworkEndpointMock = vi.fn();
 
 vi.mock("prompts", () => ({ default: promptsMock }));
 
@@ -24,7 +24,8 @@ vi.mock("../../../fork/manager.js", () => ({
 
 vi.mock("../../../core/config.js", () => ({
   loadUserConfig: loadUserConfigMock,
-  resolveNetworkConfig: resolveNetworkConfigMock,
+  resolveNetworkEndpoint: resolveNetworkEndpointMock,
+  sanitizeUrlForLog: (url: string) => url,
 }));
 
 const { default: forkCreateCommand, validateForkName } = await import("../create.js");
@@ -52,15 +53,8 @@ describe("forkCreateCommand", () => {
       defaultNetwork: "testnet",
       networks: { testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" } },
     });
-    resolveNetworkConfigMock.mockReset().mockResolvedValue({
+    resolveNetworkEndpointMock.mockReset().mockReturnValue({
       network: "testnet",
-      rpc: "https://testnet.movementnetwork.xyz/v1",
-      privateKey: "0x" + "1".repeat(64),
-      allAccounts: [],
-      profile: "default",
-      moveDir: "./move",
-      account: "",
-      namedAddresses: {},
       networkConfig: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
     });
 
@@ -88,9 +82,36 @@ describe("forkCreateCommand", () => {
     expect(forkManagerInitialize).toHaveBeenCalledTimes(1);
     expect(forkManagerInitialize).toHaveBeenCalledWith(
       "https://testnet.movementnetwork.xyz/v1",
-      "testnet"
+      "testnet",
+      undefined,
+      { overwrite: false }
     );
     expect(promptsMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to testnet when defaultNetwork is the disposable local chain", async () => {
+    loadUserConfigMock.mockResolvedValue({
+      defaultNetwork: "local",
+      networks: {
+        testnet: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+        local: { url: "http://localhost:8080/v1", chainId: "local" },
+      },
+    });
+    resolveNetworkEndpointMock.mockImplementation((_cfg, name) =>
+      name === "testnet"
+        ? {
+            network: "testnet",
+            networkConfig: { url: "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
+          }
+        : { network: "local", networkConfig: { url: "http://localhost:8080/v1", chainId: "local" } }
+    );
+
+    await forkCreateCommand({});
+
+    expect(resolveNetworkEndpointMock).toHaveBeenLastCalledWith(expect.anything(), "testnet");
+    expect(ForkManagerCtor).toHaveBeenCalledWith(
+      join(process.cwd(), ".movehat", "forks", "testnet-fork")
+    );
   });
 
   it("uses a custom fork name and path when provided", async () => {

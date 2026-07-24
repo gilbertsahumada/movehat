@@ -45,7 +45,9 @@ movehat run scripts/deploy-counter.ts --network testnet
 movehat fork create --network mainnet
 ```
 
-If you don't pass `--network`, Movehat falls back to (in order) `MOVEHAT_NETWORK` env var, then the `defaultNetwork` in `movehat.config.ts`.
+The effective precedence is `--network` / `MH_CLI_NETWORK`, then
+`MOVEHAT_NETWORK`, then `MH_DEFAULT_NETWORK`, then `defaultNetwork` in
+`movehat.config.ts`.
 
 ## `--redeploy`
 
@@ -64,6 +66,7 @@ Useful when your Move source changed but the local node's deployment cache still
 | `MOVEHAT_VERBOSE=1` | `-v` / `--verbose` | Surface subprocess output (level 1) |
 | `MOVEHAT_VERBOSITY=<0-4>` | `-v` … `-vvvv` | Set the exact verbosity level, including the trace levels (2–4) |
 | `MOVEHAT_NETWORK=<name>` | `--network <name>` | Default network for this shell |
+| `MH_DEFAULT_NETWORK=<name>` | — | Lower-priority environment default used before project config |
 | `NO_COLOR=1` | — | Disable all ANSI colors and spinners |
 
 `MOVEHAT_VERBOSE=1` remains the level-1 shorthand. `MOVEHAT_VERBOSITY` sets the precise level and takes precedence — useful in scripts or CI that want trace output without passing repeated flags.

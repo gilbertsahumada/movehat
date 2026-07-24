@@ -1,0 +1,27 @@
+---
+title: Lint and prove
+description: Check Move contracts with the Movement CLI linter and prover
+icon: ShieldCheck
+---
+
+## Lint
+
+```bash
+movehat lint
+```
+
+Runs `movement move lint` for the package configured by `moveDir`. Lint is a
+finite command and Movehat stops it if it exceeds five minutes.
+
+## Prove
+
+```bash
+movehat prove
+```
+
+Runs `movement move prove` for the configured package. Proving can legitimately
+take much longer than compilation, so Movehat does not impose a timeout. It runs
+until the prover finishes or you press Ctrl+C.
+
+Both commands pass the package path as a direct process argument, including
+paths that contain spaces, rather than evaluating it through a shell.

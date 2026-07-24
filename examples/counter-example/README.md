@@ -7,9 +7,12 @@ A working Movehat project scaffolded around several Move modules under the `hell
 | Script | Demonstrates | Network |
 |---|---|---|
 | `npm run compile` | `movehat compile` — Movement CLI build wrapper. | n/a |
+| `npm run lint` | `movehat lint` — lint the Move package. | n/a |
+| `npm run prove` | `movehat prove` — run the Move Prover without an artificial time limit. | n/a |
+| `npm run test:coverage` | Run Move tests with coverage and print the summary. | n/a |
 | `npm test` | `Harness.createLocal` + `runViewFunction` + auto-deploy in tests. | local-node |
-| `npm run deploy` | `Harness.createLive` + `harness.deployCodeObject` against a real network. | live (`MOVEHAT_NETWORK`, default `testnet`) |
-| `npm run upgrade` | `harness.upgradeCodeObject` — re-publishes the package into the existing code object (requires a prior `npm run deploy`). | live |
+| `npm run deploy` | `Harness.createLocal` by default; set `MOVEHAT_NETWORK` to opt into `Harness.createLive`. | local (default) or live |
+| `MOVEHAT_NETWORK=testnet npm run upgrade` | `harness.upgradeCodeObject` — re-publishes the package into the existing code object (requires a prior `npm run deploy` on the same live network, e.g. `MOVEHAT_NETWORK=testnet` for both). | explicit live network |
 | `npm run run-script` | `harness.runMoveScript` — submits an on-the-fly compiled Move script as a one-shot tx. | local-node |
 | `npm run demo-fork` | Low-level `ForkManager` API — manual init/load + direct resource read/write. | fork |
 | `npm run demo-harness-fork` | `Harness.createFork` — high-level factory; read-only `runViewFunction` + write-rejection contract + post-cleanup poisoning via `HarnessDisposedError`. | fork |
@@ -17,7 +20,10 @@ A working Movehat project scaffolded around several Move modules under the `hell
 ## Prerequisites
 
 - Node 20+, npm or pnpm, Movement CLI installed (see [movehat.org docs](https://movehat.org)).
-- For `deploy` / `upgrade`: `.env` with `PRIVATE_KEY` and optional `MOVEHAT_NETWORK`.
+- The default `deploy` is local and needs no credentials. For public-network
+  `deploy` / `upgrade`, set `MOVEHAT_NETWORK`, provide `PRIVATE_KEY` in `.env`,
+  and run both commands against the same explicit network. `upgrade` refuses
+  the local default because code-object upgrades are a live-network workflow.
 - For `demo-fork` / `demo-harness-fork`: optional `MOVEMENT_API_KEY` to avoid public-endpoint rate limits.
 
 ## Layout

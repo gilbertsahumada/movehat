@@ -1,8 +1,19 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  unlinkSync,
+  renameSync,
+} from 'fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'path';
 import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
 import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
+import { logger } from '../ui/index.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -36,9 +47,21 @@ function ensurePrivateDirectory(path: string): void {
 }
 
 function writePrivateFile(path: string, data: string): void {
-  writeFileSync(path, data, { mode: PRIVATE_FILE_MODE });
-  chmodSync(path, PRIVATE_FILE_MODE);
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, data, { mode: PRIVATE_FILE_MODE });
+    chmodSync(temporaryPath, PRIVATE_FILE_MODE);
+    renameSync(temporaryPath, path);
+    chmodSync(path, PRIVATE_FILE_MODE);
+  } catch (error) {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+    throw error;
+  }
 }
+
+const LEGACY_MIGRATION_MARKER = '.resource-cache-v1';
+const CACHE_GENERATION_FILE = '.generation';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readJsonFile<T>(path: string, label: string): T {
   try {
@@ -53,6 +76,23 @@ function readJsonFile<T>(path: string, label: string): T {
     }
     throw error;
   }
+}
+
+function readLegacyResourceMap(path: string): Record<string, unknown> {
+  const resources = readJsonFile<Record<string, unknown>>(path, 'fork resources');
+  for (const [resourceType, data] of Object.entries(resources)) {
+    if (
+      resourceType.length === 0 ||
+      data === null ||
+      typeof data !== 'object' ||
+      Array.isArray(data)
+    ) {
+      throw new Error(
+        `Invalid legacy fork resources at ${path}. Expected an object-shaped resource map.`
+      );
+    }
+  }
+  return resources;
 }
 
 /**
@@ -73,6 +113,35 @@ export class ForkStorage {
   private getResourceFilePath(address: string): string {
     const safeFilename = sanitizeAddressForFilename(address);
     return join(this.forkPath, 'resources', `${safeFilename}.json`);
+  }
+
+  private getAllResourcesMarkerPath(address: string): string {
+    const safeFilename = sanitizeAddressForFilename(address);
+    return join(this.forkPath, 'cache', `${safeFilename}.all-resources`);
+  }
+
+  getCacheGeneration(): string {
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    const generationPath = join(cacheDir, CACHE_GENERATION_FILE);
+    if (!existsSync(generationPath)) {
+      const generation = randomUUID();
+      writePrivateFile(generationPath, `${generation}\n`);
+      return generation;
+    }
+    const generation = readFileSync(generationPath, 'utf8').trim();
+    if (!UUID_RE.test(generation)) {
+      throw new Error(`Invalid fork cache generation at ${generationPath}`);
+    }
+    return generation;
+  }
+
+  advanceCacheGeneration(): string {
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    const generation = randomUUID();
+    writePrivateFile(join(cacheDir, CACHE_GENERATION_FILE), `${generation}\n`);
+    return generation;
   }
 
   /**
@@ -102,6 +171,52 @@ export class ForkStorage {
     } else {
       chmodSync(accountsPath, PRIVATE_FILE_MODE);
     }
+
+    const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
+    if (!existsSync(migrationMarker)) writePrivateFile(migrationMarker, 'complete\n');
+    this.getCacheGeneration();
+  }
+
+  /**
+   * Upgrade 0.6.x caches without contacting the upstream node. Each legacy
+   * resource file represented a complete account resource response, including
+   * an empty `{}` response. Per-address markers are committed first and the
+   * global marker last, making interruption safe and the migration idempotent.
+   */
+  migrateLegacyResourceCache(): void {
+    const cacheDir = join(this.forkPath, 'cache');
+    const resourcesDir = join(this.forkPath, 'resources');
+    ensurePrivateDirectory(cacheDir);
+    this.getCacheGeneration();
+    const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
+    if (existsSync(migrationMarker)) return;
+
+    if (existsSync(resourcesDir)) {
+      for (const file of readdirSync(resourcesDir).sort()) {
+        if (!/^0x[0-9a-fA-F]{1,64}\.json$/.test(file)) continue;
+        const legacyPath = join(resourcesDir, file);
+        // Validate legacy JSON before declaring it complete. 0.6.0 wrote these
+        // files non-atomically, so a crash can leave truncated JSON behind —
+        // quarantine such files instead of failing the whole fork (0.6.0's
+        // resetState flow deleted them unread).
+        try {
+          readLegacyResourceMap(legacyPath);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          const quarantinePath = `${legacyPath}.corrupt-${Date.now()}-${randomUUID()}.bak`;
+          renameSync(legacyPath, quarantinePath);
+          logger.warning(
+            `Skipping unreadable legacy fork resource cache ${file}: ${msg} ` +
+              `Moved to ${quarantinePath}; the address will be refetched on demand.`
+          );
+          continue;
+        }
+        const address = file.slice(0, -'.json'.length);
+        const marker = this.getAllResourcesMarkerPath(address);
+        if (!existsSync(marker)) writePrivateFile(marker, 'complete\n');
+      }
+    }
+    writePrivateFile(migrationMarker, 'complete\n');
   }
 
   /**
@@ -143,7 +258,9 @@ export class ForkStorage {
     }
 
     const accounts = assertAccountStateRecord(readJsonFile<unknown>(accountsPath, 'fork accounts'));
-    return accounts[address] || null;
+    return Object.prototype.hasOwnProperty.call(accounts, address)
+      ? accounts[address] ?? null
+      : null;
   }
 
   /**
@@ -172,7 +289,9 @@ export class ForkStorage {
     }
 
     const resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
-    return resources[resourceType] || null;
+    return Object.prototype.hasOwnProperty.call(resources, resourceType)
+      ? resources[resourceType]
+      : null;
   }
 
   /**
@@ -205,6 +324,7 @@ export class ForkStorage {
 
     resources[resourceType] = data;
     writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
+
   }
 
   /**
@@ -218,13 +338,24 @@ export class ForkStorage {
     ensurePrivateDirectory(resourcesDir);
 
     writePrivateFile(resourceFilePath, JSON.stringify(resources, null, 2));
+
+    const cacheDir = join(this.forkPath, 'cache');
+    ensurePrivateDirectory(cacheDir);
+    writePrivateFile(this.getAllResourcesMarkerPath(address), 'complete\n');
   }
 
   /**
    * Check if resource is cached
    */
   hasResource(address: string, resourceType: string): boolean {
-    return this.getResource(address, resourceType) !== null;
+    const resourceFilePath = this.getResourceFilePath(address);
+    if (!existsSync(resourceFilePath)) return false;
+    const resources = readJsonFile<Record<string, unknown>>(resourceFilePath, 'fork resources');
+    return Object.prototype.hasOwnProperty.call(resources, resourceType);
+  }
+
+  hasAllResources(address: string): boolean {
+    return existsSync(this.getAllResourcesMarkerPath(address));
   }
 
   /**
@@ -256,6 +387,13 @@ export class ForkStorage {
    */
   clearResources(): void {
     const resourcesDir = join(this.forkPath, 'resources');
+
+    const cacheDir = join(this.forkPath, 'cache');
+    if (existsSync(cacheDir)) {
+      for (const file of readdirSync(cacheDir)) {
+        if (file.endsWith('.all-resources')) unlinkSync(join(cacheDir, file));
+      }
+    }
 
     if (!existsSync(resourcesDir)) {
       return;

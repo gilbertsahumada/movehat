@@ -4,6 +4,7 @@ import { existsSync, statSync } from "fs";
 import { Account, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import { MovehatConfig, MovehatUserConfig } from "../types/config.js";
 import { logger } from "../ui/index.js";
+import { NetworkConflictError } from "../errors.js";
 
 interface ConfigCacheEntry {
   mtimeMs: number;
@@ -29,21 +30,13 @@ const configCache = new Map<string, ConfigCacheEntry>();
 // settles so a later edit (new mtime) can re-trigger a cold load.
 const inFlightLoads = new Map<string, Promise<MovehatUserConfig>>();
 
-// Hostnames recognized as safe targets for the deterministic test key
-// auto-injection. Any URL whose hostname is not in this set causes the
-// test-key path to be skipped even if the network NAME is 'testnet' or
-// 'local' (#40 — name-only gating was spoofable when users named a
-// production-pointing network 'testnet').
-const TEST_ENDPOINT_HOSTS = new Set([
-  "testnet.movementnetwork.xyz",
-  "localhost",
-  "127.0.0.1",
-  "::1",
-]);
+// Only loopback endpoints may receive the deterministic development key.
+// Public testnets require explicit credentials just like mainnet.
+const LOCAL_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function isKnownTestEndpoint(url: string): boolean {
   try {
-    return TEST_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
+    return LOCAL_ENDPOINT_HOSTS.has(new URL(url).hostname.toLowerCase());
   } catch {
     return false;
   }
@@ -53,7 +46,8 @@ function isKnownTestEndpoint(url: string): boolean {
 // or query strings (`?apiKey=…`). Returns the protocol + host + pathname
 // only, which is enough for the operator to identify the endpoint
 // without leaking embedded credentials to CI logs.
-function sanitizeUrlForLog(url: string): string {
+/** @internal Shared by CLI commands that print endpoint URLs. */
+export function sanitizeUrlForLog(url: string): string {
   try {
     const parsed = new URL(url);
     return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
@@ -178,19 +172,59 @@ export function _resetConfigCache(): void {
   inFlightLoads.clear();
 }
 
-/**
- * Resolve configuration for a specific network
- * Merges global settings with network-specific settings
- */
-export async function resolveNetworkConfig(
+/** Network name + endpoint config selected by the resolution policy. */
+export interface ResolvedNetworkEndpoint {
+  network: string;
+  networkConfig: MovehatUserConfig["networks"][string];
+}
+
+/** Resolve network selection without requiring a signing account. */
+export function resolveNetworkEndpoint(
   userConfig: MovehatUserConfig,
   networkName?: string
-): Promise<MovehatConfig> {
-  // Determine which network to use
-  // Default to "testnet" for testing with simulation
+): ResolvedNetworkEndpoint {
+  return resolveNetworkEndpointWithPolicy(userConfig, networkName, true);
+}
+
+// "movelite" is a selector for the local backend, not a distinct chain:
+// a fixture that resolves "local" under `--network movelite` is honoring
+// the flag, not conflicting with it.
+function isSameNetworkFamily(a: string, b: string): boolean {
+  const normalize = (name: string) => (name === "movelite" ? "local" : name);
+  return normalize(a) === normalize(b);
+}
+
+function resolveNetworkEndpointWithPolicy(
+  userConfig: MovehatUserConfig,
+  networkName: string | undefined,
+  enforceCliConflict: boolean
+): ResolvedNetworkEndpoint {
+  const cliNetwork = process.env.MH_CLI_NETWORK;
+  const legacyNetwork = process.env.MOVEHAT_NETWORK;
+  if (
+    enforceCliConflict &&
+    networkName &&
+    cliNetwork &&
+    !isSameNetworkFamily(networkName, cliNetwork)
+  ) {
+    throw new NetworkConflictError(networkName, cliNetwork);
+  }
+  if (enforceCliConflict && cliNetwork && legacyNetwork && cliNetwork !== legacyNetwork) {
+    logger.warning(
+      `Ignoring legacy MOVEHAT_NETWORK='${legacyNetwork}' because ` +
+        `--network selected '${cliNetwork}'.`
+    );
+  }
+  if (enforceCliConflict && !networkName && !cliNetwork && legacyNetwork) {
+    logger.info(`Using network '${legacyNetwork}' from MOVEHAT_NETWORK.`);
+  }
+
+  // The enforceCliConflict=false caller (switchNetwork) always passes
+  // networkName, so the env-var terms only ever apply under enforcement.
   const selectedNetwork =
     networkName ||
-    process.env.MH_CLI_NETWORK ||
+    cliNetwork ||
+    legacyNetwork ||
     process.env.MH_DEFAULT_NETWORK ||
     userConfig.defaultNetwork ||
     "testnet";
@@ -208,7 +242,8 @@ export async function resolveNetworkConfig(
     logger.info("testnet not found in config - using default Movement testnet configuration");
   }
 
-  // Special case: Auto-generate config for local fork server
+  // Mainnet is intentionally never synthesized: selecting it must be an
+  // explicit, reviewable project configuration.
   if (!networkConfig && selectedNetwork === "local") {
     networkConfig = {
       url: "http://localhost:8080/v1",
@@ -223,6 +258,39 @@ export async function resolveNetworkConfig(
       `Network '${selectedNetwork}' not found in configuration.\nAvailable networks: ${availableNetworks}, testnet (auto-generated), local (auto-generated)`
     );
   }
+
+  return { network: selectedNetwork, networkConfig };
+}
+
+/**
+ * Resolve configuration for a specific network.
+ * Merges global settings with network-specific settings.
+ */
+export async function resolveNetworkConfig(
+  userConfig: MovehatUserConfig,
+  networkName?: string
+): Promise<MovehatConfig> {
+  return resolveNetworkConfigWithPolicy(userConfig, networkName, true);
+}
+
+/** @internal Used only by runtime.switchNetwork's deliberate transition. */
+export async function resolveNetworkConfigForSwitch(
+  userConfig: MovehatUserConfig,
+  networkName: string
+): Promise<MovehatConfig> {
+  return resolveNetworkConfigWithPolicy(userConfig, networkName, false);
+}
+
+async function resolveNetworkConfigWithPolicy(
+  userConfig: MovehatUserConfig,
+  networkName: string | undefined,
+  enforceCliConflict: boolean
+): Promise<MovehatConfig> {
+  const { network: selectedNetwork, networkConfig } = resolveNetworkEndpointWithPolicy(
+    userConfig,
+    networkName,
+    enforceCliConflict
+  );
 
   // Get accounts using Hardhat-style resolution:
   // 1. Network-specific accounts (if defined)
@@ -247,14 +315,11 @@ export async function resolveNetworkConfig(
     accounts = [process.env.PRIVATE_KEY];
   }
 
-  // 4. Validate we have at least one account (unless using testnet/local
-  //    AND the URL is a recognized test endpoint — name alone is not enough
-  //    per #40, since a user can name a network 'testnet' but point it at
-  //    a production RPC and would otherwise inherit the deterministic test
-  //    key with a production endpoint).
+  // 4. Validate we have an account. Only local/movelite names combined with
+  // a loopback URL may use the deterministic development key.
   if (accounts.length === 0 || !accounts[0]) {
     const isTestNetworkName =
-      selectedNetwork === "testnet" || selectedNetwork === "local";
+      selectedNetwork === "local" || selectedNetwork === "movelite";
     const isTestEndpoint =
       isTestNetworkName && isKnownTestEndpoint(networkConfig.url);
 
@@ -264,7 +329,7 @@ export async function resolveNetworkConfig(
       // through to the standard "no accounts" throw below so the user gets
       // actionable guidance.
       logger.warning(
-        `Network '${selectedNetwork}' uses a name reserved for testnet/local ` +
+        `Network '${selectedNetwork}' uses a name reserved for local development ` +
           `but '${sanitizeUrlForLog(networkConfig.url)}' is not a recognized test endpoint. ` +
           `Skipping auto-injection of the deterministic test key to protect ` +
           `against accidental production use. Set PRIVATE_KEY explicitly, ` +
@@ -275,18 +340,18 @@ export async function resolveNetworkConfig(
     if (isTestEndpoint) {
       // Security: Using a deterministic test account (like Hardhat's default accounts)
       // This is SAFE because:
-      // 1. Only used for testnet/local against a known test endpoint
+      // 1. Only used for local/movelite against loopback
       //    (network NAME + URL allowlist enforced above; bypassed otherwise)
       // 2. Perfect for transaction simulation (no real funds)
       // 3. Deterministic = consistent test results
       const testPrivateKey = "0x0000000000000000000000000000000000000000000000000000000000000001";
       accounts = [testPrivateKey];
       logger.newline();
-      logger.warning("[TESTNET] Using auto-generated test account (safe for testing only)");
-      logger.warning("[TESTNET] For mainnet, set PRIVATE_KEY in .env");
+      logger.warning("[LOCAL] Using a deterministic development account");
+      logger.warning("[LOCAL] Public networks require explicit credentials");
       logger.newline();
     } else {
-      // For any other network (mainnet, or testnet/local with a non-test
+      // For any public network (or local/movelite with a remote
       // URL), REQUIRE explicit configuration. This prevents accidentally
       // using the test key on production networks.
       throw new Error(
@@ -299,8 +364,8 @@ export async function resolveNetworkConfig(
         `  2. Add 'accounts: ["0x..."]' globally in movehat.config.ts\n` +
         `  3. Add 'accounts: ["0x..."]' to the '${selectedNetwork}' network config\n` +
         `\n` +
-        `For testing without configuration, use:\n` +
-        `  movehat <command> --network testnet (auto-generates safe test accounts)`
+        `For testing without public-network credentials, use:\n` +
+        `  movehat test --ts`
       );
     }
   }
@@ -312,7 +377,7 @@ export async function resolveNetworkConfig(
   };
 
   // Capture the primary key after the L178 guard guaranteed it exists
-  // (either present from the start, or auto-assigned by the testnet/local
+  // (either present from the start, or auto-assigned by the local/movelite
   // branch; the else-branch throws). Pulling into a local lets TS see
   // the non-undefined narrowing.
   const primaryKey = accounts[0];
@@ -368,7 +433,7 @@ function deriveAccountAddress(privateKeyHex: string | undefined): string {
     return account.accountAddress.toString();
   } catch (err) {
     // The private key may have come from several sources (network.accounts,
-    // global accounts, PRIVATE_KEY env, auto-generated testnet key). Keep
+    // global accounts, PRIVATE_KEY env, local development key). Keep
     // the hint generic so it never points at the wrong source.
     logger.warning(
       `Could not derive account address from the resolved private key: ${

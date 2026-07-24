@@ -3,14 +3,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "compile": "movehat compile",
+    "lint": "movehat lint",
+    "prove": "movehat prove",
     "test": "movehat test",
     "test:move": "movehat test:move",
     "test:ts": "movehat test:ts",
     "test:watch": "movehat test:ts --watch",
+    "test:coverage": "movehat test --coverage",
     "deploy": "movehat run scripts/deploy-counter.ts"
   },
   "dependencies": {
-    "movehat": "latest",
+    "movehat": "{{movehatVersion}}",
     "@aptos-labs/ts-sdk": "^5.1.5",
     "dotenv": "^17.2.3",
     "got": "^11.8.6"

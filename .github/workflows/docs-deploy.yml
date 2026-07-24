@@ -16,6 +16,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: read
+
 # Allow only one concurrent deployment, skipping older queued runs.
 concurrency:
   group: 'docs-deploy'
@@ -47,7 +50,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build movehat (TypeDoc prebuild needs dist/)
         run: pnpm build:movehat

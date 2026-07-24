@@ -164,6 +164,20 @@ describe("initRuntime", () => {
     expect(runtime.network.name).toBe("testnet");
   });
 
+  it("switchNetwork deliberately overrides the CLI-selected initial network", async () => {
+    const previous = process.env.MH_CLI_NETWORK;
+    process.env.MH_CLI_NETWORK = "testnet";
+    try {
+      const runtime = await initRuntime();
+      const switched = await runtime.switchNetwork("custom");
+      expect(switched.network.name).toBe("custom");
+      expect(runtime.network.name).toBe("testnet");
+    } finally {
+      if (previous === undefined) delete process.env.MH_CLI_NETWORK;
+      else process.env.MH_CLI_NETWORK = previous;
+    }
+  });
+
   it("switchNetwork preserves a caller-supplied accountManager across the network switch", async () => {
     // M9.2 wired `accountManager` through InitRuntimeOptions. The
     // switchNetwork closure spreads `...options` into the recursive
@@ -204,4 +218,3 @@ describe("initRuntime", () => {
     expect(contract).toHaveProperty("view");
   });
 });
-

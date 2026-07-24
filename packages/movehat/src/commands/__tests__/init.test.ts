@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,7 +14,11 @@ vi.mock("../../helpers/banner.js", () => ({
 }));
 
 const initModule = await import("../init.js");
-const { default: initCommand, resolveProjectNames, InvalidProjectNameError } = initModule;
+const {
+  default: initCommand,
+  resolveProjectNames,
+  InvalidProjectNameError,
+} = initModule;
 
 /**
  * Strategy: real tmpdir + real fs ops (matches §6.1's example-as-canonical
@@ -113,6 +117,32 @@ describe("initCommand", () => {
     expect(moveToml).toContain('name = "my_test_project"');
     expect(moveToml).not.toContain("{{movePackageName}}");
     expect(moveToml).not.toContain("{{projectName}}");
+    const pkg = JSON.parse(
+      readFileSync(join(target, "package.json"), "utf-8")
+    ) as { dependencies: Record<string, string> };
+    const installedVersion = await import("../../../package.json", {
+      with: { type: "json" },
+    }).then((module) => module.default.version);
+    expect(pkg.dependencies.movehat).toBe(installedVersion);
+    expect(pkg.dependencies.movehat).not.toContain("{{movehatVersion}}");
+    const config = readFileSync(join(target, "movehat.config.ts"), "utf-8");
+    expect(config).toContain('defaultNetwork: "local"');
+    const deployScript = readFileSync(
+      join(target, "scripts", "deploy-counter.ts"),
+      "utf-8"
+    );
+    const networkResolution = deployScript.slice(
+      deployScript.indexOf("const network ="),
+      deployScript.indexOf("const harness =")
+    );
+    expect(networkResolution.indexOf("MH_CLI_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MOVEHAT_NETWORK")
+    );
+    expect(networkResolution.indexOf("MOVEHAT_NETWORK")).toBeLessThan(
+      networkResolution.indexOf("MH_DEFAULT_NETWORK")
+    );
+    expect(deployScript).toContain('network === "local" || network === "movelite"');
+    expect(deployScript).toContain("Harness.createLive(network)");
   });
 
   it("substitutes {{projectName}} placeholders inside template files", async () => {
@@ -135,7 +165,7 @@ describe("initCommand", () => {
   it("prompts for project name when none is provided", async () => {
     promptsMock.mockResolvedValueOnce({ projectName: "from_prompt" });
 
-    await initCommand();
+    await initCommand(undefined, { interactive: true });
 
     expect(promptsMock).toHaveBeenCalledTimes(1);
     expect(existsSync(join(tmpParent, "from_prompt"))).toBe(true);
@@ -144,8 +174,51 @@ describe("initCommand", () => {
   it("exits 0 when the user Ctrl+Cs the prompt (no project created)", async () => {
     promptsMock.mockResolvedValueOnce({});
 
-    await expect(initCommand()).rejects.toThrow("__test_exit_0__");
+    await expect(initCommand(undefined, { interactive: true })).rejects.toThrow("__test_exit_0__");
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("requires a project name without prompting in non-interactive mode", async () => {
+    await expect(
+      initCommand(undefined, { interactive: false })
+    ).rejects.toThrow("Project name is required in non-interactive mode");
+    expect(promptsMock).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite an existing destination in non-interactive mode", async () => {
+    const target = join(tmpParent, "existing");
+    mkdirSync(target);
+    const marker = join(target, "package.json");
+    writeFileSync(marker, '{"name":"keep-me"}');
+
+    await expect(
+      initCommand("existing", { interactive: false })
+    ).rejects.toThrow("__test_exit_1__");
+    expect(readFileSync(marker, "utf-8")).toContain("keep-me");
+  });
+
+  it("overwrites template files only when --force is explicit", async () => {
+    const target = join(tmpParent, "existing-force");
+    mkdirSync(target);
+    const marker = join(target, "user-notes.txt");
+    writeFileSync(marker, "preserve");
+
+    await initCommand("existing-force", { force: true, interactive: false });
+
+    expect(existsSync(join(target, "package.json"))).toBe(true);
+    expect(readFileSync(marker, "utf-8")).toBe("preserve");
+  });
+
+  it("asks before overwriting an existing destination in a TTY", async () => {
+    mkdirSync(join(tmpParent, "existing-tty"));
+    promptsMock.mockResolvedValueOnce({ overwrite: false });
+
+    await initCommand("existing-tty", { interactive: true });
+
+    expect(promptsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "confirm", name: "overwrite" })
+    );
+    expect(existsSync(join(tmpParent, "existing-tty", "package.json"))).toBe(false);
   });
 
   it("exits 1 when the template copy step hits an unwriteable target", async () => {

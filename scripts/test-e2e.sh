@@ -103,7 +103,8 @@ log_info "Test 4: Packing and installing globally..."
 cd "$PROJECT_ROOT/packages/movehat"
 
 # Pack the package
-if npm pack; then
+PACKAGE_FILE=$(npm pack 2>/dev/null | tail -1)
+if [ -n "$PACKAGE_FILE" ] && [ -f "$PACKAGE_FILE" ]; then
     log_success "Package packed successfully"
 else
     log_error "Failed to pack package"
@@ -111,7 +112,6 @@ else
 fi
 
 # Install globally
-PACKAGE_FILE=$(ls movehat-*.tgz | head -1)
 if npm install -g "$PACKAGE_FILE"; then
     log_success "Package installed globally"
 else

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Harness, HarnessDisposedError } from "../../harness/index.js";
@@ -7,6 +7,7 @@ import {
   CliExecutionError,
   ModuleAlreadyDeployedError,
   PostPublishError,
+  TransactionOutcomeUnknownError,
 } from "../../errors.js";
 import type {
   ChildProcessAdapter,
@@ -108,6 +109,33 @@ describe("Harness.deployCodeObject", () => {
         "counter",
       ]);
       expect(calls[1]?.args).toContain("--assume-yes");
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  it("persists a successful deploy-object when artifact hashing fails", async () => {
+    const base = makeAdapter({
+      build: { exitCode: 0, stdout: "build ok", stderr: "" },
+      deploy: { exitCode: 0, stdout: successStdout(), stderr: "" },
+    });
+    const adapter: ChildProcessAdapter = {
+      ...base.adapter,
+      async run(input) {
+        const result = await base.adapter.run(input);
+        if (input.args[1] === "deploy-object") {
+          const build = join(fixture.tmpCwd, "move", "build");
+          rmSync(build, { recursive: true, force: true });
+          writeFileSync(build, "not a directory");
+        }
+        return result;
+      },
+    };
+    const harness = await Harness.createLive("testnet");
+    try {
+      const result = await harness.deployCodeObject({ moduleName: "counter", adapter });
+      expect(result.artifactHash).toBeUndefined();
+      expect(existsSync(join(fixture.tmpCwd, "deployments", "testnet", "counter.json"))).toBe(true);
     } finally {
       await harness.cleanup();
     }
@@ -229,7 +257,7 @@ describe("Harness.deployCodeObject", () => {
       build: { exitCode: 0, stdout: "build ok", stderr: "" },
       deploy: {
         exitCode: 0,
-        stdout: "deployed successfully (but no object address mentioned)",
+        stdout: `deployed successfully; transaction hash: ${TX_HASH}`,
         stderr: "",
       },
     });
@@ -245,7 +273,9 @@ describe("Harness.deployCodeObject", () => {
       expect(caught).toBeInstanceOf(Error);
       // Not a CliExecutionError — the CLI succeeded, our parser failed.
       expect(caught).not.toBeInstanceOf(CliExecutionError);
-      expect((caught as Error).message).toMatch(/Could not parse object address/);
+      expect(caught).toBeInstanceOf(TransactionOutcomeUnknownError);
+      expect((caught as TransactionOutcomeUnknownError).txHash).toBe(TX_HASH);
+      expect((caught as TransactionOutcomeUnknownError).stdoutPreview?.length).toBeLessThanOrEqual(1000);
     } finally {
       await harness.cleanup();
     }

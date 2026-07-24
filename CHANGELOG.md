@@ -5,6 +5,168 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking
+
+- Public testnet and mainnet transactions no longer receive Movehat's known
+  deterministic development key. Projects created with 0.6.0 that keep
+  `defaultNetwork: "testnet"` must either switch their default to `"local"`
+  for the credential-free development flow, or configure `PRIVATE_KEY`, global
+  `accounts`, or `networks.<name>.accounts` before submitting transactions.
+  Mainnet must also be declared explicitly in `movehat.config.ts`. Read-only
+  public forks still need no signing key; an RPC API key is independent from a
+  signing account. Closes #373. Tracks #371.
+- Non-interactive `movehat init` now requires an explicit project name and
+  refuses to overwrite an existing destination without `--force`. 0.6.0
+  automation that piped the name to a flagless `movehat init` or refreshed
+  template files into an existing directory must pass the name as an argument
+  and add `--force`. Closes #376. Tracks #371.
+
+### Added
+
+- Added `movehat lint`, `movehat prove`, and Move coverage through
+  `movehat test --coverage`, with matching scaffold and example scripts.
+- Enabling the reviewed API-report gate promoted several previously implicit
+  types to the public surface: `MovehatUserConfig`, `MovementApiClientOptions`,
+  `ForkServerOptions`, and the child-process adapter types
+  (`ChildProcessSignal`, `ChildProcessEnvironment`, and the run input/result
+  shapes). Consumers writing typed config or a custom process adapter can now
+  import them directly instead of restating the shapes. Closes #377.
+
+### Changed
+
+- `movehat init` now pins the exact installed Movehat version and generates a
+  credential-free local deployment flow by default. The canonical script
+  respects `--network` / `MH_CLI_NETWORK`, `MOVEHAT_NETWORK`,
+  `MH_DEFAULT_NETWORK`, then config precedence, and only uses `createLive` for
+  an explicit public/custom network. Release, E2E, and dogfood gates install
+  the candidate tarball before dependency resolution, so normal and
+  prerelease versions are testable before publication. Closes #372.
+- Deterministic development credentials are now limited to loopback
+  local/movelite networks. Network selector conflicts are typed, read-only fork
+  creation resolves endpoints without signing accounts, and Movelite discovery
+  supports explicit relative/absolute paths, package installs, local or global
+  npm bins, and safe fallback to Movement node. Local-node state is protected
+  by ownership markers with conservative migration of recognized 0.6 layouts.
+- CLI actions are awaited and non-interactive `movehat test` runs all suites.
+- Intentional long-running commands can opt out of process timeouts explicitly:
+  the prover and TypeScript watch mode run until completion or Ctrl+C, while
+  compile, lint, coverage, and normal test commands retain finite limits.
+- An explicit `MOVELITE_PATH` that points at a missing or non-executable file
+  now fails with a clear error instead of silently falling back to the slow
+  Movement node; automatic discovery candidates (PATH shims, package installs)
+  still fall back. `MOVEHAT_NETWORK` is now honored by the core network
+  resolver (between `--network`/`MH_CLI_NETWORK` and `MH_DEFAULT_NETWORK`) and
+  logs which selector chose the network; previously only generated scripts
+  read it. `--network movelite` is recognized as the local backend family, so
+  local fixtures run under it without a selector-conflict error.
+- Scaffolded `Move.toml` now pins the AptosFramework dependency to an exact
+  `movement`-branch commit instead of the moving branch ref, so fresh projects
+  compile reproducibly regardless of upstream framework changes. The pin is
+  bumped deliberately alongside Movement CLI upgrades.
+- `movehat fork create` / `fork serve` without `--network` fall back to
+  `testnet` when the project's `defaultNetwork` is the disposable local chain
+  (which has nothing durable to snapshot), preserving the 0.6.0 no-flag fork
+  behavior for the new local-first scaffold.
+
+### Fixed
+
+- Network documentation and live-script examples now match the local-first
+  scaffold: public transaction examples require an explicit network and
+  signing credentials, while read-only public forks remain credential-free.
+  Network-precedence examples include CLI, environment, and config selectors.
+  Closes #384. Tracks #371.
+- Fork snapshots now pin every account, resource, and view read to their
+  recorded ledger version. Typed API/domain errors distinguish missing data
+  from pruned snapshots without exposing upstream bodies; legacy 0.6 resource
+  caches migrate offline and atomically, including empty snapshots. Fork
+  writes are atomic and cross-process locked, and `Harness.createFork` keeps
+  its positional API while adding an options form with explicit overwrite.
+  The 0.6.0 contracts are preserved: `initialize()` on an existing fork
+  re-adopts its pinned snapshot (the documented mocha before-hook
+  pattern keeps working; `overwrite: true` resets cached state), unreadable
+  legacy resource-cache files are quarantined with a warning instead of
+  failing the whole fork, funding accepts any non-negative integral amount,
+  and a fork whose stored `nodeUrl` embeds credentials fails at `load()` with
+  edit-the-metadata guidance. Caller-input validation now reports the
+  `invalid_argument` error code (`invalid_response` remains for malformed
+  upstream responses). Fork views and reads are pinned to the fork's snapshot
+  ledger version, so results are deterministic for a given fork rather than
+  tracking the upstream's current state. Closes #375.
+- Fork adoption of existing 0.6 snapshots is now correct and offline-safe.
+  `initialize()` ran the 0.6 legacy-cache migration after `storage.initialize()`
+  had already stamped the migration marker, so the migration self-cancelled and
+  the per-address cache markers were never written — an offline or pruned 0.6
+  fork then forced an upstream read and failed. Re-initializing an existing fork
+  also refetched the ledger and moved the pinned version while keeping the old
+  cache, so metadata and cached reads could disagree. `initialize()` now runs
+  the migration before stamping the marker, contacts upstream only for new or
+  `overwrite` forks, and re-adopts the existing pinned snapshot (refreshing only
+  the network/nodeUrl labels). `fundAccount()` now re-checks the cache
+  generation under the lock and discards a balance fetched before a concurrent
+  `overwrite`, so a stale balance is never written into a rotated snapshot.
+  Closes #391.
+- Cross-process publish locks now share a per-user namespace, reclaim dead
+  owners immediately (including PIDs recycled by another user's process),
+  preserve live owners, and clean up on signals; a lock-wait timeout names the
+  lock file to delete if no other Movehat process is running. Deployment
+  identity prefers chain ID, while `--redeploy` can quarantine corrupt records
+  and bypass only legacy RPC mismatches. Artifact inspection after an on-chain
+  success is best-effort; only persistence failure raises `PostPublishError`.
+  Submitted transactions whose final status cannot be confirmed now raise a
+  typed, non-retryable unknown-outcome error carrying the transaction hash.
+  The 0.6.0 read contracts are preserved: `loadDeployment` still returns
+  `null` for unreadable records (with a warning) so the documented
+  `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
+  recovery records without `deployer`/`timestamp` still parse, and detected
+  named addresses still bind to the deployer's address. Closes #374.
+- `movehat fork serve` now resolves its default fork through the same central
+  network policy as `fork create` (honoring `MH_CLI_NETWORK`, `MOVEHAT_NETWORK`,
+  `MH_DEFAULT_NETWORK`, then config), instead of reading only `MH_CLI_NETWORK`.
+  Previously, with a local-first scaffold and `MOVEHAT_NETWORK=mainnet`, `fork
+  create` wrote `mainnet-fork` while `fork serve` looked for `testnet-fork`;
+  both commands now agree on the `<network>-fork` directory. Closes #395.
+
+### Internal
+
+- Added reproducible quality gates for lint, manifest/config formatting,
+  dependency cycles, reviewed API reports, docs builds, packed npm contents,
+  frozen installs, and production-critical audits. PRs to `develop` now run
+  deterministic checks; public-testnet and external CLI checks remain
+  advisory on `main` or manual dispatch. The Docker test image verifies both
+  the pinned Movement CLI archive and extracted binary and can no longer fall
+  back to a mock executable; its Node 20/22 base now uses Debian Trixie to
+  satisfy the verified binary's glibc/libstdc++ ABI. Closes #377. Tracks #371.
+- The install-verification gates (`test:e2e`, `test:smoke`, `test-e2e.sh`) now
+  select the freshly packed tarball from `npm pack` output instead of
+  `ls movehat-*.tgz | head -1`, which sorted alphabetically and could pick a
+  stale lower-version `.tgz` left in `packages/movehat/` — silently validating
+  an old build in place of the current one. Closes #387.
+- Regenerated the committed API-extractor reports (`etc/*.api.md`) to match the
+  public surface after the recovery stack merged. The reports had been
+  generated on a sub-PR branch behind the source change that removed
+  `ForkAlreadyExistsError` and added `invalid_argument`, so `api:check` failed
+  on the combined `develop` tree; each sub-PR passed alone. Closes #389.
+- CI now scopes advisory to the individual external steps instead of the whole
+  E2E job. The local deterministic gates — the `vi.mock` guard, the Movelite
+  backend gate (#302), and the `test:example` movelite suite — are required on
+  both `develop` and `main`, so a broken canonical local flow fails the PR
+  instead of passing green. Only the genuinely-external steps (`smoke-test`,
+  `test:e2e:quick`, `test:integration`) stay advisory and main-only, so no
+  develop PR depends on live public testnet. Closes #393.
+
+### Security
+
+- Updated Next.js within major 15, Vitest/coverage within major 4, and
+  `js-yaml` within major 4 to address documented advisories without broad
+  dependency overrides. The full workspace audit is scheduled and
+  informational until accepted advisories have a versioned allowlist.
+- Resynced the `SECURITY.md` non-critical advisory inventory with the current
+  `pnpm audit --prod` (24 findings: 12 high, 11 moderate, 1 low; zero critical),
+  correcting a stale count so the documented posture matches reality. None of
+  these reach the published `movehat` artifact. Closes #395.
+
 ## [0.6.0] - 2026-07-12
 
 ### Changed

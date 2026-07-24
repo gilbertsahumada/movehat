@@ -1,6 +1,49 @@
 import { spawn } from 'node:child_process';
 import type { Readable, Writable } from 'node:stream';
 
+/** Portable environment map used at the public process boundary. */
+export type ChildProcessEnvironment = Record<string, string | undefined>;
+
+/** Signal names accepted by Node child processes. Mirrors `NodeJS.Signals`. */
+export type ChildProcessSignal =
+  | "SIGABRT"
+  | "SIGALRM"
+  | "SIGBUS"
+  | "SIGCHLD"
+  | "SIGCONT"
+  | "SIGFPE"
+  | "SIGHUP"
+  | "SIGILL"
+  | "SIGINT"
+  | "SIGIO"
+  | "SIGIOT"
+  | "SIGKILL"
+  | "SIGPIPE"
+  | "SIGPOLL"
+  | "SIGPROF"
+  | "SIGPWR"
+  | "SIGQUIT"
+  | "SIGSEGV"
+  | "SIGSTKFLT"
+  | "SIGSTOP"
+  | "SIGSYS"
+  | "SIGTERM"
+  | "SIGTRAP"
+  | "SIGTSTP"
+  | "SIGTTIN"
+  | "SIGTTOU"
+  | "SIGUNUSED"
+  | "SIGURG"
+  | "SIGUSR1"
+  | "SIGUSR2"
+  | "SIGVTALRM"
+  | "SIGWINCH"
+  | "SIGXCPU"
+  | "SIGXFSZ"
+  | "SIGBREAK"
+  | "SIGLOST"
+  | "SIGINFO";
+
 /**
  * Injectable abstraction over `child_process.spawn`.
  *
@@ -21,8 +64,13 @@ export interface RunInput {
   command: string;
   args: readonly string[];
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: ChildProcessEnvironment;
   stdin?: string;
+  /**
+   * Maximum runtime in milliseconds. Omit it to use the adapter default.
+   * Pass `Infinity` for commands that intentionally run until interrupted,
+   * such as a prover or test watcher. Finite values must be greater than 0.
+   */
   timeoutMs?: number;
   signal?: AbortSignal;
   /**
@@ -63,7 +111,13 @@ export interface RunResult {
    * Populated when the child died from a signal (e.g. external abort, kill
    * during shutdown). `undefined` for normal exits.
    */
-  signal?: NodeJS.Signals;
+  signal?: ChildProcessSignal;
+  /**
+   * Set by `runCliUntilInterrupted` when Movehat received the signal and
+   * forwarded shutdown to the child. A child-only signal leaves this unset,
+   * allowing callers to distinguish user cancellation from a crashed tool.
+   */
+  interruptedByParent?: "SIGINT" | "SIGTERM";
 }
 
 /**
@@ -75,7 +129,7 @@ export interface SpawnInput {
   command: string;
   args: readonly string[];
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: ChildProcessEnvironment;
   /**
    * `'pipe'` (default) makes stdout/stderr/stdin streams available on the
    * returned `SpawnedProcess`. `'ignore'` silences the child entirely
@@ -94,7 +148,7 @@ export interface SpawnedProcess {
   stdout: Readable | null;
   stderr: Readable | null;
   stdin: Writable | null;
-  kill(signal?: NodeJS.Signals): boolean;
+  kill(signal?: ChildProcessSignal): boolean;
   /**
    * Detaches the child AND its stdio pipes from the event-loop ref count
    * so a long-lived child no longer keeps the parent process alive. Each
@@ -107,7 +161,7 @@ export interface SpawnedProcess {
    * triggered it (natural exit, `kill`, or process death). Safe to await
    * multiple times.
    */
-  exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+  exited: Promise<{ code: number | null; signal: ChildProcessSignal | null }>;
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -118,6 +172,12 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
     const timeoutMs =
       input.timeoutMs ??
       (input.inheritStdio ? DEFAULT_INHERIT_STDIO_TIMEOUT_MS : DEFAULT_TIMEOUT_MS);
+
+    if (Number.isNaN(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(
+        new TypeError('timeoutMs must be a positive number or Infinity')
+      );
+    }
 
     if (input.signal?.aborted) {
       return Promise.reject(new Error('Command aborted before start'));
@@ -189,7 +249,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
         if (timeoutHandle) clearTimeout(timeoutHandle);
       };
 
-      if (timeoutMs !== undefined) {
+      if (Number.isFinite(timeoutMs)) {
         timeoutHandle = setTimeout(() => {
           requestTermination(
             new Error(`Command timed out after ${timeoutMs}ms: ${input.command}`)
@@ -255,9 +315,9 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
     // `exited` must settle whether the child dies via natural exit, kill,
     // or a spawn-time `error` (e.g. ENOENT). Both events resolve once;
     // a settled guard prevents double-resolve if both happen to fire.
-    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    const exited = new Promise<{ code: number | null; signal: ChildProcessSignal | null }>((resolve) => {
       let settled = false;
-      const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+      const finish = (code: number | null, signal: ChildProcessSignal | null) => {
         if (settled) return;
         settled = true;
         resolve({ code, signal });
@@ -271,7 +331,7 @@ class DefaultChildProcessAdapter implements ChildProcessAdapter {
       stdout: child.stdout,
       stderr: child.stderr,
       stdin: child.stdin,
-      kill: (signal?: NodeJS.Signals) => child.kill(signal),
+      kill: (signal?: ChildProcessSignal) => child.kill(signal),
       unref: () => {
         child.unref();
         // Typed as Readable/Writable but net.Socket at runtime.

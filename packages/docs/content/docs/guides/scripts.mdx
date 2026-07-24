@@ -22,7 +22,14 @@ The `movehat run` command provides your script with access to the **Hardhat-styl
 import { Harness } from "movehat";
 
 async function main() {
-  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK;
+  if (!network || network === "local" || network === "movelite") {
+    throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
+  }
+  const harness = await Harness.createLive(network);
   try {
     // 1. Deploy via `movement move deploy-object` (code object).
     //    Set `addressName` if Move.toml's named address ≠ moduleName.
@@ -81,7 +88,13 @@ main().catch(console.error);
 import { Harness } from "movehat";
 
 async function main() {
-  const network = process.env.MOVEHAT_NETWORK ?? "testnet";
+  const network =
+    process.env.MH_CLI_NETWORK ??
+    process.env.MOVEHAT_NETWORK ??
+    process.env.MH_DEFAULT_NETWORK;
+  if (!network || network === "local" || network === "movelite") {
+    throw new Error("Select a live network: --network testnet or MOVEHAT_NETWORK=testnet");
+  }
   const harness = await Harness.createLive(network);
   try {
     if (harness.runtime.config.network === "mainnet") {
@@ -102,12 +115,12 @@ main().catch(console.error);
 ## Network Selection
 
 ```bash
-# Deploy to testnet (default)
+# Run the generated script on the local default
 movehat run scripts/deploy-counter.ts
 
-# Deploy to specific network
+# Public networks are explicit and require configured credentials
+movehat run scripts/deploy-counter.ts --network testnet
 movehat run scripts/deploy-counter.ts --network mainnet
-movehat run scripts/deploy-counter.ts --network local
 
 # Force redeploy
 movehat run scripts/deploy-counter.ts --network testnet --redeploy

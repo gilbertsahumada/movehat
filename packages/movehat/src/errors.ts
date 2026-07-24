@@ -25,7 +25,7 @@ import type { DeploymentInfo } from './core/deployments.js';
 
 /**
  * Thrown when the on-chain publish succeeded but a subsequent local
- * step (saveDeployment, profile cleanup, etc.) failed.
+ * persistence step (`saveDeployment`) failed.
  *
  * Distinct from `CliExecutionError`: by the time this error fires, the
  * module IS deployed on-chain. Callers that want to recover can read
@@ -48,6 +48,28 @@ export class PostPublishError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, PostPublishError);
     }
+  }
+}
+
+/**
+ * The transaction was submitted (or a CLI reported success), but Movehat
+ * could not prove its final on-chain outcome. Retrying automatically may
+ * duplicate a successful transaction.
+ */
+export class TransactionOutcomeUnknownError extends Error {
+  public readonly stdoutPreview: string | undefined;
+
+  constructor(
+    message: string,
+    public readonly operation: string,
+    public readonly txHash?: string,
+    stdoutPreview?: string,
+    public readonly cause?: Error
+  ) {
+    super(message);
+    this.name = 'TransactionOutcomeUnknownError';
+    this.stdoutPreview = stdoutPreview ? redactSecrets(stdoutPreview).slice(0, 1000) : undefined;
+    if (Error.captureStackTrace) Error.captureStackTrace(this, TransactionOutcomeUnknownError);
   }
 }
 
@@ -77,5 +99,32 @@ export class CliExecutionError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, CliExecutionError);
     }
+  }
+}
+
+/** Raised when an API network selector disagrees with the CLI flag. */
+export class NetworkConflictError extends Error {
+  constructor(
+    public readonly apiNetwork: string,
+    public readonly cliNetwork: string
+  ) {
+    super(
+      `Conflicting network selection: API requested '${apiNetwork}' but ` +
+        `--network selected '${cliNetwork}'. Remove one selector or make them match.`
+    );
+    this.name = "NetworkConflictError";
+    Error.captureStackTrace?.(this, NetworkConflictError);
+  }
+}
+
+/** Raised before a recursive operation targets a path Movehat cannot prove it owns. */
+export class UnsafePathError extends Error {
+  constructor(
+    message: string,
+    public readonly path: string
+  ) {
+    super(message);
+    this.name = "UnsafePathError";
+    Error.captureStackTrace?.(this, UnsafePathError);
   }
 }

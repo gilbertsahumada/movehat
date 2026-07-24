@@ -79,8 +79,7 @@ describe("Harness.accounts + runtime.accountManager (M9.2, #279)", () => {
     expect(runtime.accountManager.hasLabel("bob")).toBe(true);
 
     // initRuntime additionally calls loadAccountsFromConfig(config), which
-    // loads the testnet config's accounts (1 auto-generated deterministic
-    // test key when no `accounts` array is configured) and adds them to
+    // loads the fixture's explicit testnet account and adds it to
     // the same manager. Pool size = seeded + config-loaded.
     expect(runtime.accountManager.getPoolSize()).toBe(seededSize + 1);
   });

@@ -66,7 +66,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export default {
-  defaultNetwork: "testnet",
+  defaultNetwork: "local",
   networks: {
     testnet: { url: process.env.MOVEMENT_RPC_URL || "https://testnet.movementnetwork.xyz/v1", chainId: "testnet" },
     mainnet: { url: "https://mainnet.movementnetwork.xyz/v1", chainId: "mainnet" },
@@ -129,18 +129,31 @@ Run with `npm test` (interactive menu) or `movehat test --ts` (TypeScript suite,
 
 ## Writing Deployment Scripts
 
-Deploy as a code object with `Harness.createLive`:
+Deploy safely to a local chain by default, and opt into live networks explicitly:
 
 ```typescript
 // scripts/deploy-counter.ts
 import { Harness } from "movehat";
+import config from "../movehat.config.js";
 
 async function main() {
-  const harness = await Harness.createLive(process.env.MOVEHAT_NETWORK ?? "testnet");
+  const network = process.env.MH_CLI_NETWORK
+    ?? process.env.MOVEHAT_NETWORK
+    ?? process.env.MH_DEFAULT_NETWORK
+    ?? config.defaultNetwork
+    ?? "local";
+  const isLocal = network === "local" || network === "movelite";
+  const harness = isLocal
+    ? await Harness.createLocal({
+        ...(network === "movelite" ? { useMovelite: true } : {}),
+        autoDeploy: ["counter"],
+      })
+    : await Harness.createLive(network);
   try {
-    const deployment = await harness.deployCodeObject({
-      moduleName: "counter",
-    });
+    const deployment = isLocal
+      ? harness.runtime.getDeployment("counter")
+      : await harness.deployCodeObject({ moduleName: "counter" });
+    if (!deployment) throw new Error("Counter deployment was not created");
     console.log(`Deployed: ${deployment.address}::counter`);
     console.log(`Tx:       ${deployment.txHash}`);
 
@@ -155,9 +168,12 @@ async function main() {
 main().catch((err) => { console.error(err); process.exit(1); });
 ```
 
-Run with `movehat run scripts/deploy-counter.ts --network testnet`.
+Run locally with `movehat run scripts/deploy-counter.ts`, or target testnet
+explicitly with `movehat run scripts/deploy-counter.ts --network testnet`.
 
-Re-running fails with `ModuleAlreadyDeployedError` (local record at `deployments/{network}/counter.json`). Set `MH_CLI_REDEPLOY=true` to force a re-deploy.
+Live re-runs fail with `ModuleAlreadyDeployedError` (recorded at
+`deployments/{network}/counter.json`). Set `MH_CLI_REDEPLOY=true` to force a
+live re-deploy; the disposable local chain starts clean.
 
 > Requires `movehat@^0.2.0`. Full deploy guide (named addresses, code-object semantics, redeploy flow, deployment tracking): [`/docs/guides/deployment`](https://movehat.org/docs/guides/deployment).
 
@@ -173,10 +189,18 @@ Full fork docs: [`FORK_GUIDE.md`](./FORK_GUIDE.md) (in-repo, comprehensive) or [
 |---|---|---|
 | `movehat init [name]` | Scaffold a new Movehat project | [/docs/cli/init](https://movehat.org/docs/cli/init) |
 | `movehat compile` | Compile Move contracts via Movement CLI | [/docs/cli/compile](https://movehat.org/docs/cli/compile) |
-| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (interactive menu by default) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat lint` | Lint the configured Move package | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
+| `movehat prove` | Run the Move Prover without an artificial timeout | [/docs/cli/lint-and-prove](https://movehat.org/docs/cli/lint-and-prove) |
+| `movehat test --coverage` | Run covered Move tests and print their coverage summary | [/docs/cli/test](https://movehat.org/docs/cli/test) |
+| `movehat test [--move\|--ts\|--all]` | Run Move and/or TypeScript tests (TTY menu; all suites in non-interactive use) | [/docs/cli/test](https://movehat.org/docs/cli/test) |
 | `movehat run <script>` | Execute a TypeScript deployment / interaction script | [/docs/cli/run](https://movehat.org/docs/cli/run) |
 | `movehat fork <subcmd>` | Manage local network forks (create / list / serve / fund / view-resource) | [/docs/cli/fork](https://movehat.org/docs/cli/fork) |
 | `movehat update` | Check npm for a newer version and upgrade | — |
+
+`--coverage` by itself covers only the Move test phase. Combine it with `--all`
+to run covered Move tests and their summary before the TypeScript suite.
+Coverage cannot be combined with `--watch`; `--coverage --ts` is rejected
+unless `--all` is also present. `--filter` applies to the Move phase only.
 
 ## Troubleshooting
 

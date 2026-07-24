@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { vol, fs as memfsFs } from 'memfs';
 
+const { fsyncSpy } = vi.hoisted(() => ({ fsyncSpy: vi.fn() }));
+
 // Mock fs module
 vi.mock('fs', () => ({
   default: memfsFs,
   ...memfsFs,
+  fsyncSync: (fd: number) => {
+    fsyncSpy(fd);
+    return memfsFs.fsyncSync(fd);
+  },
 }));
 
 // Import after mock
@@ -14,6 +20,10 @@ const {
   loadDeployment,
   getAllDeployments,
   getDeployedAddress,
+  fingerprintRpcUrl,
+  assertDeploymentEnvironment,
+  tryHashBuildArtifacts,
+  sanitizeRpcUrl,
 } = await import('../deployments.js');
 
 describe('validateSafeName', () => {
@@ -65,6 +75,7 @@ describe('validateSafeName', () => {
 
 describe('saveDeployment and loadDeployment', () => {
   beforeEach(() => {
+    fsyncSpy.mockClear();
     vol.reset();
     // Create initial directory structure
     vol.fromJSON({
@@ -101,6 +112,75 @@ describe('saveDeployment and loadDeployment', () => {
   it('should return null for non-existent deployment', () => {
     const loaded = loadDeployment('testnet', 'nonexistent');
     expect(loaded).toBeNull();
+    expect(vol.existsSync('/project/deployments')).toBe(false);
+  });
+
+  it('treats corrupt or path-mismatched records as absent, preserving the 0.6.0 null contract', () => {
+    vol.fromJSON({
+      '/project/deployments/testnet/counter.json': '{not-json',
+    });
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
+
+    vol.writeFileSync('/project/deployments/testnet/counter.json', JSON.stringify({
+      address: '0x1', moduleName: 'other', network: 'testnet', deployer: '0x2', timestamp: 1,
+    }));
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
+    // The invalid file stays in place for inspection; only quarantine moves it.
+    expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(true);
+  });
+
+  it('parses minimal hand-written recovery records without deployer or timestamp', () => {
+    vol.fromJSON({
+      '/project/deployments/testnet/counter.json': JSON.stringify({
+        address: '0xabc', moduleName: 'counter', network: 'testnet',
+      }),
+    });
+    const record = loadDeployment('testnet', 'counter');
+    expect(record?.address).toBe('0xabc');
+    expect(record?.deployer).toBe('');
+    expect(record?.timestamp).toBe(0);
+  });
+
+  it('persists additive v2 metadata and leaves no temporary file', () => {
+    const deployment = {
+      address: '0x1234', moduleName: 'counter', network: 'testnet',
+      deployer: '0xabcd', timestamp: 1, schemaVersion: 2 as const,
+      chainId: '126', rpcFingerprint: fingerprintRpcUrl('https://user:secret@example.com/v1?key=x'),
+      artifactHash: 'abc', kind: 'publish' as const,
+    };
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    saveDeployment(deployment);
+    expect(loadDeployment('testnet', 'counter')).toEqual(deployment);
+    expect(vol.readdirSync('/project/deployments/testnet')).toEqual(['counter.json']);
+    expect(deployment.rpcFingerprint).not.toContain('secret');
+    expect(fsyncSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses chain ID as primary identity across dynamic RPC ports', () => {
+    const deployment = { address: '0x1', moduleName: 'counter', network: 'local', deployer: '0x2', timestamp: 1, chainId: 'local', rpcFingerprint: fingerprintRpcUrl('http://127.0.0.1:1/v1') };
+    expect(() => assertDeploymentEnvironment(deployment, { chainId: 'local', rpc: 'http://127.0.0.1:2/v1' })).not.toThrow();
+    expect(() => assertDeploymentEnvironment(deployment, { chainId: 'other', rpc: 'http://127.0.0.1:1/v1', allowRpcMismatch: true })).toThrow('does not match');
+  });
+
+  it('quarantines corrupt records only when requested', () => {
+    vol.fromJSON({ '/project/deployments/testnet/counter.json': '{bad' });
+    expect(loadDeployment('testnet', 'counter')).toBeNull();
+    expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(true);
+    expect(loadDeployment('testnet', 'counter', { quarantineCorrupt: true })).toBeNull();
+    expect(vol.existsSync('/project/deployments/testnet/counter.json')).toBe(false);
+  });
+
+  it('treats artifact inspection as best-effort metadata', () => {
+    vol.fromJSON({ '/package/build': 'not a directory' });
+    const errors: Error[] = [];
+    expect(tryHashBuildArtifacts('/package', (error) => errors.push(error))).toBeUndefined();
+    expect(errors).toHaveLength(1);
+  });
+
+  it('redacts credentials from every RPC URL component used in logs', () => {
+    const shown = sanitizeRpcUrl('https://user:pass@example.com/v1/private-api-key?api_key=secret');
+    expect(shown).toBe('https://example.com/…');
+    expect(shown).not.toMatch(/user|pass|private-api-key|secret/);
   });
 
   it('should create directories if they do not exist', () => {
@@ -118,6 +198,14 @@ describe('saveDeployment and loadDeployment', () => {
 
     expect(vol.existsSync('/project/deployments')).toBe(true);
     expect(vol.existsSync('/project/deployments/mainnet')).toBe(true);
+  });
+
+  it('refuses a symlink deployments directory', () => {
+    vol.mkdirSync('/target');
+    vol.symlinkSync('/target', '/project/deployments');
+    expect(() => saveDeployment({
+      address: '0x1', moduleName: 'counter', network: 'testnet', deployer: '0x2', timestamp: 1,
+    })).toThrow('must not be a symlink');
   });
 
   it('should reject invalid network names when saving', () => {
@@ -207,6 +295,14 @@ describe('getAllDeployments', () => {
 
     expect(Object.keys(deployments)).toHaveLength(1);
     expect(deployments['counter']).toBeDefined();
+  });
+
+  it('skips corrupt records while listing valid deployments', () => {
+    vol.fromJSON({
+      '/project/deployments/testnet/counter.json': '{bad',
+      '/project/deployments/testnet/token.json': JSON.stringify({ address: '0x2', moduleName: 'token', network: 'testnet', deployer: '0xd2', timestamp: 2 }),
+    });
+    expect(Object.keys(getAllDeployments('testnet'))).toEqual(['token']);
   });
 });
 

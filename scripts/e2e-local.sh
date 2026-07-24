@@ -75,9 +75,6 @@ cleanup() {
         echo ""
         echo -e "${YELLOW}Test directory preserved:${NC} $TEST_DIR"
     fi
-    
-    # Uninstall global package
-    npm uninstall -g movehat 2>/dev/null || true
 }
 
 trap cleanup EXIT
@@ -162,8 +159,8 @@ step "Creating npm package (npm pack)"
 cd "$PROJECT_ROOT/packages/movehat"
 
 # Pack
-if npm pack > /dev/null 2>&1; then
-    PACKAGE_FILE=$(ls movehat-*.tgz | head -1)
+PACKAGE_FILE=$(npm pack 2>/dev/null | tail -1)
+if [ -n "$PACKAGE_FILE" ] && [ -f "$PACKAGE_FILE" ]; then
     PACKAGE_PATH="$PROJECT_ROOT/packages/movehat/$PACKAGE_FILE"
     pass "Created: $PACKAGE_FILE"
 else
@@ -190,16 +187,19 @@ done
 # ===========================================
 # Install globally
 # ===========================================
-step "Installing globally (npm install -g)"
+step "Installing CLI into an isolated global prefix"
 
 mkdir -p "$TEST_DIR"
 cp "$PACKAGE_PATH" "$TEST_DIR/"
 cd "$TEST_DIR"
 
-if npm install -g "$PACKAGE_FILE" > /dev/null 2>&1; then
-    pass "Global installation successful"
+NPM_PREFIX="$TEST_DIR/npm-global"
+mkdir -p "$NPM_PREFIX"
+if npm install --global --prefix "$NPM_PREFIX" "$PACKAGE_FILE" > /dev/null 2>&1; then
+    export PATH="$NPM_PREFIX/bin:$PATH"
+    pass "Isolated CLI installation successful"
 else
-    fail "Global installation failed"
+    fail "Isolated CLI installation failed"
     exit 1
 fi
 
@@ -249,30 +249,33 @@ for file in "${EXPECTED_FILES[@]}"; do
 done
 
 # ===========================================
-# Test: npm install
+# Test: install candidate tarball before dependency resolution
 # ===========================================
-step "Testing: npm install"
+step "Testing: npm install from candidate tarball"
 
-if npm install > /dev/null 2>&1; then
-    pass "Dependencies installed"
+SCAFFOLD_PIN=$(node -p "require('./package.json').dependencies.movehat")
+if [ "$SCAFFOLD_PIN" = "$VERSION" ]; then
+    pass "Scaffold pins the installed Movehat version exactly ($VERSION)"
 else
-    fail "npm install failed"
+    fail "Scaffold pins '$SCAFFOLD_PIN', expected '$VERSION'"
     exit 1
 fi
 
-# Force the user project's `node_modules/movehat` to point at the
-# freshly-built local tarball, not the version on the npm registry.
-# Without this, `npm install` resolves `"movehat": "..."` from the
-# template's package.json against the registry, leaving the test
-# running against the previously-published version (not the code we
-# just changed). The Step 8 "canonical deploy script" check would
-# then be exercising stale code — exactly the failure mode that
-# allowed the original #208 regression to re-surface in CI even after
-# the local fix.
-if npm install "$PACKAGE_PATH" > /dev/null 2>&1; then
-    pass "Local tarball overridden into node_modules/movehat"
+# Install the candidate first. A plain `npm install` here would try to fetch
+# the exact, not-yet-published version from the registry and deadlock releases.
+if npm install --no-save "$PACKAGE_PATH" > /dev/null 2>&1; then
+    pass "Dependencies installed with candidate tarball"
 else
-    fail "npm install of local tarball failed"
+    fail "npm install of candidate tarball failed"
+    exit 1
+fi
+
+if [ "$(node -p "require('./package.json').dependencies.movehat")" != "$VERSION" ]; then
+    fail "Candidate install rewrote the exact Movehat pin"
+    exit 1
+fi
+if [ "$(node -p "require('./node_modules/movehat/package.json').version")" != "$VERSION" ]; then
+    fail "Installed Movehat version does not match candidate $VERSION"
     exit 1
 fi
 
@@ -304,25 +307,21 @@ else
 fi
 
 # ===========================================
-# Test: Canonical deploy-counter.ts end-to-end against Movement testnet
+# Test: Canonical deploy-counter.ts end-to-end against a local chain
 # ===========================================
 # Catches the class of bug where the template's deploy script is
 # type-valid but fails at runtime (e.g., skipping a required `init`
-# call). Uses Movement testnet because:
-#   - It matches the path real users hit on first install.
-#   - The runtime auto-generates and faucet-funds a test account for
-#     testnet, so this works without any CI secret.
-#   - Avoids the upstream MintFunder bug on Linux x86_64 that gates
-#     the local-node spawn behind MOVEHAT_SKIP_LOCAL_NODE.
+# call). This is deliberately local and credential-free; public networks are
+# opt-in and never belong in the deterministic install-experience gate.
 #
 # The step is NOT gated by --quick. The whole point of this gate is
 # to run on every PR, since unit tests can't catch a missing init()
 # in a template script.
-step "Testing: canonical deploy-counter.ts against Movement testnet"
+step "Testing: canonical deploy-counter.ts against a local chain"
 
 DEPLOY_LOG="$TEST_DIR/deploy.log"
 
-if MOVEHAT_NETWORK=testnet npx movehat run scripts/deploy-counter.ts > "$DEPLOY_LOG" 2>&1; then
+if npx movehat run scripts/deploy-counter.ts > "$DEPLOY_LOG" 2>&1; then
     # Exit code 0 is necessary but not sufficient — assert the script
     # actually reached the final view-function call. The "Counter
     # value: 1" line is emitted only after deploy + init + increment

@@ -73,6 +73,7 @@ export function setupHarnessTestFixture(
     testnet: {
       url: "https://testnet.movementnetwork.xyz/v1",
       chainId: "testnet",
+      accounts: ["0x0000000000000000000000000000000000000000000000000000000000000001"],
     },
     ...(options.extraNetworks ?? {}),
   };

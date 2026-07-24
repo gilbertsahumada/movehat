@@ -6,12 +6,15 @@
   "scripts": {
     "test": "mocha",
     "test:watch": "mocha --watch",
+    "test:coverage": "movehat test --coverage",
     "deploy": "movehat run scripts/deploy-counter.ts",
     "upgrade": "movehat run scripts/upgrade-counter.ts",
     "run-script": "movehat run scripts/run-script.ts",
     "demo-fork": "movehat run scripts/demo-fork.ts",
     "demo-harness-fork": "movehat run scripts/demo-harness-fork.ts",
-    "compile": "movehat compile"
+    "compile": "movehat compile",
+    "lint": "movehat lint",
+    "prove": "movehat prove"
   },
   "dependencies": {
     "movehat": "workspace:*",

@@ -1,5 +1,16 @@
-import { existsSync, rmSync } from "fs";
-import { join } from "path";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
+import { homedir } from "os";
+import { dirname, join, parse, relative, resolve, sep } from "path";
 import { Account } from "@aptos-labs/ts-sdk";
 import {
   defaultChildProcessAdapter,
@@ -9,6 +20,7 @@ import {
 import { resolveMovementBinary, sanitizeMovementEnv } from "../utils/movementCli.js";
 import { logger, isVerbose, colors, symbols } from "../ui/index.js";
 import { withTimedSpinner, withSpinner } from "../ui/spinner.js";
+import { UnsafePathError } from "../errors.js";
 
 /**
  * Substrings that always surface from a node subprocess regardless of
@@ -41,6 +53,121 @@ export interface LocalNodeOptions {
 }
 
 const MOVEMENT_API_PORT = 8080;
+const NODE_MARKER = ".movehat-local-node";
+const NODE_MARKER_CONTENT = "movehat-managed-local-node\n";
+const LEGACY_SENTINELS = ["0", "mint.key", "waypoint.txt"] as const;
+
+function isSameOrChild(pathname: string, parent: string): boolean {
+  return pathname === parent || pathname.startsWith(`${parent}${sep}`);
+}
+
+function canonicalizePotentialPath(pathname: string): string {
+  const absolute = resolve(pathname);
+  if (existsSync(absolute)) return realpathSync(absolute);
+  let ancestor = dirname(absolute);
+  while (!existsSync(ancestor) && dirname(ancestor) !== ancestor) {
+    ancestor = dirname(ancestor);
+  }
+  return resolve(realpathSync(ancestor), relative(ancestor, absolute));
+}
+
+function assertNoSymlinkBelow(pathname: string, basePath: string): void {
+  const base = resolve(basePath);
+  if (!isSameOrChild(pathname, base)) return;
+  let cursor = base;
+  for (const part of relative(base, pathname).split(sep).filter(Boolean)) {
+    cursor = join(cursor, part);
+    if (!existsSync(cursor)) return;
+    if (lstatSync(cursor).isSymbolicLink()) {
+      throw new UnsafePathError(
+        `Refusing local-node path with a symlinked component: ${cursor}`,
+        pathname
+      );
+    }
+  }
+}
+
+function assertSafeNodeDirectory(pathname: string): string {
+  const absolute = resolve(pathname);
+  if (existsSync(absolute) && lstatSync(absolute).isSymbolicLink()) {
+    throw new UnsafePathError(`Refusing symlinked local-node directory: ${absolute}`, absolute);
+  }
+  assertNoSymlinkBelow(absolute, process.cwd());
+  assertNoSymlinkBelow(absolute, homedir());
+  const canonical = canonicalizePotentialPath(absolute);
+  const root = parse(canonical).root;
+  const cwd = realpathSync(process.cwd());
+  const home = realpathSync(homedir());
+  if (canonical === root || canonical === cwd || canonical === home || isSameOrChild(cwd, canonical)) {
+    throw new UnsafePathError(
+      `Refusing unsafe local-node directory: ${canonical}. Choose a dedicated child directory.`,
+      canonical
+    );
+  }
+  if (existsSync(canonical) && !lstatSync(canonical).isDirectory()) {
+    throw new UnsafePathError(`Local-node path is not a directory: ${canonical}`, canonical);
+  }
+  return canonical;
+}
+
+function writeMarker(directory: string): void {
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  chmodSync(directory, 0o700);
+  const marker = join(directory, NODE_MARKER);
+  if (existsSync(marker) && (lstatSync(marker).isSymbolicLink() || !lstatSync(marker).isFile())) {
+    throw new UnsafePathError(`Invalid local-node ownership marker: ${marker}`, directory);
+  }
+  writeFileSync(marker, NODE_MARKER_CONTENT, { mode: 0o600 });
+  chmodSync(marker, 0o600);
+}
+
+function hasValidMarker(directory: string): boolean {
+  const marker = join(directory, NODE_MARKER);
+  return existsSync(marker) && lstatSync(marker).isFile() &&
+    !lstatSync(marker).isSymbolicLink() && readFileSync(marker, "utf8") === NODE_MARKER_CONTENT;
+}
+
+function isRecognizedLegacyLayout(directory: string): boolean {
+  const names = readdirSync(directory);
+  if (names.some((name) => lstatSync(join(directory, name)).isSymbolicLink())) {
+    return false;
+  }
+  return LEGACY_SENTINELS.every((name) => {
+    const sentinel = join(directory, name);
+    if (!existsSync(sentinel)) return false;
+    const stat = lstatSync(sentinel);
+    return name === "0" ? stat.isDirectory() : stat.isFile();
+  });
+}
+
+function prepareManagedDirectory(pathname: string): string {
+  const directory = assertSafeNodeDirectory(pathname);
+  if (!existsSync(directory) || readdirSync(directory).length === 0) {
+    writeMarker(directory);
+    return directory;
+  }
+  if (hasValidMarker(directory)) return directory;
+
+  if (isRecognizedLegacyLayout(directory)) {
+    logger.warning(`Adopting recognized Movehat 0.6 local-node state at ${directory}.`);
+    writeMarker(directory);
+    return directory;
+  }
+
+  throw new UnsafePathError(
+    `Refusing unowned local-node directory: ${directory}. Move it aside or choose an empty directory.`,
+    directory
+  );
+}
+
+function removeManagedDirectory(pathname: string): void {
+  const directory = assertSafeNodeDirectory(pathname);
+  const empty = !existsSync(directory) || readdirSync(directory).length === 0;
+  if (!empty && !hasValidMarker(directory) && !isRecognizedLegacyLayout(directory)) {
+    throw new UnsafePathError(`Refusing to remove unowned local-node directory: ${directory}`, directory);
+  }
+  rmSync(directory, { recursive: true, force: true });
+}
 
 export interface LocalNodeInfo {
   rpcUrl: string;
@@ -115,10 +242,14 @@ export class LocalNodeManager {
       logger.kv("Ready port", String(this.options.readyPort), 2);
       logger.newline();
 
-      // Clean state if force restart
+      this.options.testDir = prepareManagedDirectory(this.options.testDir);
+
+      // Clean state if force restart. Recursive removal requires the marker
+      // verified above, then a fresh marker is installed for the child.
       if (this.options.forceRestart && existsSync(this.options.testDir)) {
         logger.step("Cleaning previous node state...");
-        rmSync(this.options.testDir, { recursive: true, force: true });
+        removeManagedDirectory(this.options.testDir);
+        writeMarker(this.options.testDir);
       }
 
       // Build command arguments
@@ -141,7 +272,7 @@ export class LocalNodeManager {
       this.spawned = this.adapter.spawn({
         command: usesDefaultAdapter ? resolveMovementBinary() : "movement",
         args,
-        ...(usesDefaultAdapter ? { env: sanitizeMovementEnv() } : {}),
+        env: sanitizeMovementEnv(),
         stdio: this.options.silent ? "ignore" : "pipe",
       });
 
@@ -203,6 +334,7 @@ export class LocalNodeManager {
       await withTimedSpinner("Waiting for node to be ready", () =>
         this.waitForReady(60000)
       );
+      writeMarker(this.options.testDir);
 
       logger.newline();
 
@@ -379,7 +511,7 @@ export class LocalNodeManager {
 
     if (existsSync(this.options.testDir)) {
       logger.step(`Cleaning node data at ${this.options.testDir}...`);
-      rmSync(this.options.testDir, { recursive: true, force: true });
+      removeManagedDirectory(this.options.testDir);
       logger.success("Node data cleaned");
     }
   }

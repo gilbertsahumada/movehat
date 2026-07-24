@@ -19,6 +19,12 @@ export interface RunCliOptions {
   throwOnNonZeroExit?: boolean | undefined;
 }
 
+export interface InterruptSignalProcess {
+  exitCode: string | number | null | undefined;
+  on(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+  removeListener(signal: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+}
+
 /**
  * Spawns a CLI command through the injectable adapter, redacts well-known
  * secret shapes from stdout and stderr before returning, and throws
@@ -71,4 +77,57 @@ export async function runCli(
   }
 
   return result;
+}
+
+/**
+ * Run an attached child until it exits, forwarding parent termination signals
+ * through an AbortSignal so a signal aimed only at Movehat cannot orphan the
+ * child. The parent exits naturally with the conventional shell status after
+ * the child has closed, which keeps Ctrl+C output free of stack traces.
+ */
+export async function runCliUntilInterrupted(
+  input: RunInput,
+  options: RunCliOptions = {},
+  signalProcess: InterruptSignalProcess = process
+): Promise<RunResult> {
+  const controller = new AbortController();
+  let receivedSignal: "SIGINT" | "SIGTERM" | undefined;
+  const onSigint = () => {
+    receivedSignal ??= "SIGINT";
+    controller.abort();
+  };
+  const onSigterm = () => {
+    receivedSignal ??= "SIGTERM";
+    controller.abort();
+  };
+
+  // Keep both listeners installed until the child has closed. Removing a
+  // one-shot listener after the first signal would restore Node's default
+  // behaviour, letting a second Ctrl+C kill Movehat before child cleanup.
+  signalProcess.on("SIGINT", onSigint);
+  signalProcess.on("SIGTERM", onSigterm);
+  try {
+    const signal = input.signal
+      ? AbortSignal.any([input.signal, controller.signal])
+      : controller.signal;
+    // The wrapper must observe the child's final result before callers decide
+    // how to handle it, otherwise runCli's default non-zero exception would
+    // prevent us from attaching the parent signal that caused the shutdown.
+    // An explicit caller override remains authoritative.
+    const interruptOptions: RunCliOptions = {
+      ...options,
+      throwOnNonZeroExit: options.throwOnNonZeroExit ?? false,
+    };
+    const result = await runCli({ ...input, signal }, interruptOptions);
+    if (receivedSignal) {
+      result.interruptedByParent = receivedSignal;
+    }
+    return result;
+  } finally {
+    signalProcess.removeListener("SIGINT", onSigint);
+    signalProcess.removeListener("SIGTERM", onSigterm);
+    if (receivedSignal && signalProcess.exitCode == null) {
+      signalProcess.exitCode = receivedSignal === "SIGINT" ? 130 : 143;
+    }
+  }
 }

@@ -5,7 +5,7 @@ A Move smart contract project built with Movehat.
 ## Prerequisites
 
 **Required:**
-- **Node.js v18+** - [Download](https://nodejs.org/)
+- **Node.js v20+** - [Download](https://nodejs.org/)
 - **Movement CLI** - **REQUIRED** for compiling contracts
 
   Install: [Movement CLI Installation Guide](https://docs.movementnetwork.xyz/devs/movementCLI)
@@ -22,17 +22,18 @@ A Move smart contract project built with Movehat.
 npm install
 ```
 
-### 2. Configure environment
+### 2. Configure environment (public networks only)
 
-Copy `.env.example` to `.env` and fill in your credentials:
+The default workflow is local and needs no credentials. To deploy to a public
+network, copy `.env.example` to `.env` and add your key:
 
 ```bash
 cp .env.example .env
 ```
 
 Edit `.env`:
-```
-PRIVATE_KEY=your_private_key_here
+```env
+PRIVATE_KEY=<your private key>
 ```
 
 ### 3. Compile contracts
@@ -52,9 +53,11 @@ npm run compile
 npm test
 ```
 
-When you run `npm test`, you'll see an **interactive menu**:
+When you run `npm test` in a TTY, you'll see an **interactive menu**. In CI or
+another non-interactive shell, the same command runs all suites without
+waiting for input:
 
-```
+```text
 ? What tests do you want to run?
 ❯ Move unit tests (fast, no node required)
   TypeScript integration tests (starts local node)
@@ -77,22 +80,34 @@ When you run `npm test`, you'll see an **interactive menu**:
    - Run with: `npm run test:ts` or `movehat test --ts`
 
 **Commands:**
-- `npm test` - Interactive menu to choose test type
+- `npm test` - TTY menu, or all suites in non-interactive use
 - `npm run test:move` or `movehat test --move` - Only Move unit tests (fast)
 - `npm run test:ts` or `movehat test --ts` - Only TypeScript integration tests
 - `movehat test --all` - Both Move + TypeScript tests
 - `npm run test:watch` or `movehat test --watch` - TypeScript tests in watch mode
+- `npm run test:coverage` or `movehat test --coverage` - Move coverage summary
+- `movehat test --all --coverage` - Covered Move tests and summary, then TypeScript tests
+
+Coverage cannot be combined with `--watch`. `--coverage --ts` requires
+`--all`, and `--filter` applies only to the Move phase.
 
 ### 5. Deploy (optional)
 
 ```bash
+# Safe default: local chain (movelite when available)
 npx movehat run scripts/deploy-counter.ts
+
+# Explicit public-network opt-in
+npx movehat run scripts/deploy-counter.ts --network testnet
 ```
+
+Network precedence is `--network`, `MOVEHAT_NETWORK`, `MH_DEFAULT_NETWORK`,
+then `defaultNetwork` from `movehat.config.ts`.
 
 ## Project Structure
 
-```
-{{PROJECT_NAME}}/
+```text
+{{projectName}}/
 ├── move/                   # Move smart contracts
 │   ├── sources/
 │   │   └── Counter.move
@@ -108,9 +123,11 @@ npx movehat run scripts/deploy-counter.ts
 ## Available Commands
 
 - `npm run compile` - Compile Move contracts (auto-detects addresses)
+- `npm run lint` - Lint Move contracts
+- `npm run prove` - Run the Move Prover (runs until it finishes or you interrupt it)
 - `npm test` - Run integration tests
 - `npm run test:watch` - Run tests in watch mode
-- `npx movehat run scripts/deploy-counter.ts` - Deploy and initialize counter
+- `npx movehat run scripts/deploy-counter.ts` - Deploy locally and initialize counter
 
 ## How Named Addresses Work
 

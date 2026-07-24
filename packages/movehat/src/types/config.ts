@@ -70,6 +70,7 @@ export interface LocalTestOptions {
     forkName?: string;                  // Name for the fork (default: 'test-local')
     forkPort?: number;                  // Fork server port (default: 8080)
     forkResetState?: boolean;           // Clear fork state before tests (default: true)
+    forkOverwrite?: boolean;            // Recreate an existing fork after preflighting the replacement RPC
     /**
      * Optional API key sent as `Authorization: Bearer <key>` on every
      * outgoing Movement API request made by the fork's

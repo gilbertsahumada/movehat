@@ -26,6 +26,7 @@ vi.mock("../api.js", () => ({
 }));
 
 import { ForkServer } from "../server.js";
+import { MovementApiError } from "../errors.js";
 
 /**
  * Helper to set up a minimal fork directory so ForkServer.start() succeeds.
@@ -170,6 +171,23 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(body.message).toContain("connection refused");
   });
 
+  it("returns 410 when the pinned view snapshot was pruned", async () => {
+    fakeApi.view.mockRejectedValueOnce(new MovementApiError(
+      "gone",
+      "http_error",
+      { statusCode: 410, upstreamErrorCode: "version_pruned" }
+    ));
+
+    const { status, body } = await postView(
+      JSON.stringify({ function: "0x1::coin::supply" })
+    );
+
+    expect(status).toBe(410);
+    expect(body.error_code).toBe("fork_snapshot_pruned");
+    expect(body.message).toMatch(/recreate.*overwrite/i);
+    expect(body.message).toMatch(/resetState.*cannot/i);
+  });
+
   it("redacts upstream view errors before logging or returning them", async () => {
     const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const rawSecret = "0x" + "a".repeat(64);
@@ -187,7 +205,7 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(logged).toContain("***REDACTED***");
   });
 
-  it("forwards Accept and X-Aptos-Client headers to upstream", async () => {
+  it("forwards JSON Accept and X-Aptos-Client headers to upstream", async () => {
     fakeApi.view.mockResolvedValueOnce(["forwarded"]);
 
     server = new ForkServer(forkDir, 0);
@@ -199,7 +217,7 @@ describe("ForkServer — POST /v1/view proxy", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/x-bcs",
+        "Accept": "application/json",
         "X-Aptos-Client": "my-test-client/1.0",
       },
       body: JSON.stringify({ function: "0x1::coin::supply" }),
@@ -209,10 +227,22 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(fakeApi.view).toHaveBeenCalledWith(
       { function: "0x1::coin::supply" },
       {
-        Accept: "application/x-bcs",
+        Accept: "application/json",
         "X-Aptos-Client": "my-test-client/1.0",
       },
+      "0",
     );
+  });
+
+  it("rejects BCS view responses with a JSON 406 before contacting upstream", async () => {
+    const res = await startAndFetch("/v1/view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/x-bcs" },
+      body: JSON.stringify({ function: "0x1::coin::supply" }),
+    });
+    expect(res.status).toBe(406);
+    expect(await res.json()).toMatchObject({ error_code: "unsupported_response_format" });
+    expect(fakeApi.view).not.toHaveBeenCalled();
   });
 
   it("returns 413 body_too_large when the request body exceeds 1 MiB", async () => {

@@ -10,6 +10,11 @@ const basePath = process.env.MOVEHAT_DOCS_BASE_PATH ?? '';
 /** @type {import('next').NextConfig} */
 const config = {
   output: 'export',
+  // Next 15's legacy lint wrapper cannot consume the workspace flat config.
+  // Docs sources are linted explicitly by the root `pnpm lint` quality gate.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     unoptimized: true,
   },

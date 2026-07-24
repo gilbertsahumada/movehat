@@ -99,8 +99,6 @@ export function updateMoveToml(moveDir: string, detectedAddresses: Set<string>):
   }
 
   let content = fs.readFileSync(moveTomlPath, "utf-8");
-  const addedAddresses: string[] = [];
-
   // Parse existing addresses from [addresses] section
   const existingAddresses = new Set<string>();
   const addressesMatch = content.match(/\[addresses\]([\s\S]*?)(?=\[|$)/);

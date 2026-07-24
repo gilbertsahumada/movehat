@@ -49,7 +49,7 @@ export async function snapshot(options: SnapshotOptions = {}): Promise<string> {
     // command injection. Pass throwOnNonZeroExit:false so the exitCode is
     // observable below — the stderr/dir defenses are belt-and-suspenders
     // on top of the exitCode check.
-    const { stdout, stderr, exitCode } = await runCli(
+    const { stderr, exitCode } = await runCli(
       {
         command: 'aptos',
         args: ['move', 'sim', 'init', '--path', snapshotPath],
