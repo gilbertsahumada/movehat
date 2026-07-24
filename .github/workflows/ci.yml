@@ -188,12 +188,10 @@ jobs:
 
   # E2E tests + integration suite
   e2e-tests:
-    name: Public Testnet & External CLI (advisory)
+    name: Example, Movelite & Testnet Gates
     runs-on: ubuntu-latest
     needs: [build, unit-tests]
     timeout-minutes: 15
-    continue-on-error: true
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.base_ref == 'main'
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -274,16 +272,24 @@ jobs:
 
       - name: Run clean-install smoke test
         # This installs a candidate tarball into an isolated prefix and may
-        # resolve user-template dependencies from npm. Keep it in the
-        # external, advisory job rather than the deterministic PR gate.
+        # resolve user-template dependencies from npm. Advisory + main-only:
+        # external npm resolution must not gate a develop PR.
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.base_ref == 'main'
         run: bash scripts/smoke-test.sh
 
       - name: Run E2E tests
+        # Advisory + main-only: drives the CLI against live public testnet.
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.base_ref == 'main'
         run: pnpm test:e2e:quick
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
       - name: Run integration suite (zero-mock)
+        # Advisory + main-only: the fork test reads live public testnet.
+        continue-on-error: true
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.base_ref == 'main'
         run: pnpm test:integration
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
@@ -314,6 +320,11 @@ jobs:
         run: MOVEHAT_EXPECT_BACKEND=movelite pnpm assert-backend
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+          # A cold GitHub runner boots movelite (plus the probe's deploy) in
+          # ~25-30s; the 20s local-dev default flakes here. 60s keeps a
+          # meaningful ceiling — the slow Movement node fallback is minutes —
+          # while the backend-identity assertion still catches a wrong backend.
+          MOVEHAT_EXPECT_BOOT_MAX_MS: '60000'
 
       - name: Example suite (Tier 2 gate — movelite backend)
         # The counter-example mocha suite is all-local: the fixtures share

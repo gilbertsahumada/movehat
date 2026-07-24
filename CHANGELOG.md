@@ -142,6 +142,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated on a sub-PR branch behind the source change that removed
   `ForkAlreadyExistsError` and added `invalid_argument`, so `api:check` failed
   on the combined `develop` tree; each sub-PR passed alone. Closes #389.
+- CI now scopes advisory to the individual external steps instead of the whole
+  E2E job. The local deterministic gates — the `vi.mock` guard, the Movelite
+  backend gate (#302), and the `test:example` movelite suite — are required on
+  both `develop` and `main`, so a broken canonical local flow fails the PR
+  instead of passing green. Only the genuinely-external steps (`smoke-test`,
+  `test:e2e:quick`, `test:integration`) stay advisory and main-only, so no
+  develop PR depends on live public testnet. Closes #393.
 
 ### Security
 
