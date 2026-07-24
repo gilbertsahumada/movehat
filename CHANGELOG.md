@@ -137,6 +137,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ls movehat-*.tgz | head -1`, which sorted alphabetically and could pick a
   stale lower-version `.tgz` left in `packages/movehat/` — silently validating
   an old build in place of the current one. Closes #387.
+- Regenerated the committed API-extractor reports (`etc/*.api.md`) to match the
+  public surface after the recovery stack merged. The reports had been
+  generated on a sub-PR branch behind the source change that removed
+  `ForkAlreadyExistsError` and added `invalid_argument`, so `api:check` failed
+  on the combined `develop` tree; each sub-PR passed alone. Closes #389.
 
 ### Security
 
