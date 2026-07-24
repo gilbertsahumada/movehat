@@ -135,50 +135,80 @@ export class ForkManager {
     }
 
     const apiClient = new MovementApiClient(nodeUrl, this.apiKey);
-    const ledgerInfo = await apiClient.getLedgerInfo();
 
-    const metadata: ForkMetadata = {
-      network: networkName,
-      nodeUrl,
-      chainId: ledgerInfo.chain_id,
-      ledgerVersion: ledgerInfo.ledger_version,
-      timestamp: ledgerInfo.ledger_timestamp,
-      epoch: ledgerInfo.epoch,
-      blockHeight: ledgerInfo.block_height,
-      createdAt: new Date().toISOString(),
-    };
+    // Contact upstream only when a fresh snapshot is actually needed: a
+    // brand-new fork or an explicit overwrite. Re-initializing an existing
+    // fork re-adopts its pinned snapshot, so it must work offline and must
+    // not move the ledger out from under the cached resources.
+    const existedBeforeLock = this.storage.exists();
+    let freshMetadata: ForkMetadata | undefined;
+    if (options.overwrite || !existedBeforeLock) {
+      const ledgerInfo = await apiClient.getLedgerInfo();
+      freshMetadata = {
+        network: networkName,
+        nodeUrl,
+        chainId: ledgerInfo.chain_id,
+        ledgerVersion: ledgerInfo.ledger_version,
+        timestamp: ledgerInfo.ledger_timestamp,
+        epoch: ledgerInfo.epoch,
+        blockHeight: ledgerInfo.block_height,
+        createdAt: new Date().toISOString(),
+      };
+    }
 
-    const cacheGeneration = await withFileLocks(
+    const resolved = await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
-      async () => {
+      async (): Promise<{ metadata: ForkMetadata; generation: string }> => {
         const existing = this.storage.exists();
-        this.storage.initialize();
+
         if (options.overwrite) {
+          this.storage.initialize();
           const generation = this.storage.advanceCacheGeneration();
           this.storage.clearAccounts();
           this.storage.clearResources();
-          this.storage.saveMetadata(metadata);
-          return generation;
+          this.storage.saveMetadata(freshMetadata!);
+          return { metadata: freshMetadata!, generation };
         }
+
         if (existing) {
-          // 0.6.0 contract: re-initializing an existing fork refreshes its
-          // snapshot metadata and keeps cached state (the documented mocha
-          // before-hook pattern re-initializes on every run).
-          logger.info(
-            `Fork already exists at ${this.forkPath}; refreshing snapshot metadata ` +
-              `(pass overwrite: true to reset cached state)`
-          );
+          // 0.6.0 contract: re-initializing an existing fork re-adopts its
+          // pinned snapshot and keeps cached state (the documented mocha
+          // before-hook pattern re-initializes on every run). Run the 0.6
+          // legacy-cache migration BEFORE storage.initialize() stamps the
+          // migration marker — otherwise the marker makes the migration a
+          // no-op and the per-address cache markers never get written.
           this.storage.migrateLegacyResourceCache();
+          this.storage.initialize();
+          const preserved = this.storage.loadMetadata();
+          // Keep the pinned ledger identity so the cache stays consistent
+          // with metadata; refresh only the connection labels from this
+          // call's arguments.
+          const readopted: ForkMetadata = { ...preserved, network: networkName, nodeUrl };
+          this.storage.saveMetadata(readopted);
+          logger.info(
+            `Fork already exists at ${this.forkPath}; re-adopting pinned snapshot ` +
+              `at ledger version ${preserved.ledgerVersion} (pass overwrite: true to reset cached state)`
+          );
+          return { metadata: readopted, generation: this.storage.getCacheGeneration() };
         }
-        this.storage.saveMetadata(metadata);
-        return this.storage.getCacheGeneration();
+
+        // Brand-new fork. freshMetadata was built above unless a concurrent
+        // process removed the fork between the pre-lock check and the lock.
+        if (freshMetadata === undefined) {
+          throw new Error(
+            'Fork state changed during initialization (concurrently removed); retry initialize()'
+          );
+        }
+        this.storage.initialize();
+        this.storage.saveMetadata(freshMetadata);
+        return { metadata: freshMetadata, generation: this.storage.getCacheGeneration() };
       }
     );
-    this.metadata = metadata;
+    this.metadata = resolved.metadata;
     this.apiClient = apiClient;
-    this.cacheGeneration = cacheGeneration;
+    this.cacheGeneration = resolved.generation;
 
-    logger.success(`Fork initialized at ledger version ${ledgerInfo.ledger_version}`);
+    logger.success(`Fork initialized at ledger version ${resolved.metadata.ledgerVersion}`);
   }
 
   /**
@@ -402,6 +432,7 @@ export class ForkManager {
     const normalizedAddress = normalizeAddress(address);
     const resourceType = `0x1::coin::CoinStore<${coinType}>`;
 
+    const expectedGeneration = this.expectedCacheGeneration();
     let fetched: CoinStore | null = null;
     try {
       fetched = assertCoinStore(await this.getResource(normalizedAddress, resourceType));
@@ -412,6 +443,13 @@ export class ForkManager {
     await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
+        // The pre-lock fetch may have observed the snapshot before a
+        // concurrent overwrite/reset rotated the generation; discard it so a
+        // stale balance is never written into the rotated snapshot (mirrors
+        // the read paths' generation guard).
+        if (this.storage.getCacheGeneration() !== expectedGeneration) {
+          fetched = null;
+        }
         const cached = this.storage.hasResource(normalizedAddress, resourceType)
           ? this.storage.getResource(normalizedAddress, resourceType)
           : null;

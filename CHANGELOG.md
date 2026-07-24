@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes are atomic and cross-process locked, and `Harness.createFork` keeps
   its positional API while adding an options form with explicit overwrite.
   The 0.6.0 contracts are preserved: `initialize()` on an existing fork
-  refreshes its snapshot metadata in place (the documented mocha before-hook
+  re-adopts its pinned snapshot (the documented mocha before-hook
   pattern keeps working; `overwrite: true` resets cached state), unreadable
   legacy resource-cache files are quarantined with a warning instead of
   failing the whole fork, funding accepts any non-negative integral amount,
@@ -94,6 +94,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upstream responses). Fork views and reads are pinned to the fork's snapshot
   ledger version, so results are deterministic for a given fork rather than
   tracking the upstream's current state. Closes #375.
+- Fork adoption of existing 0.6 snapshots is now correct and offline-safe.
+  `initialize()` ran the 0.6 legacy-cache migration after `storage.initialize()`
+  had already stamped the migration marker, so the migration self-cancelled and
+  the per-address cache markers were never written — an offline or pruned 0.6
+  fork then forced an upstream read and failed. Re-initializing an existing fork
+  also refetched the ledger and moved the pinned version while keeping the old
+  cache, so metadata and cached reads could disagree. `initialize()` now runs
+  the migration before stamping the marker, contacts upstream only for new or
+  `overwrite` forks, and re-adopts the existing pinned snapshot (refreshing only
+  the network/nodeUrl labels). `fundAccount()` now re-checks the cache
+  generation under the lock and discards a balance fetched before a concurrent
+  `overwrite`, so a stale balance is never written into a rotated snapshot.
+  Closes #391.
 - Cross-process publish locks now share a per-user namespace, reclaim dead
   owners immediately (including PIDs recycled by another user's process),
   preserve live owners, and clean up on signals; a lock-wait timeout names the
