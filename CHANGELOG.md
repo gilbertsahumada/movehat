@@ -157,6 +157,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Previously, with a local-first scaffold and `MOVEHAT_NETWORK=mainnet`, `fork
   create` wrote `mainnet-fork` while `fork serve` looked for `testnet-fork`;
   both commands now agree on the `<network>-fork` directory. Closes #395.
+- A fork's cached "complete snapshot" marker is now only trusted alongside its
+  resource file. `load()` runs the 0.6 legacy-cache migration without the fork
+  lock (it is synchronous and cannot take one), so a concurrent cache sweep
+  could leave a marker whose data file had already been deleted — and
+  `getAllResources()` then served that account as permanently empty, with no
+  upstream request and no error. Because the writer always commits the data
+  file before the marker, requiring both closes the window without changing the
+  public API. The migration also no longer aborts with `ENOENT` when a legacy
+  file it just listed is removed mid-scan; that address is left uncached and
+  refetched on demand. Affects `fork serve`, `fork fund`, `fork view-resource`,
+  and fork-mode `setupLocalTesting`. Closes #400.
 
 ### Internal
 

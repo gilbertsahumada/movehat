@@ -204,7 +204,15 @@ export class ForkStorage {
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           const quarantinePath = `${legacyPath}.corrupt-${Date.now()}-${randomUUID()}.bak`;
-          renameSync(legacyPath, quarantinePath);
+          try {
+            renameSync(legacyPath, quarantinePath);
+          } catch (renameError) {
+            // The file listed by readdirSync is already gone — another process
+            // cleared the cache mid-scan. Nothing to quarantine; the address
+            // simply stays uncached and is refetched on demand.
+            if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') continue;
+            throw renameError;
+          }
           logger.warning(
             `Skipping unreadable legacy fork resource cache ${file}: ${msg} ` +
               `Moved to ${quarantinePath}; the address will be refetched on demand.`
@@ -354,8 +362,18 @@ export class ForkStorage {
     return Object.prototype.hasOwnProperty.call(resources, resourceType);
   }
 
+  /**
+   * A complete-snapshot marker is only trusted alongside its data file.
+   * `saveAllResources` always writes the data file before the marker (including
+   * an empty `{}` snapshot), so a marker without data means the pair was torn
+   * apart — by a concurrent `clearResources()` or an interrupted write — and the
+   * address must be refetched rather than served as an empty snapshot.
+   */
   hasAllResources(address: string): boolean {
-    return existsSync(this.getAllResourcesMarkerPath(address));
+    return (
+      existsSync(this.getAllResourcesMarkerPath(address)) &&
+      existsSync(this.getResourceFilePath(address))
+    );
   }
 
   /**

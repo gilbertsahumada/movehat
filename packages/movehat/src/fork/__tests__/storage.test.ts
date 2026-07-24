@@ -325,6 +325,79 @@ describe('ForkStorage', () => {
       expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
     });
 
+    it('does not trust an all-resources marker whose data file is gone', () => {
+      // saveAllResources always writes the data file before the marker, so a
+      // lone marker means the pair was torn apart. Serving it as a complete
+      // snapshot would silently answer {} for an account that has resources.
+      vol.fromJSON({
+        [`${forkPath}/cache/0x1.all-resources`]: 'complete\n',
+      });
+      const storage = new ForkStorage(forkPath);
+
+      expect(storage.hasAllResources('0x1')).toBe(false);
+    });
+
+    it('does not trust a marker written while the cache was swept mid-migration', async () => {
+      // load() runs migrateLegacyResourceCache() without the fork lock, so a
+      // concurrent clearResources() can delete the data file in the window
+      // between reading it and writing its marker. Reproduce that window
+      // deterministically by deleting the file as the migration reads it.
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: JSON.stringify({ '0x1::a::A': { value: 1 } }),
+      });
+      const fs = await import('fs');
+      const realReadFileSync = fs.readFileSync;
+      const readSpy = vi
+        .spyOn(fs, 'readFileSync')
+        .mockImplementation(((path: unknown, ...rest: unknown[]) => {
+          const data = (realReadFileSync as (...args: unknown[]) => unknown)(path, ...rest);
+          if (String(path) === `${forkPath}/resources/0x1.json`) {
+            vol.unlinkSync(`${forkPath}/resources/0x1.json`);
+          }
+          return data;
+        }) as unknown as typeof fs.readFileSync);
+
+      const storage = new ForkStorage(forkPath);
+      storage.migrateLegacyResourceCache();
+      readSpy.mockRestore();
+
+      // The orphan marker really is written — that is the race.
+      expect(vol.existsSync(`${forkPath}/cache/0x1.all-resources`)).toBe(true);
+      // It must not be served as a complete snapshot.
+      expect(storage.hasAllResources('0x1')).toBe(false);
+    });
+
+    it('tolerates a legacy resource file that vanishes mid-scan', async () => {
+      vol.fromJSON({
+        [`${forkPath}/resources/0x1.json`]: JSON.stringify({ '0x1::a::A': { value: 1 } }),
+        [`${forkPath}/resources/0x2.json`]: JSON.stringify({ '0x1::b::B': { value: 2 } }),
+      });
+      const fs = await import('fs');
+      const realReadFileSync = fs.readFileSync;
+      const readSpy = vi
+        .spyOn(fs, 'readFileSync')
+        .mockImplementation(((path: unknown, ...rest: unknown[]) => {
+          if (String(path) === `${forkPath}/resources/0x1.json`) {
+            vol.unlinkSync(`${forkPath}/resources/0x1.json`);
+            const missing: NodeJS.ErrnoException = new Error(
+              `ENOENT: no such file or directory, open '${String(path)}'`
+            );
+            missing.code = 'ENOENT';
+            throw missing;
+          }
+          return (realReadFileSync as (...args: unknown[]) => unknown)(path, ...rest);
+        }) as unknown as typeof fs.readFileSync);
+
+      const storage = new ForkStorage(forkPath);
+      expect(() => storage.migrateLegacyResourceCache()).not.toThrow();
+      readSpy.mockRestore();
+
+      // The vanished address is simply left uncached; healthy ones migrate.
+      expect(storage.hasAllResources('0x1')).toBe(false);
+      expect(storage.hasAllResources('0x2')).toBe(true);
+      expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
+
     it('advances cache generations without clearing migration state', () => {
       const storage = new ForkStorage(forkPath);
       storage.initialize();
