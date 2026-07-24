@@ -9,14 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Public testnet and mainnet transactions no longer receive Movehat's known
-  deterministic development key. Projects created with 0.6.0 that keep
+- Public-network transactions no longer receive Movehat's known deterministic
+  development key. It is now limited to the `local` / `movelite` network names
+  pointing at a loopback endpoint; 0.6.0 also injected it for `testnet` against
+  the public Movement testnet endpoint. Projects created with 0.6.0 that keep
   `defaultNetwork: "testnet"` must either switch their default to `"local"`
   for the credential-free development flow, or configure `PRIVATE_KEY`, global
   `accounts`, or `networks.<name>.accounts` before submitting transactions.
-  Mainnet must also be declared explicitly in `movehat.config.ts`. Read-only
-  public forks still need no signing key; an RPC API key is independent from a
-  signing account. Closes #373. Tracks #371.
+  Mainnet is unaffected — it never received the key and still must be declared
+  explicitly in `movehat.config.ts`. Read-only public forks still need no
+  signing key; an RPC API key is independent from a signing account.
+  Closes #373. Tracks #371.
 - Non-interactive `movehat init` now requires an explicit project name and
   refuses to overwrite an existing destination without `--force`. 0.6.0
   automation that piped the name to a flagless `movehat init` or refreshed
@@ -33,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flagless `movehat test` were silently green no-ops; they now execute the
   Move and TypeScript suites (which may require the Movement CLI) — pass
   `--move` or `--ts` to scope the run.
+- `movehat fork serve` now answers `/v1/view` requests carrying
+  `Accept: application/x-bcs` with HTTP 406 `unsupported_response_format`
+  instead of forwarding the header upstream as 0.6.0 did. The JSON fork server
+  cannot represent a BCS response while pinning every read to the fork's
+  snapshot ledger version, so the unsupported combination now fails fast rather
+  than returning data the fork cannot guarantee. Clients that requested BCS view
+  encoding must read the JSON form; `X-Aptos-Client` still round-trips. Reads
+  whose pinned version has been pruned upstream answer HTTP 410
+  `fork_snapshot_pruned`, which clients should treat as "recreate the fork".
 
 ### Added
 
@@ -43,7 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ForkServerOptions`, and the child-process adapter types
   (`ChildProcessSignal`, `ChildProcessEnvironment`, and the run input/result
   shapes). Consumers writing typed config or a custom process adapter can now
-  import them directly instead of restating the shapes. Closes #377.
+  import them directly instead of restating the shapes. The error types these
+  flows raise are exported from `movehat` as well — `NetworkConflictError`,
+  `TransactionOutcomeUnknownError`, `UnsafePathError`,
+  `InvalidPersistedStateError`, `MovementApiError`, `ForkDataNotFoundError`,
+  and `ForkSnapshotPrunedError` — so callers can branch on the failure kind
+  with `instanceof` instead of matching message strings. Closes #377.
 
 ### Changed
 
@@ -127,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and bypass only legacy RPC mismatches. Artifact inspection after an on-chain
   success is best-effort; only persistence failure raises `PostPublishError`.
   Submitted transactions whose final status cannot be confirmed now raise a
-  typed, non-retryable unknown-outcome error carrying the transaction hash.
+  typed unknown-outcome error carrying the transaction hash, documented as
+  unsafe to retry automatically.
   The 0.6.0 read contracts are preserved: `loadDeployment` still returns
   `null` for unreadable records (with a warning) so the documented
   `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
