@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-24
 
 ### Breaking
 
@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automation that piped the name to a flagless `movehat init` or refreshed
   template files into an existing directory must pass the name as an argument
   and add `--force`. Closes #376. Tracks #371.
+- Combining an explicit public network selector with local test fixtures now
+  fails with a typed `NetworkConflictError` instead of silently ignoring the
+  selector: `movehat --network testnet test --ts` (or a script that calls
+  `setupTestFixture` under that flag) exits 1 where 0.6.0 ran locally anyway.
+  Drop the flag or pass `--network local` / `--network movelite` for fixture
+  runs; only `movelite` is normalized into the local backend family.
+- Bare `movehat test` in a non-interactive shell now runs all suites instead
+  of exiting 0 without running anything. 0.6.0 CI pipelines that invoked
+  flagless `movehat test` were silently green no-ops; they now execute the
+  Move and TypeScript suites (which may require the Movement CLI) — pass
+  `--move` or `--ts` to scope the run.
 
 ### Added
 
@@ -49,7 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supports explicit relative/absolute paths, package installs, local or global
   npm bins, and safe fallback to Movement node. Local-node state is protected
   by ownership markers with conservative migration of recognized 0.6 layouts.
-- CLI actions are awaited and non-interactive `movehat test` runs all suites.
+- CLI actions are awaited end-to-end, so command failures reliably set a
+  nonzero exit code.
 - Intentional long-running commands can opt out of process timeouts explicitly:
   the prover and TypeScript watch mode run until completion or Ctrl+C, while
   compile, lint, coverage, and normal test commands retain finite limits.
