@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { loadUserConfig } from '../../core/config.js';
+import { loadUserConfig, resolveNetworkEndpoint } from '../../core/config.js';
 import { ForkServer } from '../../fork/server.js';
 import { logger } from '../../ui/index.js';
 
@@ -22,23 +22,20 @@ export default async function forkServeCommand(options: ForkServeOptions): Promi
       // Use specified path
       forkPath = options.fork;
     } else {
-      // Use default fork path based on current network
+      // Resolve the default fork via the same central policy as `fork create`
+      // (honors MH_CLI_NETWORK / MOVEHAT_NETWORK / MH_DEFAULT_NETWORK / config),
+      // so both commands agree on which <network>-fork directory to use.
+      // fork serve only reads data, so no signing account is required.
       const config = await loadUserConfig();
       const explicitNetwork = process.env.MH_CLI_NETWORK;
-      let networkName = explicitNetwork || config.defaultNetwork || 'testnet';
-      if (!explicitNetwork && (networkName === 'local' || networkName === 'movelite')) {
+      let endpoint = resolveNetworkEndpoint(config);
+      if (!explicitNetwork && (endpoint.network === 'local' || endpoint.network === 'movelite')) {
         // Forks are snapshots of remote networks; a local default cannot
         // name one, so serve the conventional testnet fork instead.
-        networkName = 'testnet';
+        endpoint = resolveNetworkEndpoint(config, 'testnet');
       }
 
-      // Lightweight validation: only check if network exists in config
-      // Don't validate accounts/keys since fork serve only reads data
-      if (!config.networks || !config.networks[networkName]) {
-        throw new Error(`Network "${networkName}" not found in config. Available networks: ${Object.keys(config.networks || {}).join(', ')}`);
-      }
-
-      forkPath = join(process.cwd(), '.movehat', 'forks', `${networkName}-fork`);
+      forkPath = join(process.cwd(), '.movehat', 'forks', `${endpoint.network}-fork`);
     }
 
     // Verify fork exists

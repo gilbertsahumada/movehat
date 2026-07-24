@@ -55,11 +55,11 @@ runtime package to pass. None of these reach the packed `movehat` npm
 artifact; they affect the docs-site dependency tree and related
 workspace build tooling.
 
-Tracked state (2026-07-20):
+Tracked state (2026-07-24):
 
 - Current `pnpm audit --prod --audit-level critical`: passes with zero
-  critical advisories (14 non-critical production findings remain: 7 high,
-  6 moderate, 1 low).
+  critical advisories (24 non-critical production findings remain: 12 high,
+  11 moderate, 1 low).
 - Socket's Next.js warning was actionable. The docs site moved from
   `next@^15.3.3` to the patched, same-major `next@^15.5.20`; the docs build is
   a required deterministic gate. No Next.js major upgrade or compatibility

@@ -121,6 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `if (!loadDeployment(...)) deploy()` flow self-heals, minimal hand-written
   recovery records without `deployer`/`timestamp` still parse, and detected
   named addresses still bind to the deployer's address. Closes #374.
+- `movehat fork serve` now resolves its default fork through the same central
+  network policy as `fork create` (honoring `MH_CLI_NETWORK`, `MOVEHAT_NETWORK`,
+  `MH_DEFAULT_NETWORK`, then config), instead of reading only `MH_CLI_NETWORK`.
+  Previously, with a local-first scaffold and `MOVEHAT_NETWORK=mainnet`, `fork
+  create` wrote `mainnet-fork` while `fork serve` looked for `testnet-fork`;
+  both commands now agree on the `<network>-fork` directory. Closes #395.
 
 ### Internal
 
@@ -156,6 +162,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `js-yaml` within major 4 to address documented advisories without broad
   dependency overrides. The full workspace audit is scheduled and
   informational until accepted advisories have a versioned allowlist.
+- Resynced the `SECURITY.md` non-critical advisory inventory with the current
+  `pnpm audit --prod` (24 findings: 12 high, 11 moderate, 1 low; zero critical),
+  correcting a stale count so the documented posture matches reality. None of
+  these reach the published `movehat` artifact. Closes #395.
 
 ## [0.6.0] - 2026-07-12
 
