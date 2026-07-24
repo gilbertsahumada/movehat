@@ -320,6 +320,11 @@ jobs:
         run: MOVEHAT_EXPECT_BACKEND=movelite pnpm assert-backend
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+          # A cold GitHub runner boots movelite (plus the probe's deploy) in
+          # ~25-30s; the 20s local-dev default flakes here. 60s keeps a
+          # meaningful ceiling — the slow Movement node fallback is minutes —
+          # while the backend-identity assertion still catches a wrong backend.
+          MOVEHAT_EXPECT_BOOT_MAX_MS: '60000'
 
       - name: Example suite (Tier 2 gate — movelite backend)
         # The counter-example mocha suite is all-local: the fixtures share
