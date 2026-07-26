@@ -306,7 +306,6 @@ export class ForkStorage {
     // (undocumented)
     getCacheGeneration(): string;
     getResource(address: string, resourceType: string): unknown | null;
-    // (undocumented)
     hasAllResources(address: string): boolean;
     hasResource(address: string, resourceType: string): boolean;
     initialize(): void;
