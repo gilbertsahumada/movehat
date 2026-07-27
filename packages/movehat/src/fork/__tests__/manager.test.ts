@@ -444,6 +444,23 @@ describe("ForkManager — account + resource fetch", () => {
     }).storage;
     expect(storage.hasAllResources(TEST_ADDR)).toBe(false);
   });
+
+  it("refetches when an all-resources marker outlived its data file", async () => {
+    // An unlocked legacy migration racing a cache sweep can leave the marker
+    // behind without its data file. Serving that as a complete snapshot would
+    // answer {} forever; the address must be refetched instead.
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: "0x1::counter::Counter", data: { value: "7" } },
+    ]);
+    await mgr.getAllResources(TEST_ADDR);
+    rmSync(join(forkPath, "resources", `${TEST_ADDR}.json`), { force: true });
+    fakeApi.getAccountResources.mockClear();
+
+    const all = await mgr.getAllResources(TEST_ADDR);
+
+    expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
+    expect(all["0x1::counter::Counter"]).toEqual({ value: "7" });
+  });
 });
 
 describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount", () => {
