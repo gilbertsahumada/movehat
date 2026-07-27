@@ -7,6 +7,7 @@ import {
 import { loadUserConfig, resolveNetworkConfig } from "../core/config.js";
 import { MovehatConfig } from "../types/config.js";
 import { AccountManager } from "../core/AccountManager.js";
+import { sanitizeRpcUrl } from "../core/deployments.js";
 import { logger } from "../ui/index.js";
 
 export interface TestEnvironment {
@@ -38,7 +39,7 @@ export async function setupTestEnvironment(networkName?: string): Promise<TestEn
   logger.success("Test environment ready");
   logger.plain(`   Account: ${account.accountAddress.toString()}`);
   logger.plain(`   Network: ${config.network}`);
-  logger.plain(`   RPC: ${config.rpc}`);
+  logger.plain(`   RPC: ${sanitizeRpcUrl(config.rpc)}`);
   logger.newline();
 
   return {

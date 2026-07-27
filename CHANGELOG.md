@@ -207,6 +207,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pnpm audit --prod` (24 findings: 12 high, 11 moderate, 1 low; zero critical),
   correcting a stale count so the documented posture matches reality. None of
   these reach the published `movehat` artifact. Closes #395.
+- `setupTestEnvironment()` no longer prints the configured RPC URL verbatim, so
+  a `url` or `MOVEMENT_RPC_URL` carrying userinfo or an `apiKey` query parameter
+  can no longer reach a terminal or CI log. It now uses the same `sanitizeRpcUrl`
+  treatment the deploy and upgrade paths already applied to the same value.
+  Closes #402.
+- The loopback allowlist that gates the deterministic development key now
+  recognizes the IPv6 literal. `URL.hostname` returns IPv6 hosts bracketed, so
+  the previous unbracketed `::1` entry could never match and a `local` network
+  on `http://[::1]:8080/v1` was refused as an unrecognized test endpoint. The
+  gate failed closed, so no endpoint ever received the key incorrectly.
+  Closes #402.
 
 ## [0.6.0] - 2026-07-12
 

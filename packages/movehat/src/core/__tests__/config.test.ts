@@ -585,6 +585,17 @@ describe("resolveNetworkConfig", () => {
       );
     });
 
+    it("treats the IPv6 loopback literal as a known test endpoint", async () => {
+      // `URL.hostname` brackets IPv6 literals, so the allowlist must too.
+      const user = baseUserConfig({
+        local: { url: "http://[::1]:8080/v1", chainId: "local" },
+      });
+      const resolved = await resolveNetworkConfig(user, "local");
+      expect(resolved.privateKey).toBe(
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+      );
+    });
+
     it("rejects malformed URLs without injecting (URL parser returns false)", async () => {
       const user = baseUserConfig({
         testnet: { url: "not-a-url", chainId: "testnet" },
