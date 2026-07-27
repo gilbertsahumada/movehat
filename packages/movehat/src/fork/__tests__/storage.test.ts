@@ -358,8 +358,11 @@ describe('ForkStorage', () => {
         }) as unknown as typeof fs.readFileSync);
 
       const storage = new ForkStorage(forkPath);
-      storage.migrateLegacyResourceCache();
-      readSpy.mockRestore();
+      try {
+        storage.migrateLegacyResourceCache();
+      } finally {
+        readSpy.mockRestore();
+      }
 
       // The orphan marker really is written — that is the race.
       expect(vol.existsSync(`${forkPath}/cache/0x1.all-resources`)).toBe(true);
@@ -389,8 +392,11 @@ describe('ForkStorage', () => {
         }) as unknown as typeof fs.readFileSync);
 
       const storage = new ForkStorage(forkPath);
-      expect(() => storage.migrateLegacyResourceCache()).not.toThrow();
-      readSpy.mockRestore();
+      try {
+        expect(() => storage.migrateLegacyResourceCache()).not.toThrow();
+      } finally {
+        readSpy.mockRestore();
+      }
 
       // The vanished address is simply left uncached; healthy ones migrate.
       expect(storage.hasAllResources('0x1')).toBe(false);
