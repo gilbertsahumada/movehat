@@ -32,7 +32,9 @@ const inFlightLoads = new Map<string, Promise<MovehatUserConfig>>();
 
 // Only loopback endpoints may receive the deterministic development key.
 // Public testnets require explicit credentials just like mainnet.
-const LOCAL_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+// `URL.hostname` returns IPv6 literals bracketed (RFC 3986), so the allowlist
+// must store the bracketed form to ever match one.
+const LOCAL_ENDPOINT_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function isKnownTestEndpoint(url: string): boolean {
   try {
