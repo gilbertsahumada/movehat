@@ -1,13 +1,20 @@
 import { createHash } from 'node:crypto';
 import { MovementApiClient } from './api.js';
-import { ForkStorage } from './storage.js';
+import {
+  beginCacheGenerationTransition,
+  commitCacheGenerationTransition,
+  ForkCacheGenerationTransitionError,
+  ForkStorage,
+} from './storage.js';
 import type { ForkMetadata, AccountState, CoinStore } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
 import { assertCoinStore } from './validation.js';
 import {
   ForkDataNotFoundError,
+  ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
+  FORK_SNAPSHOT_CHANGED_GUIDANCE,
   FORK_SNAPSHOT_PRUNED_GUIDANCE,
   MovementApiError,
   isMovementApiHttpError,
@@ -82,15 +89,76 @@ export class ForkManager {
 
   private expectedCacheGeneration(): string {
     if (this.cacheGeneration === null) {
-      this.cacheGeneration = this.storage.getCacheGeneration();
+      this.cacheGeneration = this.readCurrentCacheGeneration();
     }
     return this.cacheGeneration;
   }
 
-  private translateReadError(error: unknown, notFoundMessage: string): never {
+  private snapshotChanged(cause?: unknown): never {
+    throw new ForkSnapshotChangedError(
+      FORK_SNAPSHOT_CHANGED_GUIDANCE,
+      cause === undefined ? {} : { cause }
+    );
+  }
+
+  private readCurrentCacheGeneration(): string {
+    try {
+      return this.storage.getCacheGeneration();
+    } catch (error) {
+      if (error instanceof ForkCacheGenerationTransitionError) {
+        this.snapshotChanged(error);
+      }
+      throw error;
+    }
+  }
+
+  private migrateLegacyResourceCache(): void {
+    try {
+      this.storage.migrateLegacyResourceCache();
+    } catch (error) {
+      if (error instanceof ForkCacheGenerationTransitionError) {
+        this.snapshotChanged(error);
+      }
+      throw error;
+    }
+  }
+
+  private assertCacheGeneration(expectedGeneration: string): void {
+    if (this.readCurrentCacheGeneration() !== expectedGeneration) {
+      this.snapshotChanged();
+    }
+  }
+
+  /**
+   * Optimistic, lock-free snapshot read. Generation transitions are published
+   * before multi-file rotations and committed last, so matching checks around
+   * an atomic JSON read establish a stable linearization point without adding a
+   * cross-process lock to every cache hit.
+   */
+  private readAtGeneration<T>(expectedGeneration: string, read: () => T): T {
+    this.assertCacheGeneration(expectedGeneration);
+    const value = read();
+    this.assertCacheGeneration(expectedGeneration);
+    return value;
+  }
+
+  private metadataAtGeneration(expectedGeneration: string): ForkMetadata {
+    return this.readAtGeneration(expectedGeneration, () => {
+      if (!this.metadata) {
+        this.metadata = this.storage.loadMetadata();
+      }
+      return this.metadata;
+    });
+  }
+
+  private translateReadError(
+    error: unknown,
+    notFoundMessage: string,
+    ledgerVersion: string
+  ): never {
     if (isPrunedSnapshotError(error)) {
       throw new ForkSnapshotPrunedError(
-        `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
+        `Fork snapshot at ledger version ${ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
         { cause: error }
       );
     }
@@ -163,10 +231,14 @@ export class ForkManager {
 
         if (options.overwrite) {
           this.storage.initialize();
-          const generation = this.storage.advanceCacheGeneration();
+          const generation = beginCacheGenerationTransition(this.forkPath);
+          // Leave the transition marker in place if any mutation fails. A
+          // subsequent explicit overwrite can recover safely; readers never
+          // accept a partially-rotated snapshot as stable.
           this.storage.clearAccounts();
           this.storage.clearResources();
           this.storage.saveMetadata(freshMetadata!);
+          commitCacheGenerationTransition(this.forkPath, generation);
           return { metadata: freshMetadata!, generation };
         }
 
@@ -177,7 +249,9 @@ export class ForkManager {
           // legacy-cache migration BEFORE storage.initialize() stamps the
           // migration marker — otherwise the marker makes the migration a
           // no-op and the per-address cache markers never get written.
-          this.storage.migrateLegacyResourceCache();
+          const generation = this.readCurrentCacheGeneration();
+          this.migrateLegacyResourceCache();
+          this.assertCacheGeneration(generation);
           this.storage.initialize();
           const preserved = this.storage.loadMetadata();
           // Keep the pinned ledger identity so the cache stays consistent
@@ -189,7 +263,7 @@ export class ForkManager {
             `Fork already exists at ${this.forkPath}; re-adopting pinned snapshot ` +
               `at ledger version ${preserved.ledgerVersion} (pass overwrite: true to reset cached state)`
           );
-          return { metadata: readopted, generation: this.storage.getCacheGeneration() };
+          return { metadata: readopted, generation };
         }
 
         // Brand-new fork. freshMetadata was built above unless a concurrent
@@ -201,7 +275,7 @@ export class ForkManager {
         }
         this.storage.initialize();
         this.storage.saveMetadata(freshMetadata);
-        return { metadata: freshMetadata, generation: this.storage.getCacheGeneration() };
+        return { metadata: freshMetadata, generation: this.readCurrentCacheGeneration() };
       }
     );
     this.metadata = resolved.metadata;
@@ -221,11 +295,17 @@ export class ForkManager {
       throw new Error('Fork does not exist. Run `initialize()` first.');
     }
 
-    this.metadata = this.storage.loadMetadata();
-    this.storage.migrateLegacyResourceCache();
-    this.cacheGeneration = this.storage.getCacheGeneration();
+    // Establish metadata and generation from one stable state. A concurrent
+    // reset/overwrite publishes a transition marker before touching either, so
+    // this fails closed instead of memoizing a mismatched pair.
+    const generation = this.readCurrentCacheGeneration();
+    this.migrateLegacyResourceCache();
+    const metadata = this.storage.loadMetadata();
+    this.assertCacheGeneration(generation);
+    this.metadata = metadata;
+    this.cacheGeneration = generation;
     try {
-      this.apiClient = new MovementApiClient(this.metadata.nodeUrl, this.apiKey);
+      this.apiClient = new MovementApiClient(metadata.nodeUrl, this.apiKey);
     } catch (error) {
       if (error instanceof MovementApiError) {
         throw new MovementApiError(
@@ -241,32 +321,39 @@ export class ForkManager {
   }
 
   getMetadata(): ForkMetadata {
-    if (!this.metadata) {
-      this.metadata = this.storage.loadMetadata();
-    }
-    return this.metadata;
+    const expectedGeneration = this.expectedCacheGeneration();
+    return this.metadataAtGeneration(expectedGeneration);
   }
 
   async getAccount(address: string): Promise<AccountState> {
     const normalizedAddress = normalizeAddress(address);
+    const expectedGeneration = this.expectedCacheGeneration();
 
-    let accountState = this.storage.getAccount(normalizedAddress);
+    let accountState = this.readAtGeneration(
+      expectedGeneration,
+      () => this.storage.getAccount(normalizedAddress)
+    );
 
     if (!accountState) {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
-      const expectedGeneration = this.expectedCacheGeneration();
+      const ledgerVersion = this.metadataAtGeneration(expectedGeneration).ledgerVersion;
 
       logger.info(`Fetching account ${normalizedAddress} from network...`, 2);
       let accountData;
       try {
         accountData = await this.apiClient.getAccount(
           normalizedAddress,
-          this.getMetadata().ledgerVersion
+          ledgerVersion
         );
       } catch (error) {
-        this.translateReadError(error, `Account not found: ${normalizedAddress}`);
+        this.assertCacheGeneration(expectedGeneration);
+        this.translateReadError(
+          error,
+          `Account not found: ${normalizedAddress}`,
+          ledgerVersion
+        );
       }
 
       accountState = {
@@ -275,9 +362,7 @@ export class ForkManager {
       };
 
       accountState = await withFileLock(this.accountLockKey(), async () => {
-        if (this.storage.getCacheGeneration() !== expectedGeneration) {
-          return accountState!;
-        }
+        this.assertCacheGeneration(expectedGeneration);
         const cached = this.storage.getAccount(normalizedAddress);
         if (cached) return cached;
         this.storage.saveAccount(normalizedAddress, accountState!);
@@ -291,16 +376,26 @@ export class ForkManager {
 
   async getResource(address: string, resourceType: string): Promise<unknown> {
     const normalizedAddress = normalizeAddress(address);
+    const expectedGeneration = this.expectedCacheGeneration();
 
-    if (this.storage.hasResource(normalizedAddress, resourceType)) {
-      return this.storage.getResource(normalizedAddress, resourceType);
+    const cachedResource = this.readAtGeneration(expectedGeneration, () => {
+      if (!this.storage.hasResource(normalizedAddress, resourceType)) {
+        return { found: false as const };
+      }
+      return {
+        found: true as const,
+        value: this.storage.getResource(normalizedAddress, resourceType),
+      };
+    });
+    if (cachedResource.found) {
+      return cachedResource.value;
     }
     let resource: unknown;
     {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
-      const expectedGeneration = this.expectedCacheGeneration();
+      const ledgerVersion = this.metadataAtGeneration(expectedGeneration).ledgerVersion;
 
       logger.info(`Fetching resource ${resourceType} for ${normalizedAddress}...`, 2);
 
@@ -308,13 +403,11 @@ export class ForkManager {
         const resourceData = await this.apiClient.getAccountResource(
           normalizedAddress,
           resourceType,
-          this.getMetadata().ledgerVersion
+          ledgerVersion
         );
         resource = resourceData.data;
         resource = await withFileLock(this.resourceLockKey(), async () => {
-          if (this.storage.getCacheGeneration() !== expectedGeneration) {
-            return resource;
-          }
+          this.assertCacheGeneration(expectedGeneration);
           if (this.storage.hasResource(normalizedAddress, resourceType)) {
             return this.storage.getResource(normalizedAddress, resourceType);
           }
@@ -323,9 +416,11 @@ export class ForkManager {
           return resource;
         });
       } catch (error) {
+        this.assertCacheGeneration(expectedGeneration);
         this.translateReadError(
           error,
-          `Resource ${resourceType} not found for account ${normalizedAddress}`
+          `Resource ${resourceType} not found for account ${normalizedAddress}`,
+          ledgerVersion
         );
       }
     }
@@ -335,24 +430,34 @@ export class ForkManager {
 
   async getAllResources(address: string): Promise<Record<string, unknown>> {
     const normalizedAddress = normalizeAddress(address);
+    const expectedGeneration = this.expectedCacheGeneration();
 
-    let resources = this.storage.getAllResources(normalizedAddress);
+    const cachedResources = this.readAtGeneration(expectedGeneration, () => ({
+      resources: this.storage.getAllResources(normalizedAddress),
+      complete: this.storage.hasAllResources(normalizedAddress),
+    }));
+    let resources = cachedResources.resources;
 
-    if (!this.storage.hasAllResources(normalizedAddress)) {
+    if (!cachedResources.complete) {
       if (!this.apiClient) {
         throw new Error('Fork not initialized. Call initialize() or load() first.');
       }
-      const expectedGeneration = this.expectedCacheGeneration();
+      const ledgerVersion = this.metadataAtGeneration(expectedGeneration).ledgerVersion;
 
       logger.info(`Fetching all resources for ${normalizedAddress}...`, 2);
       let resourcesList;
       try {
         resourcesList = await this.apiClient.getAccountResources(
           normalizedAddress,
-          this.getMetadata().ledgerVersion
+          ledgerVersion
         );
       } catch (error) {
-        this.translateReadError(error, `Account not found: ${normalizedAddress}`);
+        this.assertCacheGeneration(expectedGeneration);
+        this.translateReadError(
+          error,
+          `Account not found: ${normalizedAddress}`,
+          ledgerVersion
+        );
       }
 
       resources = Object.create(null) as Record<string, unknown>;
@@ -361,9 +466,7 @@ export class ForkManager {
       }
 
       resources = await withFileLock(this.resourceLockKey(), async () => {
-        if (this.storage.getCacheGeneration() !== expectedGeneration) {
-          return resources;
-        }
+        this.assertCacheGeneration(expectedGeneration);
         if (this.storage.hasAllResources(normalizedAddress)) {
           return this.storage.getAllResources(normalizedAddress);
         }
@@ -397,16 +500,21 @@ export class ForkManager {
     if (!this.apiClient) {
       throw new Error('Fork not initialized. Call initialize() or load() first.');
     }
+    const expectedGeneration = this.expectedCacheGeneration();
+    const ledgerVersion = this.metadataAtGeneration(expectedGeneration).ledgerVersion;
     try {
-      return await this.apiClient.view(
+      const result = await this.apiClient.view(
         payload,
         extraHeaders,
-        this.getMetadata().ledgerVersion
+        ledgerVersion
       );
+      this.assertCacheGeneration(expectedGeneration);
+      return result;
     } catch (error) {
+      this.assertCacheGeneration(expectedGeneration);
       if (isPrunedSnapshotError(error)) {
         throw new ForkSnapshotPrunedError(
-          `Fork snapshot at ledger version ${this.getMetadata().ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
+          `Fork snapshot at ledger version ${ledgerVersion} is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
           { cause: error }
         );
       }
@@ -416,7 +524,9 @@ export class ForkManager {
 
   async setResource(address: string, resourceType: string, data: unknown): Promise<void> {
     const normalizedAddress = normalizeAddress(address);
+    const expectedGeneration = this.expectedCacheGeneration();
     await withFileLock(this.resourceLockKey(), async () => {
+      this.assertCacheGeneration(expectedGeneration);
       this.storage.saveResource(normalizedAddress, resourceType, data);
     });
     logger.success(`Updated resource ${resourceType} for ${normalizedAddress}`, 2);
@@ -444,12 +554,10 @@ export class ForkManager {
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
         // The pre-lock fetch may have observed the snapshot before a
-        // concurrent overwrite/reset rotated the generation; discard it so a
-        // stale balance is never written into the rotated snapshot (mirrors
-        // the read paths' generation guard).
-        if (this.storage.getCacheGeneration() !== expectedGeneration) {
-          fetched = null;
-        }
+        // concurrent overwrite/reset rotated the generation. Fail closed so
+        // neither that balance nor a synthetic replacement reaches the new
+        // snapshot.
+        this.assertCacheGeneration(expectedGeneration);
         const cached = this.storage.hasResource(normalizedAddress, resourceType)
           ? this.storage.getResource(normalizedAddress, resourceType)
           : null;
@@ -482,7 +590,11 @@ export class ForkManager {
   }
 
   listAccounts(): string[] {
-    return this.storage.listAccounts();
+    const expectedGeneration = this.expectedCacheGeneration();
+    return this.readAtGeneration(
+      expectedGeneration,
+      () => this.storage.listAccounts()
+    );
   }
 
   /**
@@ -525,12 +637,15 @@ export class ForkManager {
     logger.newline();
     logger.step("Resetting fork state...");
 
+    const expectedGeneration = this.expectedCacheGeneration();
     const generation = await withFileLocks(
       [this.accountLockKey(), this.resourceLockKey()],
       async () => {
-        const nextGeneration = this.storage.advanceCacheGeneration();
+        this.assertCacheGeneration(expectedGeneration);
+        const nextGeneration = beginCacheGenerationTransition(this.forkPath);
         this.storage.clearAccounts();
         this.storage.clearResources();
+        commitCacheGenerationTransition(this.forkPath, nextGeneration);
         return nextGeneration;
       }
     );
@@ -552,6 +667,7 @@ export class ForkManager {
    */
   async getOrCreateAccount(address: string): Promise<AccountState> {
     const normalizedAddress = normalizeAddress(address);
+    const expectedGeneration = this.expectedCacheGeneration();
 
     try {
       return await this.getAccount(normalizedAddress);
@@ -563,6 +679,7 @@ export class ForkManager {
       };
 
       const account = await withFileLock(this.accountLockKey(), async () => {
+        this.assertCacheGeneration(expectedGeneration);
         const cached = this.storage.getAccount(normalizedAddress);
         if (cached) return cached;
         this.storage.saveAccount(normalizedAddress, newAccount);

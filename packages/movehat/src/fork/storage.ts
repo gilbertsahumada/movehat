@@ -61,7 +61,49 @@ function writePrivateFile(path: string, data: string): void {
 
 const LEGACY_MIGRATION_MARKER = '.resource-cache-v1';
 const CACHE_GENERATION_FILE = '.generation';
+const CACHE_GENERATION_TRANSITION_PREFIX = 'transition:';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** @internal Signals that a multi-file fork state rotation has not committed. */
+export class ForkCacheGenerationTransitionError extends Error {
+  constructor(path: string) {
+    super(`Fork cache generation is changing at ${path}`);
+    this.name = 'ForkCacheGenerationTransitionError';
+  }
+}
+
+function generationPath(forkPath: string): string {
+  return join(forkPath, 'cache', CACHE_GENERATION_FILE);
+}
+
+/**
+ * Publish an in-progress marker before changing metadata or clearing caches.
+ * Readers that overlap the rotation fail closed; the stable UUID is committed
+ * only after every related file mutation succeeds.
+ *
+ * @internal This module is not a package export.
+ */
+export function beginCacheGenerationTransition(forkPath: string): string {
+  const cacheDir = join(forkPath, 'cache');
+  ensurePrivateDirectory(cacheDir);
+  const generation = randomUUID();
+  writePrivateFile(
+    generationPath(forkPath),
+    `${CACHE_GENERATION_TRANSITION_PREFIX}${generation}\n`
+  );
+  return generation;
+}
+
+/** @internal This module is not a package export. */
+export function commitCacheGenerationTransition(
+  forkPath: string,
+  generation: string
+): void {
+  if (!UUID_RE.test(generation)) {
+    throw new Error('Cannot commit an invalid fork cache generation');
+  }
+  writePrivateFile(generationPath(forkPath), `${generation}\n`);
+}
 
 function readJsonFile<T>(path: string, label: string): T {
   try {
@@ -123,24 +165,27 @@ export class ForkStorage {
   getCacheGeneration(): string {
     const cacheDir = join(this.forkPath, 'cache');
     ensurePrivateDirectory(cacheDir);
-    const generationPath = join(cacheDir, CACHE_GENERATION_FILE);
-    if (!existsSync(generationPath)) {
+    const path = generationPath(this.forkPath);
+    if (!existsSync(path)) {
       const generation = randomUUID();
-      writePrivateFile(generationPath, `${generation}\n`);
+      writePrivateFile(path, `${generation}\n`);
       return generation;
     }
-    const generation = readFileSync(generationPath, 'utf8').trim();
+    const generation = readFileSync(path, 'utf8').trim();
+    if (generation.startsWith(CACHE_GENERATION_TRANSITION_PREFIX)) {
+      throw new ForkCacheGenerationTransitionError(path);
+    }
     if (!UUID_RE.test(generation)) {
-      throw new Error(`Invalid fork cache generation at ${generationPath}`);
+      throw new Error(`Invalid fork cache generation at ${path}`);
     }
     return generation;
   }
 
   advanceCacheGeneration(): string {
+    const generation = randomUUID();
     const cacheDir = join(this.forkPath, 'cache');
     ensurePrivateDirectory(cacheDir);
-    const generation = randomUUID();
-    writePrivateFile(join(cacheDir, CACHE_GENERATION_FILE), `${generation}\n`);
+    commitCacheGenerationTransition(this.forkPath, generation);
     return generation;
   }
 
@@ -174,7 +219,12 @@ export class ForkStorage {
 
     const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
     if (!existsSync(migrationMarker)) writePrivateFile(migrationMarker, 'complete\n');
-    this.getCacheGeneration();
+    const path = generationPath(this.forkPath);
+    if (!existsSync(path)) {
+      writePrivateFile(path, `${randomUUID()}\n`);
+    } else {
+      chmodSync(path, PRIVATE_FILE_MODE);
+    }
   }
 
   /**

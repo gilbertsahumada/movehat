@@ -45,8 +45,18 @@ export class ForkSnapshotPrunedError extends Error {
   }
 }
 
+export class ForkSnapshotChangedError extends Error {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    this.name = 'ForkSnapshotChangedError';
+  }
+}
+
 export const FORK_SNAPSHOT_PRUNED_GUIDANCE =
   'Recreate the fork at a fresh ledger version (CLI: run movehat fork create again and confirm overwrite; API: initialize with overwrite: true). resetState() only clears local cache and cannot restore a pruned upstream snapshot.';
+
+export const FORK_SNAPSHOT_CHANGED_GUIDANCE =
+  'The fork snapshot changed after this ForkManager was loaded. Call load() to adopt the current snapshot or create a new ForkManager. If this came from movehat fork serve, restart the server.';
 
 export function isMovementApiHttpError(
   error: unknown,

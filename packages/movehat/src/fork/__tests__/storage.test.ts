@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { vol } from 'memfs';
-import { ForkStorage } from '../storage.js';
+import {
+  beginCacheGenerationTransition,
+  commitCacheGenerationTransition,
+  ForkCacheGenerationTransitionError,
+  ForkStorage,
+} from '../storage.js';
 
 // Mock fs module
 vi.mock('fs', async () => {
@@ -413,6 +418,37 @@ describe('ForkStorage', () => {
       expect(second).not.toBe(first);
       expect(storage.getCacheGeneration()).toBe(second);
       expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
+
+    it('fails closed between the transition marker and stable generation commit', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const next = beginCacheGenerationTransition(forkPath);
+
+      expect(() => storage.getCacheGeneration()).toThrow(
+        ForkCacheGenerationTransitionError
+      );
+      expect(
+        vol.readFileSync(`${forkPath}/cache/.generation`, 'utf8')
+      ).toBe(`transition:${next}\n`);
+
+      commitCacheGenerationTransition(forkPath, next);
+      expect(storage.getCacheGeneration()).toBe(next);
+    });
+
+    it('initialize preserves an interrupted transition for explicit recovery', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const next = beginCacheGenerationTransition(forkPath);
+
+      storage.initialize();
+
+      expect(
+        vol.readFileSync(`${forkPath}/cache/.generation`, 'utf8')
+      ).toBe(`transition:${next}\n`);
+      expect(() => storage.getCacheGeneration()).toThrow(
+        ForkCacheGenerationTransitionError
+      );
     });
   });
 
