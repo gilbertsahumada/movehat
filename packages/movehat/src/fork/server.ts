@@ -5,7 +5,9 @@ import { logger } from '../ui/index.js';
 import { redactSecrets } from '../utils/redact.js';
 import {
   FORK_SNAPSHOT_PRUNED_GUIDANCE,
+  FORK_SNAPSHOT_CHANGED_GUIDANCE,
   ForkDataNotFoundError,
+  ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
 } from './errors.js';
 
@@ -114,6 +116,14 @@ export class ForkServer {
     this.sendJSON(res, 410, {
       message: `The pinned fork snapshot is no longer available upstream. ${FORK_SNAPSHOT_PRUNED_GUIDANCE}`,
       error_code: 'fork_snapshot_pruned',
+      vm_error_code: null
+    });
+  }
+
+  private sendSnapshotChanged(res: http.ServerResponse): void {
+    this.sendJSON(res, 409, {
+      message: FORK_SNAPSHOT_CHANGED_GUIDANCE,
+      error_code: 'fork_snapshot_changed',
       vm_error_code: null
     });
   }
@@ -332,6 +342,10 @@ export class ForkServer {
         }
       }
     } catch (error) {
+      if (error instanceof ForkSnapshotChangedError) {
+        this.sendSnapshotChanged(res);
+        return;
+      }
       // Log full error server-side for diagnostics
       logger.error(`Error handling request: ${this.sanitizeErrorMessage(error instanceof Error ? error.message : String(error))}`);
 
@@ -546,6 +560,9 @@ export class ForkServer {
       const result = await this.forkManager.forwardView(payload, forwardableHeaders);
       this.sendJSON(res, 200, result);
     } catch (error) {
+      if (error instanceof ForkSnapshotChangedError) {
+        throw error;
+      }
       if (error instanceof ForkSnapshotPrunedError) {
         this.sendSnapshotPruned(res);
         return;
