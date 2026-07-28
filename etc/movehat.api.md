@@ -287,6 +287,13 @@ export interface ForkServerOptions {
 }
 
 // @public (undocumented)
+export class ForkSnapshotChangedError extends Error {
+    constructor(message: string, options?: {
+        cause?: unknown;
+    });
+}
+
+// @public (undocumented)
 export class ForkSnapshotPrunedError extends Error {
     constructor(message: string, options?: {
         cause?: unknown;

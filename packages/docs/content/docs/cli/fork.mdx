@@ -90,6 +90,11 @@ movehat fork serve --fork .movehat/forks/my-fork --port 8080
 - `GET /v1/accounts/:address/resource/:type` — Specific resource
 - `GET /v1/accounts/:address/resources` — All resources
 
+The server stays pinned to the snapshot it loaded. If another process
+overwrites or resets the same fork, subsequent requests return HTTP `409`
+with `error_code: "fork_snapshot_changed"`. Restart `movehat fork serve` to
+adopt the replacement snapshot; it is never reloaded silently.
+
 **Connect with the TypeScript SDK:**
 
 ```typescript

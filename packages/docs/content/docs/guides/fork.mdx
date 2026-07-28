@@ -158,6 +158,36 @@ console.log(`Forked from: ${metadata.network}`);
 console.log(`Chain ID: ${metadata.chainId}`);
 ```
 
+### Snapshot replacement and long-running processes
+
+Each `ForkManager` stays pinned to the snapshot generation it loaded. If
+another process overwrites or resets the same fork directory, the older
+manager throws `ForkSnapshotChangedError` instead of reading or modifying the
+replacement snapshot:
+
+```typescript
+import { ForkManager, ForkSnapshotChangedError } from 'movehat';
+
+try {
+  await fork.getResource('0x1', '0x1::example::Resource');
+} catch (error) {
+  if (error instanceof ForkSnapshotChangedError) {
+    fork.load(); // Explicitly adopt the current on-disk snapshot.
+  } else {
+    throw error;
+  }
+}
+```
+
+`movehat fork serve` responds with HTTP `409` and
+`fork_snapshot_changed` after its fork is replaced. Restart the server to load
+the new snapshot. MoveHat never switches snapshots silently inside a running
+manager or server.
+
+If an overwrite is interrupted, reads remain blocked rather than accepting
+partially-cleared state. Run `movehat fork create` for the same destination and
+confirm the overwrite to recover it.
+
 ## Fork Storage Structure
 
 Forks are stored as JSON files for easy inspection and version control:
@@ -274,5 +304,6 @@ But **commit** metadata and resources for reproducible tests.
 |-------|----------|
 | Fork creation fails | Check network URL and verify network is accessible |
 | Resource not found (404) | Verify account address exists and resource type is exact |
+| Fork snapshot changed (409) | Call `load()` on programmatic managers or restart `movehat fork serve` |
 | Port already in use | Use a different port: `--port 8081` |
 | Permission denied | Use a port above 1024 |
