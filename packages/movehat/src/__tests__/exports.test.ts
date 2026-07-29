@@ -12,6 +12,7 @@ const EXPECTED_RUNTIME_EXPORTS = [
   "ForkManager",
   "MovementApiClient",
   "ForkStorage",
+  "ForkCacheGenerationTransitionError",
   "ForkServer",
   "ModuleAlreadyDeployedError",
   "PostPublishError",

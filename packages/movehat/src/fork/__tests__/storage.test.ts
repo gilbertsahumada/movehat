@@ -3,9 +3,9 @@ import { vol } from 'memfs';
 import {
   beginCacheGenerationTransition,
   commitCacheGenerationTransition,
-  ForkCacheGenerationTransitionError,
   ForkStorage,
 } from '../storage.js';
+import { ForkCacheGenerationTransitionError } from '../errors.js';
 
 // Mock fs module
 vi.mock('fs', async () => {

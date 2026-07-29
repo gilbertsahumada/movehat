@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overwrites or resets their fork. Snapshot generation rotations use an
   explicit transition marker, so cached reads, in-flight upstream responses,
   local mutations, metadata, and account listings cannot silently mix two
-  ledger snapshots. Fork servers return HTTP 409 `fork_snapshot_changed` with
-  restart guidance, and an explicit overwrite can recover an interrupted
-  rotation. Closes #404.
+  ledger snapshots. Direct `ForkStorage` consumers can distinguish an
+  interrupted rotation through the exported
+  `ForkCacheGenerationTransitionError`. Fork servers return HTTP 409
+  `fork_snapshot_changed` with restart guidance, and an explicit overwrite can
+  recover an interrupted rotation. Closes #404.
 
 ## [0.7.0] - 2026-07-24
 

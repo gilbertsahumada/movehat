@@ -287,7 +287,16 @@ describe("ForkManager — initialize / load", () => {
     beginCacheGenerationTransition(forkPath);
 
     const reloaded = new ForkManager(forkPath);
-    expect(() => reloaded.load()).toThrow(ForkSnapshotChangedError);
+    let loadError: unknown;
+    try {
+      reloaded.load();
+    } catch (error) {
+      loadError = error;
+    }
+    expect(loadError).toBeInstanceOf(ForkSnapshotChangedError);
+    expect((loadError as Error).message).toMatch(
+      /movehat fork create.*initialize\(\).*overwrite: true/i
+    );
   });
 
   it("does not let a stale legacy migration mark a replacement cache as complete", async () => {
@@ -866,6 +875,16 @@ describe("ForkManager — stale instance contract", () => {
     expect(current.getMetadata().ledgerVersion).toBe("200");
     await expect(
       current.getResource(TEST_ADDR, "0x1::new::Resource")
+    ).resolves.toEqual({ fromLedger: "200" });
+
+    stale.load();
+    expect(stale.getMetadata().ledgerVersion).toBe("200");
+    await expect(stale.getAccount(TEST_ADDR)).resolves.toMatchObject({
+      sequenceNumber: "2",
+      authenticationKey: "0xnew",
+    });
+    await expect(
+      stale.getResource(TEST_ADDR, "0x1::new::Resource")
     ).resolves.toEqual({ fromLedger: "200" });
   });
 

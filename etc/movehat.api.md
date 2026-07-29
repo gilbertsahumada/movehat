@@ -204,6 +204,11 @@ export interface DeploymentInfo {
 // @public (undocumented)
 export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
 
+// @public
+export class ForkCacheGenerationTransitionError extends Error {
+    constructor(path: string);
+}
+
 // @public (undocumented)
 export class ForkDataNotFoundError extends Error {
     constructor(message: string, options?: {

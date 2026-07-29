@@ -14,6 +14,7 @@ import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
 import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
 import { logger } from '../ui/index.js';
+import { ForkCacheGenerationTransitionError } from './errors.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -75,14 +76,6 @@ let testHooks: ForkStorageTestHooks | undefined;
 /** @internal Test-only scheduling hooks; this module is not a package export. */
 export function __setForkStorageTestHooks(hooks?: ForkStorageTestHooks): void {
   testHooks = hooks;
-}
-
-/** @internal Signals that a multi-file fork state rotation has not committed. */
-export class ForkCacheGenerationTransitionError extends Error {
-  constructor(path: string) {
-    super(`Fork cache generation is changing at ${path}`);
-    this.name = 'ForkCacheGenerationTransitionError';
-  }
 }
 
 function generationPath(forkPath: string): string {

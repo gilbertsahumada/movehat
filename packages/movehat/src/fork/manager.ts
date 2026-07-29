@@ -3,7 +3,6 @@ import { MovementApiClient } from './api.js';
 import {
   beginCacheGenerationTransition,
   commitCacheGenerationTransition,
-  ForkCacheGenerationTransitionError,
   ForkStorage,
   migrateLegacyResourceCacheAtGeneration,
 } from './storage.js';
@@ -12,6 +11,7 @@ import { normalizeAddress } from '../utils/address.js';
 import { logger } from '../ui/index.js';
 import { assertCoinStore } from './validation.js';
 import {
+  ForkCacheGenerationTransitionError,
   ForkDataNotFoundError,
   ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
