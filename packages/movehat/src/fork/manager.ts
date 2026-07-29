@@ -5,6 +5,7 @@ import {
   commitCacheGenerationTransition,
   ForkCacheGenerationTransitionError,
   ForkStorage,
+  migrateLegacyResourceCacheAtGeneration,
 } from './storage.js';
 import type { ForkMetadata, AccountState, CoinStore } from '../types/fork.js';
 import { normalizeAddress } from '../utils/address.js';
@@ -112,9 +113,9 @@ export class ForkManager {
     }
   }
 
-  private migrateLegacyResourceCache(): void {
+  private migrateLegacyResourceCache(expectedGeneration: string): void {
     try {
-      this.storage.migrateLegacyResourceCache();
+      migrateLegacyResourceCacheAtGeneration(this.forkPath, expectedGeneration);
     } catch (error) {
       if (error instanceof ForkCacheGenerationTransitionError) {
         this.snapshotChanged(error);
@@ -136,10 +137,17 @@ export class ForkManager {
    * cross-process lock to every cache hit.
    */
   private readAtGeneration<T>(expectedGeneration: string, read: () => T): T {
-    this.assertCacheGeneration(expectedGeneration);
-    const value = read();
-    this.assertCacheGeneration(expectedGeneration);
-    return value;
+    try {
+      this.assertCacheGeneration(expectedGeneration);
+      const value = read();
+      this.assertCacheGeneration(expectedGeneration);
+      return value;
+    } catch (error) {
+      if (error instanceof ForkCacheGenerationTransitionError) {
+        this.snapshotChanged(error);
+      }
+      throw error;
+    }
   }
 
   private metadataAtGeneration(expectedGeneration: string): ForkMetadata {
@@ -250,7 +258,7 @@ export class ForkManager {
           // migration marker — otherwise the marker makes the migration a
           // no-op and the per-address cache markers never get written.
           const generation = this.readCurrentCacheGeneration();
-          this.migrateLegacyResourceCache();
+          this.migrateLegacyResourceCache(generation);
           this.assertCacheGeneration(generation);
           this.storage.initialize();
           const preserved = this.storage.loadMetadata();
@@ -299,7 +307,7 @@ export class ForkManager {
     // reset/overwrite publishes a transition marker before touching either, so
     // this fails closed instead of memoizing a mismatched pair.
     const generation = this.readCurrentCacheGeneration();
-    this.migrateLegacyResourceCache();
+    this.migrateLegacyResourceCache(generation);
     const metadata = this.storage.loadMetadata();
     this.assertCacheGeneration(generation);
     this.metadata = metadata;

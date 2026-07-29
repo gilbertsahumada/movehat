@@ -40,7 +40,12 @@ vi.mock("../api.js", () => ({
 
 // Static import after the mock declaration — vi hoists vi.mock calls.
 import { ForkManager } from "../manager.js";
-import { beginCacheGenerationTransition } from "../storage.js";
+import {
+  ForkStorage,
+  __setForkStorageTestHooks,
+  beginCacheGenerationTransition,
+  commitCacheGenerationTransition,
+} from "../storage.js";
 import {
   ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
@@ -283,6 +288,54 @@ describe("ForkManager — initialize / load", () => {
 
     const reloaded = new ForkManager(forkPath);
     expect(() => reloaded.load()).toThrow(ForkSnapshotChangedError);
+  });
+
+  it("does not let a stale legacy migration mark a replacement cache as complete", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const first = new ForkManager(forkPath);
+    await first.initialize(TEST_NODE_URL);
+
+    const storage = new ForkStorage(forkPath);
+    const legacyType = "0x1::legacy::Complete";
+    const partialType = "0x1::new::Partial";
+    const fetchedType = "0x1::new::Fetched";
+    storage.saveResource(TEST_ADDR, legacyType, { value: "legacy" });
+    rmSync(join(forkPath, "cache", ".resource-cache-v1"), { force: true });
+
+    let replacementGeneration: string | undefined;
+    __setForkStorageTestHooks({
+      beforeLegacyMarkerWrite: (address) => {
+        if (address === TEST_ADDR && replacementGeneration === undefined) {
+          replacementGeneration = beginCacheGenerationTransition(forkPath);
+          storage.clearResources();
+          storage.saveResource(TEST_ADDR, partialType, { value: "partial" });
+          commitCacheGenerationTransition(forkPath, replacementGeneration);
+        }
+      },
+    });
+
+    const stale = new ForkManager(forkPath);
+    try {
+      expect(() => stale.load()).toThrow(ForkSnapshotChangedError);
+    } finally {
+      __setForkStorageTestHooks();
+    }
+
+    expect(replacementGeneration).toBeDefined();
+    expect(storage.getCacheGeneration()).toBe(replacementGeneration);
+
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: fetchedType, data: { value: "fetched" } },
+    ]);
+    const current = new ForkManager(forkPath);
+    current.load();
+
+    const resources = await current.getAllResources(TEST_ADDR);
+    expect(fakeApi.getAccountResources).toHaveBeenCalledOnce();
+    expect(resources).toEqual({
+      [partialType]: { value: "partial" },
+      [fetchedType]: { value: "fetched" },
+    });
   });
 
   it("an explicit overwrite recovers an interrupted snapshot rotation", async () => {
