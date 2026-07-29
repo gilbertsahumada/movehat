@@ -512,6 +512,60 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
   });
 
+  it("translates a cache file disappearing during rotation into a snapshot error", async () => {
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: "0x1::a::A", data: { x: 1 } },
+    ]);
+    await mgr.getAllResources(TEST_ADDR);
+
+    const storage = new ForkStorage(forkPath);
+    let transitionStarted = false;
+    __setForkStorageTestHooks({
+      beforeAllResourcesMarkerRead: (address) => {
+        if (address === TEST_ADDR && !transitionStarted) {
+          transitionStarted = true;
+          beginCacheGenerationTransition(forkPath);
+          storage.clearResources();
+        }
+      },
+    });
+
+    try {
+      await expect(mgr.getAllResources(TEST_ADDR)).rejects.toBeInstanceOf(
+        ForkSnapshotChangedError
+      );
+    } finally {
+      __setForkStorageTestHooks();
+    }
+    expect(transitionStarted).toBe(true);
+  });
+
+  it("preserves a storage read error when the cache generation is stable", async () => {
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: "0x1::a::A", data: { x: 1 } },
+    ]);
+    await mgr.getAllResources(TEST_ADDR);
+
+    let markerRemoved = false;
+    __setForkStorageTestHooks({
+      beforeAllResourcesMarkerRead: (address) => {
+        if (address === TEST_ADDR && !markerRemoved) {
+          markerRemoved = true;
+          rmSync(join(forkPath, "cache", `${TEST_ADDR}.all-resources`));
+        }
+      },
+    });
+
+    try {
+      await expect(mgr.getAllResources(TEST_ADDR)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      __setForkStorageTestHooks();
+    }
+    expect(markerRemoved).toBe(true);
+  });
+
   it("rejects an all-resources fetch from before resetState", async () => {
     const pending = deferred<Array<{ type: string; data: { value: string } }>>();
     fakeApi.getAccountResources.mockReturnValueOnce(pending.promise);

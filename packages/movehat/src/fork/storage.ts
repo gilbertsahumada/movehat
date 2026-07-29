@@ -67,6 +67,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 
 interface ForkStorageTestHooks {
   beforeLegacyMarkerWrite?: ((address: string) => void) | undefined;
+  beforeAllResourcesMarkerRead?: ((address: string) => void) | undefined;
 }
 
 let testHooks: ForkStorageTestHooks | undefined;
@@ -464,6 +465,7 @@ export class ForkStorage {
       return false;
     }
 
+    testHooks?.beforeAllResourcesMarkerRead?.(address);
     const marker = readFileSync(markerPath, 'utf8').trim();
     // 0.6/0.7 markers predate generation scoping. Continue accepting them
     // when adopting existing snapshots; all markers written by this version

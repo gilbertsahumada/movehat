@@ -143,9 +143,13 @@ export class ForkManager {
       this.assertCacheGeneration(expectedGeneration);
       return value;
     } catch (error) {
-      if (error instanceof ForkCacheGenerationTransitionError) {
-        this.snapshotChanged(error);
-      }
+      if (error instanceof ForkSnapshotChangedError) throw error;
+      // Storage uses exists-then-read operations, while snapshot rotations
+      // unlink cache files after publishing the transition marker. If that
+      // race surfaces as ENOENT (or any other I/O error), re-check the
+      // generation before preserving the original error so stale reads keep
+      // the public ForkSnapshotChangedError contract.
+      this.assertCacheGeneration(expectedGeneration);
       throw error;
     }
   }
