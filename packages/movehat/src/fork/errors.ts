@@ -45,6 +45,40 @@ export class ForkSnapshotPrunedError extends Error {
   }
 }
 
+/**
+ * Raised when an existing fork is re-initialized with a different persisted
+ * network or endpoint identity.
+ */
+export class ForkIdentityMismatchError extends Error {
+  /** Network label stored with the cached snapshot. */
+  readonly storedNetwork: string;
+  /** Network label requested by the rejected initialization. */
+  readonly requestedNetwork: string;
+  /** Whether the requested network label differs from the stored label. */
+  readonly networkChanged: boolean;
+  /** Whether the normalized requested endpoint differs from the stored endpoint. */
+  readonly endpointChanged: boolean;
+
+  constructor(storedNetwork: string, requestedNetwork: string, endpointChanged: boolean) {
+    const networkChanged = storedNetwork !== requestedNetwork;
+    const changed = [
+      ...(networkChanged ? ['network'] : []),
+      ...(endpointChanged ? ['endpoint'] : []),
+    ].join(' and ') || 'requested identity';
+    const verb = networkChanged && endpointChanged ? 'differ' : 'differs';
+    super(
+      `Fork identity mismatch: ${changed} ${verb} from the cached snapshot. ` +
+        'Call load() to use the stored identity, initialize() with the original ' +
+        'network and endpoint, or pass overwrite: true to replace the snapshot.'
+    );
+    this.name = 'ForkIdentityMismatchError';
+    this.storedNetwork = storedNetwork;
+    this.requestedNetwork = requestedNetwork;
+    this.networkChanged = networkChanged;
+    this.endpointChanged = endpointChanged;
+  }
+}
+
 /** Signals that ForkStorage observed an uncommitted snapshot rotation. */
 export class ForkCacheGenerationTransitionError extends Error {
   constructor(path: string) {

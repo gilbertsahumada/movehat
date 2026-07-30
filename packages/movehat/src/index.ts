@@ -34,6 +34,7 @@ export { ForkStorage } from "./fork/storage.js";
 export { ForkServer } from "./fork/server.js";
 export {
   ForkCacheGenerationTransitionError,
+  ForkIdentityMismatchError,
   MovementApiError,
   ForkDataNotFoundError,
   ForkSnapshotChangedError,

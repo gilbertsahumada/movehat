@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { MovementApiClient } from './api.js';
+import { normalizeMovementApiUrl } from './endpoint.js';
 import {
   beginCacheGenerationTransition,
   commitCacheGenerationTransition,
@@ -13,6 +14,7 @@ import { assertCoinStore } from './validation.js';
 import {
   ForkCacheGenerationTransitionError,
   ForkDataNotFoundError,
+  ForkIdentityMismatchError,
   ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
   FORK_SNAPSHOT_CHANGED_GUIDANCE,
@@ -208,13 +210,7 @@ export class ForkManager {
     apiKey?: string,
     options: ForkInitializeOptions = {}
   ): Promise<void> {
-    if (apiKey === undefined) {
-      delete this.apiKey;
-    } else {
-      this.apiKey = apiKey;
-    }
-
-    const apiClient = new MovementApiClient(nodeUrl, this.apiKey);
+    const apiClient = new MovementApiClient(nodeUrl, apiKey);
 
     // Contact upstream only when a fresh snapshot is actually needed: a
     // brand-new fork or an explicit overwrite. Re-initializing an existing
@@ -255,9 +251,22 @@ export class ForkManager {
         }
 
         if (existing) {
+          const preserved = this.storage.loadMetadata();
+          const endpointChanged =
+            normalizeMovementApiUrl(preserved.nodeUrl) !== normalizeMovementApiUrl(nodeUrl);
+          if (preserved.network !== networkName || endpointChanged) {
+            throw new ForkIdentityMismatchError(
+              preserved.network,
+              networkName,
+              endpointChanged
+            );
+          }
+
           // 0.6.0 contract: re-initializing an existing fork re-adopts its
           // pinned snapshot and keeps cached state (the documented mocha
-          // before-hook pattern re-initializes on every run). Run the 0.6
+          // before-hook pattern re-initializes on every run). Identity is
+          // checked before touching cache state so a mismatch fails offline
+          // and without modifying the existing fork. Run the 0.6
           // legacy-cache migration BEFORE storage.initialize() stamps the
           // migration marker — otherwise the marker makes the migration a
           // no-op and the per-address cache markers never get written.
@@ -265,17 +274,11 @@ export class ForkManager {
           this.migrateLegacyResourceCache(generation);
           this.assertCacheGeneration(generation);
           this.storage.initialize();
-          const preserved = this.storage.loadMetadata();
-          // Keep the pinned ledger identity so the cache stays consistent
-          // with metadata; refresh only the connection labels from this
-          // call's arguments.
-          const readopted: ForkMetadata = { ...preserved, network: networkName, nodeUrl };
-          this.storage.saveMetadata(readopted);
           logger.info(
             `Fork already exists at ${this.forkPath}; re-adopting pinned snapshot ` +
               `at ledger version ${preserved.ledgerVersion} (pass overwrite: true to reset cached state)`
           );
-          return { metadata: readopted, generation };
+          return { metadata: preserved, generation };
         }
 
         // Brand-new fork. freshMetadata was built above unless a concurrent
@@ -290,6 +293,11 @@ export class ForkManager {
         return { metadata: freshMetadata, generation: this.readCurrentCacheGeneration() };
       }
     );
+    if (apiKey === undefined) {
+      delete this.apiKey;
+    } else {
+      this.apiKey = apiKey;
+    }
     this.metadata = resolved.metadata;
     this.apiClient = apiClient;
     this.cacheGeneration = resolved.generation;

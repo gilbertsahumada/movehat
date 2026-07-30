@@ -216,6 +216,15 @@ export class ForkDataNotFoundError extends Error {
     });
 }
 
+// @public
+export class ForkIdentityMismatchError extends Error {
+    constructor(storedNetwork: string, requestedNetwork: string, endpointChanged: boolean);
+    readonly endpointChanged: boolean;
+    readonly networkChanged: boolean;
+    readonly requestedNetwork: string;
+    readonly storedNetwork: string;
+}
+
 // @public (undocumented)
 export interface ForkInfo {
     // (undocumented)

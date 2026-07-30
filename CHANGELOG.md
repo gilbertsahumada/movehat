@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Re-initializing an existing fork now validates its persisted network and
+  endpoint identity locally before reusing cached state. Unchanged forks still
+  work offline (including equivalent trailing-slash URL forms), while identity
+  changes fail with the exported, URL-redacted
+  `ForkIdentityMismatchError`. Callers can use `load()` to keep the stored
+  identity or `initialize(..., { overwrite: true })` to replace the snapshot
+  and cache explicitly. Refs #405.
 - Long-running `ForkManager` and `movehat fork serve` instances now fail
   closed with the exported `ForkSnapshotChangedError` after another process
   overwrites or resets their fork. Snapshot generation rotations use an
