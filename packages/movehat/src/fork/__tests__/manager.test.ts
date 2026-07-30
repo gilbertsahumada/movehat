@@ -41,6 +41,13 @@ vi.mock("../api.js", () => ({
 // Static import after the mock declaration — vi hoists vi.mock calls.
 import { ForkManager } from "../manager.js";
 import {
+  ForkStorage,
+  __setForkStorageTestHooks,
+  beginCacheGenerationTransition,
+  commitCacheGenerationTransition,
+} from "../storage.js";
+import {
+  ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
   MovementApiError,
 } from "../errors.js";
@@ -272,6 +279,91 @@ describe("ForkManager — initialize / load", () => {
     mgr.setApiKey("key");
     expect(apiCtorCalls).toHaveLength(0);
   });
+
+  it("load fails closed while a snapshot rotation is incomplete", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const first = new ForkManager(forkPath);
+    await first.initialize(TEST_NODE_URL);
+    beginCacheGenerationTransition(forkPath);
+
+    const reloaded = new ForkManager(forkPath);
+    let loadError: unknown;
+    try {
+      reloaded.load();
+    } catch (error) {
+      loadError = error;
+    }
+    expect(loadError).toBeInstanceOf(ForkSnapshotChangedError);
+    expect((loadError as Error).message).toMatch(
+      /movehat fork create.*initialize\(\).*overwrite: true/i
+    );
+  });
+
+  it("does not let a stale legacy migration mark a replacement cache as complete", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const first = new ForkManager(forkPath);
+    await first.initialize(TEST_NODE_URL);
+
+    const storage = new ForkStorage(forkPath);
+    const legacyType = "0x1::legacy::Complete";
+    const partialType = "0x1::new::Partial";
+    const fetchedType = "0x1::new::Fetched";
+    storage.saveResource(TEST_ADDR, legacyType, { value: "legacy" });
+    rmSync(join(forkPath, "cache", ".resource-cache-v1"), { force: true });
+
+    let replacementGeneration: string | undefined;
+    __setForkStorageTestHooks({
+      beforeLegacyMarkerWrite: (address) => {
+        if (address === TEST_ADDR && replacementGeneration === undefined) {
+          replacementGeneration = beginCacheGenerationTransition(forkPath);
+          storage.clearResources();
+          storage.saveResource(TEST_ADDR, partialType, { value: "partial" });
+          commitCacheGenerationTransition(forkPath, replacementGeneration);
+        }
+      },
+    });
+
+    const stale = new ForkManager(forkPath);
+    try {
+      expect(() => stale.load()).toThrow(ForkSnapshotChangedError);
+    } finally {
+      __setForkStorageTestHooks();
+    }
+
+    expect(replacementGeneration).toBeDefined();
+    expect(storage.getCacheGeneration()).toBe(replacementGeneration);
+
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: fetchedType, data: { value: "fetched" } },
+    ]);
+    const current = new ForkManager(forkPath);
+    current.load();
+
+    const resources = await current.getAllResources(TEST_ADDR);
+    expect(fakeApi.getAccountResources).toHaveBeenCalledOnce();
+    expect(resources).toEqual({
+      [partialType]: { value: "partial" },
+      [fetchedType]: { value: "fetched" },
+    });
+  });
+
+  it("an explicit overwrite recovers an interrupted snapshot rotation", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const first = new ForkManager(forkPath);
+    await first.initialize(TEST_NODE_URL);
+    beginCacheGenerationTransition(forkPath);
+
+    fakeApi.getLedgerInfo.mockResolvedValue({
+      ...ledgerInfoFixture(),
+      ledger_version: "200",
+    });
+    const recovering = new ForkManager(forkPath);
+    await recovering.initialize(TEST_NODE_URL, "replacement", undefined, {
+      overwrite: true,
+    });
+
+    expect(recovering.getMetadata().ledgerVersion).toBe("200");
+  });
 });
 
 describe("ForkManager — account + resource fetch", () => {
@@ -323,7 +415,7 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
   });
 
-  it("does not commit an account fetch from before resetState", async () => {
+  it("rejects an account fetch from before resetState", async () => {
     const pending = deferred<{ sequence_number: string; authentication_key: string }>();
     fakeApi.getAccount.mockReturnValueOnce(pending.promise);
 
@@ -332,7 +424,7 @@ describe("ForkManager — account + resource fetch", () => {
     await mgr.resetState();
     pending.resolve({ sequence_number: "7", authentication_key: "0xold" });
 
-    await expect(read).resolves.toMatchObject({ sequenceNumber: "7" });
+    await expect(read).rejects.toBeInstanceOf(ForkSnapshotChangedError);
     expect(mgr.listAccounts()).toEqual([]);
   });
 
@@ -355,7 +447,7 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
   });
 
-  it("does not commit a resource fetch from before overwrite", async () => {
+  it("rejects a resource fetch from before overwrite", async () => {
     const pending = deferred<{ data: { value: string } }>();
     fakeApi.getAccountResource.mockReturnValueOnce(pending.promise);
 
@@ -364,7 +456,7 @@ describe("ForkManager — account + resource fetch", () => {
     await mgr.initialize(TEST_NODE_URL, "replacement", undefined, { overwrite: true });
     pending.resolve({ data: { value: "old" } });
 
-    await expect(read).resolves.toEqual({ value: "old" });
+    await expect(read).rejects.toBeInstanceOf(ForkSnapshotChangedError);
     const storage = (mgr as unknown as {
       storage: { hasResource(address: string, type: string): boolean };
     }).storage;
@@ -429,7 +521,61 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccountResources).toHaveBeenCalledTimes(1);
   });
 
-  it("does not commit an all-resources marker from before resetState", async () => {
+  it("translates a cache file disappearing during rotation into a snapshot error", async () => {
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: "0x1::a::A", data: { x: 1 } },
+    ]);
+    await mgr.getAllResources(TEST_ADDR);
+
+    const storage = new ForkStorage(forkPath);
+    let transitionStarted = false;
+    __setForkStorageTestHooks({
+      beforeAllResourcesMarkerRead: (address) => {
+        if (address === TEST_ADDR && !transitionStarted) {
+          transitionStarted = true;
+          beginCacheGenerationTransition(forkPath);
+          storage.clearResources();
+        }
+      },
+    });
+
+    try {
+      await expect(mgr.getAllResources(TEST_ADDR)).rejects.toBeInstanceOf(
+        ForkSnapshotChangedError
+      );
+    } finally {
+      __setForkStorageTestHooks();
+    }
+    expect(transitionStarted).toBe(true);
+  });
+
+  it("preserves a storage read error when the cache generation is stable", async () => {
+    fakeApi.getAccountResources.mockResolvedValue([
+      { type: "0x1::a::A", data: { x: 1 } },
+    ]);
+    await mgr.getAllResources(TEST_ADDR);
+
+    let markerRemoved = false;
+    __setForkStorageTestHooks({
+      beforeAllResourcesMarkerRead: (address) => {
+        if (address === TEST_ADDR && !markerRemoved) {
+          markerRemoved = true;
+          rmSync(join(forkPath, "cache", `${TEST_ADDR}.all-resources`));
+        }
+      },
+    });
+
+    try {
+      await expect(mgr.getAllResources(TEST_ADDR)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      __setForkStorageTestHooks();
+    }
+    expect(markerRemoved).toBe(true);
+  });
+
+  it("rejects an all-resources fetch from before resetState", async () => {
     const pending = deferred<Array<{ type: string; data: { value: string } }>>();
     fakeApi.getAccountResources.mockReturnValueOnce(pending.promise);
 
@@ -438,7 +584,7 @@ describe("ForkManager — account + resource fetch", () => {
     await mgr.resetState();
     pending.resolve([{ type: "0x1::a::A", data: { value: "old" } }]);
 
-    await expect(read).resolves.toEqual({ "0x1::a::A": { value: "old" } });
+    await expect(read).rejects.toBeInstanceOf(ForkSnapshotChangedError);
     const storage = (mgr as unknown as {
       storage: { hasAllResources(address: string): boolean };
     }).storage;
@@ -518,7 +664,7 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
     await expect(mgr.fundAccount(TEST_ADDR, 100)).rejects.toThrow(/upstream is angry/);
   });
 
-  it("fundAccount discards a pre-lock balance fetched before a concurrent overwrite", async () => {
+  it("fundAccount rejects a balance fetched before a concurrent overwrite", async () => {
     // The upstream balance resolves only after an overwrite rotates the
     // snapshot generation; the stale balance must not land in the new snapshot.
     const pending = deferred<{ data: unknown }>();
@@ -538,14 +684,12 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
         frozen: false,
       },
     });
-    await funding;
+    await expect(funding).rejects.toBeInstanceOf(ForkSnapshotChangedError);
 
-    // Funded from a zero base (stale 5000 discarded), so the value is the
-    // credited amount alone, not 5000 + 1000.
-    fakeApi.getAccountResource.mockClear();
-    const stored = await mgr.getResource(TEST_ADDR, COIN_TYPE);
-    expect(stored.coin.value).toBe("1000");
-    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
+    const storage = (mgr as unknown as {
+      storage: { hasResource(address: string, type: string): boolean };
+    }).storage;
+    expect(storage.hasResource(TEST_ADDR, COIN_TYPE)).toBe(false);
   });
 
   it("fundMultipleAccounts funds every address in the list", async () => {
@@ -645,5 +789,148 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
     // After reset, fetching again should hit the API (not the cache).
     await mgr.getAccount(TEST_ADDR);
     expect(fakeApi.getAccount).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ForkManager — stale instance contract", () => {
+  let tmpDir: string;
+  let forkPath: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "movehat-forkmgr-stale-"));
+    forkPath = join(tmpDir, "fork");
+    apiCtorCalls.length = 0;
+    fakeApi.getLedgerInfo.mockReset();
+    fakeApi.getAccount.mockReset();
+    fakeApi.getAccountResource.mockReset();
+    fakeApi.getAccountResources.mockReset();
+    fakeApi.view.mockReset();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  async function managersAcrossOverwrite(): Promise<{
+    stale: ForkManager;
+    current: ForkManager;
+  }> {
+    fakeApi.getLedgerInfo.mockResolvedValueOnce(ledgerInfoFixture());
+    const stale = new ForkManager(forkPath);
+    await stale.initialize(TEST_NODE_URL, "testnet");
+
+    fakeApi.getAccount.mockResolvedValueOnce({
+      sequence_number: "1",
+      authentication_key: "0xold",
+    });
+    fakeApi.getAccountResource.mockResolvedValueOnce({
+      data: { fromLedger: "100" },
+    });
+    fakeApi.getAccountResources.mockResolvedValueOnce([
+      { type: "0x1::old::Resource", data: { fromLedger: "100" } },
+    ]);
+    await stale.getAccount(TEST_ADDR);
+    await stale.getResource(TEST_ADDR, "0x1::old::Resource");
+    await stale.getAllResources(TEST_ADDR);
+
+    fakeApi.getLedgerInfo.mockResolvedValueOnce({
+      ...ledgerInfoFixture(),
+      ledger_version: "200",
+      block_height: "84",
+    });
+    const current = new ForkManager(forkPath);
+    await current.initialize(TEST_NODE_URL, "testnet", undefined, {
+      overwrite: true,
+    });
+
+    fakeApi.getAccount.mockResolvedValueOnce({
+      sequence_number: "2",
+      authentication_key: "0xnew",
+    });
+    fakeApi.getAccountResources.mockResolvedValueOnce([
+      { type: "0x1::new::Resource", data: { fromLedger: "200" } },
+    ]);
+    await current.getAccount(TEST_ADDR);
+    await current.getAllResources(TEST_ADDR);
+    return { stale, current };
+  }
+
+  it("rejects cached reads and synchronous inspection after another manager overwrites", async () => {
+    const { stale, current } = await managersAcrossOverwrite();
+
+    await expect(stale.getAccount(TEST_ADDR)).rejects.toBeInstanceOf(
+      ForkSnapshotChangedError
+    );
+    await expect(
+      stale.getResource(TEST_ADDR, "0x1::new::Resource")
+    ).rejects.toBeInstanceOf(ForkSnapshotChangedError);
+    await expect(stale.getAllResources(TEST_ADDR)).rejects.toBeInstanceOf(
+      ForkSnapshotChangedError
+    );
+    expect(() => stale.getMetadata()).toThrow(ForkSnapshotChangedError);
+    expect(() => stale.listAccounts()).toThrow(ForkSnapshotChangedError);
+
+    expect(current.getMetadata().ledgerVersion).toBe("200");
+    await expect(
+      current.getResource(TEST_ADDR, "0x1::new::Resource")
+    ).resolves.toEqual({ fromLedger: "200" });
+
+    stale.load();
+    expect(stale.getMetadata().ledgerVersion).toBe("200");
+    await expect(stale.getAccount(TEST_ADDR)).resolves.toMatchObject({
+      sequenceNumber: "2",
+      authenticationKey: "0xnew",
+    });
+    await expect(
+      stale.getResource(TEST_ADDR, "0x1::new::Resource")
+    ).resolves.toEqual({ fromLedger: "200" });
+  });
+
+  it("rejects every stale mutation without changing the replacement snapshot", async () => {
+    const { stale, current } = await managersAcrossOverwrite();
+    const replacement = { fromLedger: "200" };
+
+    await expect(
+      stale.setResource(TEST_ADDR, "0x1::new::Resource", { corrupted: true })
+    ).rejects.toBeInstanceOf(ForkSnapshotChangedError);
+    await expect(stale.fundAccount(TEST_ADDR, 10)).rejects.toBeInstanceOf(
+      ForkSnapshotChangedError
+    );
+    await expect(stale.getOrCreateAccount(TEST_ADDR)).rejects.toBeInstanceOf(
+      ForkSnapshotChangedError
+    );
+    await expect(stale.resetState()).rejects.toBeInstanceOf(
+      ForkSnapshotChangedError
+    );
+
+    expect(current.getMetadata().ledgerVersion).toBe("200");
+    await expect(
+      current.getResource(TEST_ADDR, "0x1::new::Resource")
+    ).resolves.toEqual(replacement);
+  });
+
+  it("rejects a view response if overwrite commits while it is in flight", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValueOnce(ledgerInfoFixture());
+    const stale = new ForkManager(forkPath);
+    await stale.initialize(TEST_NODE_URL, "testnet");
+
+    const pending = deferred<unknown[]>();
+    fakeApi.view.mockReturnValueOnce(pending.promise);
+    const view = stale.forwardView({ function: "0x1::m::f" });
+    await vi.waitFor(() => expect(fakeApi.view).toHaveBeenCalledTimes(1));
+
+    fakeApi.getLedgerInfo.mockResolvedValueOnce({
+      ...ledgerInfoFixture(),
+      ledger_version: "200",
+    });
+    const current = new ForkManager(forkPath);
+    await current.initialize(TEST_NODE_URL, "testnet", undefined, {
+      overwrite: true,
+    });
+    pending.resolve(["old"]);
+
+    await expect(view).rejects.toBeInstanceOf(ForkSnapshotChangedError);
   });
 });
