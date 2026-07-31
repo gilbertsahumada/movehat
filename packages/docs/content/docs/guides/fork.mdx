@@ -158,6 +158,40 @@ console.log(`Forked from: ${metadata.network}`);
 console.log(`Chain ID: ${metadata.chainId}`);
 ```
 
+`load()` is the preferred way to accept the identity already stored in a fork.
+Calling `initialize()` again is also safe for repeated test hooks, but its
+network label and endpoint must match the stored identity (an omitted label
+accepts the stored one). This check is local:
+an unchanged fork can be re-adopted while the upstream is offline, and
+equivalent URL spellings such as a trailing slash are accepted.
+
+```typescript
+import { ForkIdentityMismatchError, ForkManager } from 'movehat';
+
+try {
+  await fork.initialize(nodeUrl, networkName);
+} catch (error) {
+  if (error instanceof ForkIdentityMismatchError) {
+    fork.load(); // Keep using the stored network and endpoint.
+  } else {
+    throw error;
+  }
+}
+```
+
+To deliberately switch the network or endpoint, replace the pinned snapshot
+and its cache explicitly:
+
+```typescript
+await fork.initialize(newNodeUrl, newNetworkName, undefined, { overwrite: true });
+```
+
+The CLI equivalent is `movehat fork create`; confirm its overwrite prompt.
+API keys are process-local and may be changed without replacing the snapshot.
+Forks created by MoveHat 0.6 already persist both identity fields and require no
+metadata migration; their legacy resource cache migration still runs after the
+identity check succeeds.
+
 ### Snapshot replacement and long-running processes
 
 Each `ForkManager` stays pinned to the snapshot generation it loaded. If
@@ -235,7 +269,7 @@ new ForkManager(forkPath: string)
 
 | Method | Description |
 |--------|-------------|
-| `initialize(nodeUrl, networkName?)` | Initialize a new fork from a network |
+| `initialize(nodeUrl, networkName?, apiKey?, options?)` | Initialize a fork; changing its stored identity requires `overwrite: true` |
 | `load()` | Load an existing fork from disk |
 | `getMetadata()` | Get fork metadata |
 | `getResource(address, resourceType)` | Get a resource with lazy loading |

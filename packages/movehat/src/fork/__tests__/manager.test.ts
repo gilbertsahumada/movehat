@@ -47,6 +47,7 @@ import {
   commitCacheGenerationTransition,
 } from "../storage.js";
 import {
+  ForkIdentityMismatchError,
   ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
   MovementApiError,
@@ -139,7 +140,7 @@ describe("ForkManager — initialize / load", () => {
     expect(mgr.getMetadata().network).toBe("bardock-testnet");
   });
 
-  it("preflights before overwriting, and re-initialize re-adopts the pinned snapshot", async () => {
+  it("preflights before overwriting, and re-adopts the same identity offline", async () => {
     fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
     const mgr = new ForkManager(forkPath);
     await mgr.initialize(TEST_NODE_URL, "original");
@@ -152,15 +153,130 @@ describe("ForkManager — initialize / load", () => {
     expect(mgr.getMetadata().network).toBe("original");
     expect(mgr.getMetadata().ledgerVersion).toBe("100");
 
-    // Non-overwrite re-init re-adopts the pinned snapshot: no upstream call
-    // (works offline), the pinned ledger is preserved, only labels refresh.
+    // An equivalent URL re-adopts the pinned snapshot without an upstream
+    // call or rewriting the stored identity.
     fakeApi.getLedgerInfo.mockReset();
     fakeApi.getLedgerInfo.mockRejectedValue(new Error("must not fetch on re-adopt"));
-    await mgr.initialize("https://relabel.example/v1", "refreshed");
-    expect(mgr.getMetadata().network).toBe("refreshed");
-    expect(mgr.getMetadata().nodeUrl).toBe("https://relabel.example/v1");
+    await mgr.initialize(
+      "HTTPS://TESTNET.MOVEMENTNETWORK.XYZ:443/v1/",
+      "original",
+      "replacement-key"
+    );
+    expect(mgr.getMetadata().network).toBe("original");
+    expect(mgr.getMetadata().nodeUrl).toBe(TEST_NODE_URL);
+    expect(mgr.getMetadata().ledgerVersion).toBe("100");
+    expect(apiCtorCalls.at(-1)?.apiKey).toBe("replacement-key");
+    expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+  });
+
+  it("omitting the network label re-adopts the stored identity offline", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL, "original");
+
+    fakeApi.getLedgerInfo.mockReset();
+    fakeApi.getLedgerInfo.mockRejectedValue(new Error("must not fetch on re-adopt"));
+    await mgr.initialize(TEST_NODE_URL);
+    expect(mgr.getMetadata().network).toBe("original");
     expect(mgr.getMetadata().ledgerVersion).toBe("100");
     expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: "endpoint",
+      nodeUrl: "https://replacement.example/v1?token=private",
+      network: "original",
+      networkChanged: false,
+      endpointChanged: true,
+    },
+    {
+      name: "network",
+      nodeUrl: TEST_NODE_URL,
+      network: "replacement",
+      networkChanged: true,
+      endpointChanged: false,
+    },
+    {
+      name: "network and endpoint",
+      nodeUrl: "https://replacement.example/v1?token=private",
+      network: "replacement",
+      networkChanged: true,
+      endpointChanged: true,
+    },
+  ])("rejects a changed $name offline without modifying cached state", async ({
+    nodeUrl,
+    network,
+    networkChanged,
+    endpointChanged,
+  }) => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "7" } });
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL, "original", "original-key");
+    await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    const storage = new ForkStorage(forkPath);
+    const metadataBefore = storage.loadMetadata();
+    const generationBefore = storage.getCacheGeneration();
+
+    fakeApi.getLedgerInfo.mockClear();
+    fakeApi.getAccountResource.mockClear();
+    const error = await mgr
+      .initialize(nodeUrl, network, "replacement-key")
+      .catch((value: unknown) => value);
+
+    expect(error).toBeInstanceOf(ForkIdentityMismatchError);
+    expect(error).toMatchObject({
+      storedNetwork: "original",
+      requestedNetwork: network,
+      networkChanged,
+      endpointChanged,
+    });
+    expect((error as Error).message).not.toContain("token=private");
+    expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+    expect(mgr.getMetadata()).toEqual(metadataBefore);
+    expect(storage.loadMetadata()).toEqual(metadataBefore);
+    expect(storage.getCacheGeneration()).toBe(generationBefore);
+    expect(storage.getResource(TEST_ADDR, "0x1::counter::Counter")).toEqual({
+      value: "7",
+    });
+    expect(apiCtorCalls.at(-2)?.apiKey).toBe("original-key");
+
+    const cached = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    expect(cached).toEqual({ value: "7" });
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
+  });
+
+  it("explicit overwrite adopts a different identity and clears the old cache", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "old" } });
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL, "original");
+    await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+
+    fakeApi.getLedgerInfo.mockResolvedValue({
+      ...ledgerInfoFixture(),
+      chain_id: 42,
+      ledger_version: "200",
+    });
+    await mgr.initialize(
+      "https://replacement.example/v1",
+      "replacement",
+      undefined,
+      { overwrite: true }
+    );
+
+    expect(mgr.getMetadata()).toMatchObject({
+      network: "replacement",
+      nodeUrl: "https://replacement.example/v1",
+      chainId: 42,
+      ledgerVersion: "200",
+    });
+    fakeApi.getAccountResource.mockClear();
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "new" } });
+    const resource = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    expect(resource).toEqual({ value: "new" });
+    expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
   });
 
   it("adopts a 0.6 fork through initialize(): migrates its cache and serves it offline", async () => {
@@ -203,7 +319,7 @@ describe("ForkManager — initialize / load", () => {
     // the pin out from under the resource cached at 100.
     fakeApi.getLedgerInfo.mockResolvedValue({ ...ledgerInfoFixture(), ledger_version: "101" });
     const callsBefore = fakeApi.getLedgerInfo.mock.calls.length;
-    await mgr.initialize(TEST_NODE_URL, "refreshed");
+    await mgr.initialize(TEST_NODE_URL);
 
     expect(mgr.getMetadata().ledgerVersion).toBe("100");
     expect(fakeApi.getLedgerInfo.mock.calls.length).toBe(callsBefore);
