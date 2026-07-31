@@ -201,12 +201,14 @@ export class ForkManager {
    * Initialize a new fork from a network.
    *
    * @param nodeUrl - Upstream JSON-RPC base URL.
-   * @param networkName - Logical network label (defaults to `'custom'`).
+   * @param networkName - Logical network label. Defaults to `'custom'` when
+   *   creating or overwriting; omitted on an existing fork it accepts the
+   *   stored label.
    * @param apiKey - Optional API key for `Authorization: Bearer` header.
    */
   async initialize(
     nodeUrl: string,
-    networkName: string = 'custom',
+    networkName?: string,
     apiKey?: string,
     options: ForkInitializeOptions = {}
   ): Promise<void> {
@@ -221,7 +223,7 @@ export class ForkManager {
     if (options.overwrite || !existedBeforeLock) {
       const ledgerInfo = await apiClient.getLedgerInfo();
       freshMetadata = {
-        network: networkName,
+        network: networkName ?? 'custom',
         nodeUrl,
         chainId: ledgerInfo.chain_id,
         ledgerVersion: ledgerInfo.ledger_version,
@@ -252,12 +254,15 @@ export class ForkManager {
 
         if (existing) {
           const preserved = this.storage.loadMetadata();
+          // An omitted label accepts the stored identity; only an explicit
+          // label is compared against it.
+          const requestedNetwork = networkName ?? preserved.network;
           const endpointChanged =
             normalizeMovementApiUrl(preserved.nodeUrl) !== normalizeMovementApiUrl(nodeUrl);
-          if (preserved.network !== networkName || endpointChanged) {
+          if (preserved.network !== requestedNetwork || endpointChanged) {
             throw new ForkIdentityMismatchError(
               preserved.network,
-              networkName,
+              requestedNetwork,
               endpointChanged
             );
           }

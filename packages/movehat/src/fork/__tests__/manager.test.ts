@@ -169,6 +169,19 @@ describe("ForkManager — initialize / load", () => {
     expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
   });
 
+  it("omitting the network label re-adopts the stored identity offline", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const mgr = new ForkManager(forkPath);
+    await mgr.initialize(TEST_NODE_URL, "original");
+
+    fakeApi.getLedgerInfo.mockReset();
+    fakeApi.getLedgerInfo.mockRejectedValue(new Error("must not fetch on re-adopt"));
+    await mgr.initialize(TEST_NODE_URL);
+    expect(mgr.getMetadata().network).toBe("original");
+    expect(mgr.getMetadata().ledgerVersion).toBe("100");
+    expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
       name: "endpoint",

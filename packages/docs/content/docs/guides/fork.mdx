@@ -160,7 +160,8 @@ console.log(`Chain ID: ${metadata.chainId}`);
 
 `load()` is the preferred way to accept the identity already stored in a fork.
 Calling `initialize()` again is also safe for repeated test hooks, but its
-network label and endpoint must match the stored identity. This check is local:
+network label and endpoint must match the stored identity (an omitted label
+accepts the stored one). This check is local:
 an unchanged fork can be re-adopted while the upstream is offline, and
 equivalent URL spellings such as a trailing slash are accepted.
 
