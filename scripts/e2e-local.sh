@@ -368,23 +368,47 @@ for cmd in "${COMMANDS[@]}"; do
 done
 
 # ===========================================
-# Test: Create and use fork
+# Test: Offline fork gate (0.6.0 migration fixture + serve)
+# ===========================================
+# Not gated by --quick: fully local and deterministic (same rationale as
+# the canonical deploy step above). Runs the shared gate script against
+# the globally installed tarball CLI.
+step "Testing: offline fork migration & serve gate"
+
+if MOVEHAT_BIN="movehat" bash "$SCRIPT_DIR/fork-e2e.sh"; then
+    pass "Offline fork gate passed (migration + cached reads + serve)"
+else
+    fail "Offline fork gate failed"
+fi
+
+# ===========================================
+# Test: Create and use fork (live testnet)
 # ===========================================
 if [ "$QUICK_MODE" = false ]; then
     step "Testing: Fork system"
-    
-    # Create fork
-    if npx movehat fork create --network testnet --name test-fork 2>&1; then
+
+    # Create fork — hard gate: exit code alone is not enough, assert the
+    # terminal success line so a partial failure cannot slip through.
+    FORK_CREATE_LOG="$TEST_DIR/fork-create.log"
+    if npx movehat fork create --network testnet --name test-fork > "$FORK_CREATE_LOG" 2>&1 \
+        && grep -q "Fork created successfully!" "$FORK_CREATE_LOG"; then
         pass "Fork created"
     else
-        info "Fork creation skipped (may require network)"
+        fail "Fork creation failed"
+        echo "--- fork create log (tail) ---"
+        tail -30 "$FORK_CREATE_LOG"
     fi
-    
-    # List forks
-    if npx movehat fork list 2>&1; then
-        pass "Fork list works"
+
+    # List forks — the fork just created must actually be listed.
+    FORK_LIST_LOG="$TEST_DIR/fork-list.log"
+    if npx movehat fork list > "$FORK_LIST_LOG" 2>&1 \
+        && grep -q "Found" "$FORK_LIST_LOG" \
+        && grep -q "test-fork" "$FORK_LIST_LOG"; then
+        pass "Fork list shows the created fork"
     else
-        fail "Fork list failed"
+        fail "Fork list failed or did not show test-fork"
+        echo "--- fork list log ---"
+        cat "$FORK_LIST_LOG"
     fi
 fi
 

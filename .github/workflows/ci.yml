@@ -341,6 +341,14 @@ jobs:
         env:
           MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
+      - name: Fork migration & serve gate (#398)
+        # Required offline gate for the fork subsystem: drives the real CLI
+        # against the checked-in genuine 0.6.0 fork fixture and asserts the
+        # legacy-cache migration, a cached resource read, and the fork
+        # server's HTTP responses. Every asserted path is a local cache
+        # hit — no network, no keys — so it can gate every PR.
+        run: pnpm test:fork-e2e
+
       - name: Example suite (Tier 2 gate — movelite backend)
         # The counter-example mocha suite is all-local: the fixtures share
         # one implicit movelite node (pulled by pnpm install as movehat's
