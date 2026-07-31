@@ -326,6 +326,21 @@ jobs:
           # while the backend-identity assertion still catches a wrong backend.
           MOVEHAT_EXPECT_BOOT_MAX_MS: '60000'
 
+      - name: Canonical deploy gate (test:runtime, #397)
+        # Required local gate for the flagship credential-free deploy flow:
+        # runs the example's deploy-counter.ts against the implicit movelite
+        # backend (local-by-default, no PRIVATE_KEY, no external network).
+        # Exit code 0 is necessary but not sufficient — the terminal
+        # "Counter value: 1" line is emitted only after deploy + init +
+        # increment + view all succeed, so the grep asserts the script
+        # actually reached the end of the flow.
+        run: |
+          set -o pipefail
+          pnpm test:runtime 2>&1 | tee runtime.log
+          grep -q "Counter value: 1" runtime.log
+        env:
+          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
+
       - name: Example suite (Tier 2 gate — movelite backend)
         # The counter-example mocha suite is all-local: the fixtures share
         # one implicit movelite node (pulled by pnpm install as movehat's

@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fork_snapshot_changed` with restart guidance, and an explicit overwrite can
   recover an interrupted rotation. Closes #404.
 
+### Internal
+
+- CI now runs `pnpm test:runtime` as a required gate on every PR: the
+  canonical `deploy-counter.ts` flow executes end-to-end against the local
+  movelite backend and the job asserts the terminal "Counter value: 1"
+  output. Previously the flagship credential-free deploy flow was covered
+  only by an advisory, main-only E2E step, so a runtime regression in the
+  first-run experience could merge green. Closes #397.
+
 ## [0.7.0] - 2026-07-24
 
 ### Breaking
