@@ -344,10 +344,19 @@ fi
 
 if ! assert_no_upstream_hits "fork serve HTTP reads"; then exit 1; fi
 
+# A child that died on its own between the HTTP assertions and this stop is
+# a crash, not a clean shutdown — never credit it as one.
+SERVER_WAS_ALIVE=0
+if kill -0 "$SERVER_PID" 2>/dev/null; then
+    SERVER_WAS_ALIVE=1
+fi
 STOP_RC=0
 stop_process "$SERVER_PID" || STOP_RC=$?
 SERVER_PID=""
-if [ "$STOP_RC" -eq 0 ]; then
+if [ "$READY" -eq 1 ] && [ "$SERVER_WAS_ALIVE" -ne 1 ]; then
+    fail "fork serve exited prematurely before the scripted stop"
+    echo "--- fork serve log ---"; cat "$SERVE_LOG"
+elif [ "$STOP_RC" -eq 0 ]; then
     pass "fork serve stopped within 3 seconds"
 elif [ "$STOP_RC" -eq 2 ]; then
     fail "fork serve required SIGKILL after the 3-second shutdown deadline"
