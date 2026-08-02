@@ -20,6 +20,7 @@
     "typecheck:example": "pnpm --filter counter-example exec tsc --noEmit",
     "check:example": "pnpm build:movehat && pnpm typecheck:example",
     "test:runtime": "pnpm --filter counter-example run deploy",
+    "test:fork-e2e": "bash scripts/fork-e2e.sh",
     "test:all": "pnpm test:unit && pnpm test:e2e",
     "clean": "pnpm -r clean",
     "prepublish": "bash scripts/pre-publish.sh",

@@ -37,6 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only by an advisory, main-only E2E step, so a runtime regression in the
   first-run experience could merge green. Closes #397.
 
+### Tests
+
+- The fork subsystem gains deterministic, required end-to-end coverage. A genuine MoveHat
+  0.6.0 fork directory (pre-migration layout) is checked in as a fixture,
+  and a new offline gate (`pnpm test:fork-e2e`) drives the real CLI against
+  a copy of it: `fork list`, a `fork view-resource` read asserting the
+  pre-migration value survives the legacy-cache migration, validates the
+  generation-scoped completeness marker, and exercises `fork serve` through
+  singular and plural cached-resource reads. A local sentinel returns the
+  fixture's value but requires zero requests, proving every asserted path is
+  a cache hit without contacting testnet. The gate is required in CI on every
+  PR. The e2e suite's full mode also hard-gates
+  `movehat fork create` against testnet (its failure was previously
+  downgraded to an informational note, so a broken fork path could never
+  fail the run). Previously the fork paths lacked deterministic, required E2E
+  coverage; `initialize()` re-adoption remains covered separately. Closes
+  #398.
+
 ## [0.7.0] - 2026-07-24
 
 ### Breaking
