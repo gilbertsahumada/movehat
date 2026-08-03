@@ -28,6 +28,9 @@ const apiCtorCalls: Array<{ nodeUrl: string; apiKey?: string | undefined }> = []
 vi.mock("../api.js", () => ({
   MovementApiClient: class {
     constructor(nodeUrl: string, apiKey?: string) {
+      if (nodeUrl.includes("reject-me")) {
+        throw new Error("client rejected nodeUrl");
+      }
       apiCtorCalls.push({ nodeUrl, apiKey });
     }
     getLedgerInfo = fakeApi.getLedgerInfo;
@@ -185,7 +188,7 @@ describe("ForkManager — initialize / load", () => {
   it.each([
     {
       name: "endpoint",
-      nodeUrl: "https://replacement.example/v1?token=private",
+      nodeUrl: "https://replacement.example/token-private/v1",
       network: "original",
       networkChanged: false,
       endpointChanged: true,
@@ -199,7 +202,7 @@ describe("ForkManager — initialize / load", () => {
     },
     {
       name: "network and endpoint",
-      nodeUrl: "https://replacement.example/v1?token=private",
+      nodeUrl: "https://replacement.example/token-private/v1",
       network: "replacement",
       networkChanged: true,
       endpointChanged: true,
@@ -232,7 +235,7 @@ describe("ForkManager — initialize / load", () => {
       networkChanged,
       endpointChanged,
     });
-    expect((error as Error).message).not.toContain("token=private");
+    expect((error as Error).message).not.toContain("token-private");
     expect(fakeApi.getLedgerInfo).not.toHaveBeenCalled();
     expect(mgr.getMetadata()).toEqual(metadataBefore);
     expect(storage.loadMetadata()).toEqual(metadataBefore);
@@ -363,6 +366,29 @@ describe("ForkManager — initialize / load", () => {
 
     expect(apiCtorCalls).toHaveLength(1);
     expect(reloaded.getMetadata().nodeUrl).toBe(TEST_NODE_URL);
+  });
+
+  it("a load rejected by the API client leaves the manager unadopted", async () => {
+    fakeApi.getLedgerInfo.mockResolvedValue(ledgerInfoFixture());
+    const first = new ForkManager(forkPath);
+    await first.initialize(TEST_NODE_URL);
+
+    const storage = new ForkStorage(forkPath);
+    storage.saveMetadata({
+      ...storage.loadMetadata(),
+      nodeUrl: "https://reject-me.example.com/v1",
+    });
+
+    const reloaded = new ForkManager(forkPath);
+    expect(() => reloaded.load()).toThrow(/client rejected nodeUrl/);
+    const internals = reloaded as unknown as {
+      metadata: unknown;
+      cacheGeneration: unknown;
+      apiClient: unknown;
+    };
+    expect(internals.metadata).toBeNull();
+    expect(internals.cacheGeneration).toBeNull();
+    expect(internals.apiClient).toBeNull();
   });
 
   it("setApiKey reconstructs the API client when one already exists", async () => {

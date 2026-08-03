@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ForkCacheGenerationTransitionError`. Fork servers return HTTP 409
   `fork_snapshot_changed` with restart guidance, and an explicit overwrite can
   recover an interrupted rotation. Closes #404.
+- Movement API base URLs carrying a query string or fragment are now rejected
+  up front with a clear `invalid_argument` error. Previously the client
+  appended request paths as text, so a URL like `.../v1?tenant=a` silently
+  sent every request to `/v1` with the path buried in the query. A `load()`
+  whose stored `nodeUrl` fails validation also no longer half-adopts the
+  fork's metadata and snapshot generation before throwing.
 
 ### Changed
 
