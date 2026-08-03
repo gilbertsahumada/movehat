@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fork_snapshot_changed` with restart guidance, and an explicit overwrite can
   recover an interrupted rotation. Closes #404.
 
+### Changed
+
+- Warm fork resource cache hits now parse the per-address cache file once
+  instead of twice. `ForkManager.getResource` (and the `fundAccount` cache
+  read) resolved a hit through a `hasResource` + `getResource` pair, each
+  doing its own read and `JSON.parse` of the same `resources/<addr>.json`;
+  a single discriminated read now preserves the missing-vs-cached-null
+  semantics with one parse. Measured at -32% median on 100 warm reads over a
+  500-entry (~1 MB) resource map via the new offline `resource` benchmark
+  suite (`MH_BENCH_SUITES=resource pnpm bench`). Found while fixing #404.
+  Closes #406.
+
 ### Internal
 
 - CI now runs `pnpm test:runtime` as a required gate on every PR: the

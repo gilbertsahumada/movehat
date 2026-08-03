@@ -6,7 +6,7 @@ Performance baseline for the fork system.
 
 - **Tool**: plain tsx script (`packages/movehat/bench/fork.bench.ts`) using `performance.now()`. Not `vitest bench` — the heavy lifecycle operations (`createLocal`, `createFork`) don't fit microbench iteration semantics (process spawn + RPC snapshot per iteration). The runViewFunction RPC suite is run as a tight loop against a long-running harness.
 - **Run**: `pnpm bench` from the repo root (cd's into `examples/counter-example` so the runtime can load a `movehat.config.ts`).
-- **Iterations**: `createLocal` × 2, `createFork` × 2, `runViewFunction` × 50.
+- **Iterations**: `createLocal` × 2, `createFork` × 2, `runViewFunction` × 50, `getResource` warm hit × 20 (each iteration is 100 reads).
 - **Output**: wall-clock milliseconds. Each row reports n, avg, median, min, max.
 
 ## Hardware
@@ -52,7 +52,13 @@ Already near the RPC floor (HTTP keep-alive + JSON parse). The implementation in
 
 ## Optimization wins applied
 
-**None applied.** Policy: if <5% improvement, document the negative result and don't claim a win. The three obvious candidates were each evaluated:
+Policy: if <5% improvement, document the negative result and don't claim a win.
+
+| Change | Benchmark | Before (median) | After (median) | Delta |
+|---|---|---|---|---|
+| Single-parse warm resource cache reads (#406) — `ForkManager.getResource` used a `hasResource` + `getResource` pair that parsed the same per-address JSON file twice per warm hit; replaced with one read | `getResource` warm hit, 100 reads over a 500-entry / ~1 MB resource map (`MH_BENCH_SUITES=resource`, offline) | 197.9 ms | 134.4 ms | -32% |
+
+Candidates evaluated and rejected:
 
 | Candidate | Inspected | Outcome |
 |---|---|---|
@@ -72,9 +78,10 @@ pnpm bench
 MH_BENCH_SUITES=local pnpm bench
 MH_BENCH_SUITES=fork  pnpm bench
 MH_BENCH_SUITES=view  pnpm bench
+MH_BENCH_SUITES=resource pnpm bench
 ```
 
-Requires: Movement CLI on PATH (`movement --version`), network access for the `fork` suite, and a `movehat.config.ts` in the working directory (the script cd's into `examples/counter-example` automatically).
+Requires: Movement CLI on PATH (`movement --version`), network access for the `fork` suite, and a `movehat.config.ts` in the working directory (the script cd's into `examples/counter-example` automatically). The `resource` suite is fully offline: it fabricates a fork directory in a tmpdir and measures warm `ForkManager.getResource` cache hits.
 
 ## Related issues fixed alongside this baseline
 

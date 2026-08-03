@@ -46,6 +46,24 @@ function forkAuthKeyPlaceholder(normalizedAddress: string): string {
   return `0x${digest}`;
 }
 
+type CachedResourceRead = { found: false } | { found: true; value: unknown };
+
+/**
+ * Read the per-address resource cache file once, distinguishing a missing
+ * key (caller must fetch upstream) from a cached `null` value.
+ */
+function readCachedResource(
+  storage: ForkStorage,
+  address: string,
+  resourceType: string
+): CachedResourceRead {
+  const resources = storage.getAllResources(address);
+  if (!Object.prototype.hasOwnProperty.call(resources, resourceType)) {
+    return { found: false };
+  }
+  return { found: true, value: resources[resourceType] };
+}
+
 function canonicalForkPath(forkPath: string): string {
   let existing = resolve(forkPath);
   const suffix: string[] = [];
@@ -403,15 +421,9 @@ export class ForkManager {
     const normalizedAddress = normalizeAddress(address);
     const expectedGeneration = this.expectedCacheGeneration();
 
-    const cachedResource = this.readAtGeneration(expectedGeneration, () => {
-      if (!this.storage.hasResource(normalizedAddress, resourceType)) {
-        return { found: false as const };
-      }
-      return {
-        found: true as const,
-        value: this.storage.getResource(normalizedAddress, resourceType),
-      };
-    });
+    const cachedResource = this.readAtGeneration(expectedGeneration, () =>
+      readCachedResource(this.storage, normalizedAddress, resourceType)
+    );
     if (cachedResource.found) {
       return cachedResource.value;
     }
@@ -433,8 +445,9 @@ export class ForkManager {
         resource = resourceData.data;
         resource = await withFileLock(this.resourceLockKey(), async () => {
           this.assertCacheGeneration(expectedGeneration);
-          if (this.storage.hasResource(normalizedAddress, resourceType)) {
-            return this.storage.getResource(normalizedAddress, resourceType);
+          const raced = readCachedResource(this.storage, normalizedAddress, resourceType);
+          if (raced.found) {
+            return raced.value;
           }
           this.storage.saveResource(normalizedAddress, resourceType, resource);
           logger.success(`Cached resource ${resourceType}`, 2);
@@ -583,9 +596,8 @@ export class ForkManager {
         // neither that balance nor a synthetic replacement reaches the new
         // snapshot.
         this.assertCacheGeneration(expectedGeneration);
-        const cached = this.storage.hasResource(normalizedAddress, resourceType)
-          ? this.storage.getResource(normalizedAddress, resourceType)
-          : null;
+        const cachedRead = readCachedResource(this.storage, normalizedAddress, resourceType);
+        const cached = cachedRead.found ? cachedRead.value : null;
         const coinStore: CoinStore = cached !== null
           ? assertCoinStore(cached)
           : fetched ?? {

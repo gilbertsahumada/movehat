@@ -563,6 +563,41 @@ describe("ForkManager — account + resource fetch", () => {
     expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
   });
 
+  it("getResource warm hit parses the cache file exactly once", async () => {
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "42" } });
+    await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+
+    const storage = (mgr as unknown as { storage: ForkStorage }).storage;
+    const getAll = vi.spyOn(storage, "getAllResources");
+    const has = vi.spyOn(storage, "hasResource");
+    const get = vi.spyOn(storage, "getResource");
+    fakeApi.getAccountResource.mockClear();
+
+    const r = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    expect(r).toEqual({ value: "42" });
+    expect(getAll).toHaveBeenCalledTimes(1);
+    expect(has).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
+  });
+
+  it("getResource serves a cached null without refetching", async () => {
+    await mgr.setResource(TEST_ADDR, "0x1::counter::Counter", null);
+
+    const r = await mgr.getResource(TEST_ADDR, "0x1::counter::Counter");
+    expect(r).toBeNull();
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
+  });
+
+  it("getResource fetches a type missing from an existing cache file", async () => {
+    await mgr.setResource(TEST_ADDR, "0x1::a::A", { value: "1" });
+    fakeApi.getAccountResource.mockResolvedValue({ data: { value: "2" } });
+
+    const r = await mgr.getResource(TEST_ADDR, "0x1::b::B");
+    expect(r).toEqual({ value: "2" });
+    expect(fakeApi.getAccountResource).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a resource fetch from before overwrite", async () => {
     const pending = deferred<{ data: { value: string } }>();
     fakeApi.getAccountResource.mockReturnValueOnce(pending.promise);
@@ -778,6 +813,12 @@ describe("ForkManager — fundAccount / setResource / list / getOrCreateAccount"
   it("fundAccount rethrows non-404 errors from getResource", async () => {
     fakeApi.getAccountResource.mockRejectedValue(new Error("upstream is angry"));
     await expect(mgr.fundAccount(TEST_ADDR, 100)).rejects.toThrow(/upstream is angry/);
+  });
+
+  it("fundAccount rejects a cached null CoinStore instead of minting over it", async () => {
+    await mgr.setResource(TEST_ADDR, COIN_TYPE, null);
+    await expect(mgr.fundAccount(TEST_ADDR, 100)).rejects.toThrow(/Invalid CoinStore/);
+    expect(fakeApi.getAccountResource).not.toHaveBeenCalled();
   });
 
   it("fundAccount rejects a balance fetched before a concurrent overwrite", async () => {
