@@ -8,9 +8,12 @@
 // Output is consumed by BENCHMARKS.md.
 
 import { performance } from 'node:perf_hooks';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Harness } from '../src/harness/index.js';
+import { ForkManager } from '../src/fork/manager.js';
+import { ForkStorage } from '../src/fork/storage.js';
 
 interface Sample {
   label: string;
@@ -100,6 +103,50 @@ async function benchCreateFork(): Promise<Sample> {
   });
 }
 
+async function benchGetResourceWarm(): Promise<Sample> {
+  // Fully offline: the fork is fabricated on disk and warm cache hits never
+  // touch the upstream API client.
+  const dir = mkdtempSync(join(tmpdir(), 'movehat-bench-resource-'));
+  try {
+    const forkDir = join(dir, 'bench-fork');
+    const address = `0x${'a'.repeat(64)}`;
+    const storage = new ForkStorage(forkDir);
+    storage.initialize();
+    storage.saveMetadata({
+      network: 'custom',
+      nodeUrl: 'http://127.0.0.1:1/v1',
+      chainId: 27,
+      ledgerVersion: '100',
+      timestamp: '0',
+      epoch: '1',
+      blockHeight: '1',
+      createdAt: new Date().toISOString(),
+    });
+    const resources: Record<string, unknown> = {};
+    for (let i = 0; i < 500; i++) {
+      resources[`0x1::bench::R${i}`] = { value: String(i), blob: 'x'.repeat(2000) };
+    }
+    storage.saveAllResources(address, resources);
+    const manager = new ForkManager(forkDir);
+    manager.load();
+    return await measure(
+      'getResource warm hit (500-entry map)',
+      async () => {
+        for (let i = 0; i < 100; i++) {
+          const resourceType = `0x1::bench::R${i % 500}`;
+          const value = await manager.getResource(address, resourceType);
+          if (value === null) {
+            throw new Error(`Expected a cached resource for ${resourceType}`);
+          }
+        }
+      },
+      20,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function benchRunViewFunction(): Promise<Sample> {
   const h = await Harness.createLocal({ accountLabels: ['deployer', 'alice'], autoDeploy: ['counter'] });
   try {
@@ -120,7 +167,7 @@ async function benchRunViewFunction(): Promise<Sample> {
 }
 
 async function main() {
-  const SUITES = process.env.MH_BENCH_SUITES?.split(',') ?? ['local', 'fork', 'view'];
+  const SUITES = process.env.MH_BENCH_SUITES?.split(',') ?? ['local', 'fork', 'view', 'resource'];
   const samples: Sample[] = [];
 
   if (SUITES.includes('local')) {
@@ -134,6 +181,10 @@ async function main() {
   if (SUITES.includes('view')) {
     console.log('Running: runViewFunction RPC (50 iterations) ...');
     samples.push(await benchRunViewFunction());
+  }
+  if (SUITES.includes('resource')) {
+    console.log('Running: getResource warm hit (20 iterations) ...');
+    samples.push(await benchGetResourceWarm());
   }
 
   printTable(samples);

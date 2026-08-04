@@ -3,6 +3,7 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import type { LedgerInfo, AccountData, AccountResource } from '../types/fork.js';
 import { normalizeAddressShort } from '../utils/address.js';
+import { normalizeMovementApiUrl } from './endpoint.js';
 import {
   assertLedgerInfo,
   assertAccountData,
@@ -27,24 +28,6 @@ export class MovementApiClient {
   private readonly maxBytes: number;
 
   constructor(nodeUrl: string, apiKey?: string, options: MovementApiClientOptions = {}) {
-    let parsed: URL;
-    try {
-      parsed = new URL(nodeUrl.replace(/\/$/, ''));
-    } catch (cause) {
-      throw new MovementApiError('Movement API URL is invalid', 'invalid_argument', { cause });
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new MovementApiError(
-        `Unsupported Movement API protocol: ${parsed.protocol}`,
-        'invalid_argument'
-      );
-    }
-    if (parsed.username !== '' || parsed.password !== '') {
-      throw new MovementApiError(
-        'Movement API URL must not contain embedded credentials',
-        'invalid_argument'
-      );
-    }
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
@@ -54,7 +37,7 @@ export class MovementApiClient {
       throw new RangeError('maxBytes must be a positive safe integer');
     }
 
-    this.nodeUrl = parsed.toString().replace(/\/$/, '');
+    this.nodeUrl = normalizeMovementApiUrl(nodeUrl);
     if (apiKey !== undefined) this.apiKey = apiKey;
     this.timeoutMs = timeoutMs;
     this.maxBytes = maxBytes;

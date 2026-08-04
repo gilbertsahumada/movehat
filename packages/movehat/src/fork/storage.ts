@@ -14,6 +14,7 @@ import type { ForkMetadata, AccountState } from '../types/fork.js';
 import { isHexAddress } from '../utils/address.js';
 import { assertForkMetadata, assertAccountStateRecord } from './validation.js';
 import { logger } from '../ui/index.js';
+import { ForkCacheGenerationTransitionError } from './errors.js';
 
 /**
  * Sanitize address to create a safe filename. Validates the address through
@@ -61,7 +62,61 @@ function writePrivateFile(path: string, data: string): void {
 
 const LEGACY_MIGRATION_MARKER = '.resource-cache-v1';
 const CACHE_GENERATION_FILE = '.generation';
+const CACHE_GENERATION_TRANSITION_PREFIX = 'transition:';
+const CACHE_COMPLETE_GENERATION_PREFIX = 'generation:';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface ForkStorageTestHooks {
+  beforeLegacyMarkerWrite?: ((address: string) => void) | undefined;
+  beforeAllResourcesMarkerRead?: ((address: string) => void) | undefined;
+}
+
+let testHooks: ForkStorageTestHooks | undefined;
+
+/** @internal Test-only scheduling hooks; this module is not a package export. */
+export function __setForkStorageTestHooks(hooks?: ForkStorageTestHooks): void {
+  testHooks = hooks;
+}
+
+function generationPath(forkPath: string): string {
+  return join(forkPath, 'cache', CACHE_GENERATION_FILE);
+}
+
+function generationCompleteMarker(generation: string): string {
+  if (!UUID_RE.test(generation)) {
+    throw new Error('Cannot write a cache marker for an invalid fork generation');
+  }
+  return `${CACHE_COMPLETE_GENERATION_PREFIX}${generation}\n`;
+}
+
+/**
+ * Publish an in-progress marker before changing metadata or clearing caches.
+ * Readers that overlap the rotation fail closed; the stable UUID is committed
+ * only after every related file mutation succeeds.
+ *
+ * @internal This module is not a package export.
+ */
+export function beginCacheGenerationTransition(forkPath: string): string {
+  const cacheDir = join(forkPath, 'cache');
+  ensurePrivateDirectory(cacheDir);
+  const generation = randomUUID();
+  writePrivateFile(
+    generationPath(forkPath),
+    `${CACHE_GENERATION_TRANSITION_PREFIX}${generation}\n`
+  );
+  return generation;
+}
+
+/** @internal This module is not a package export. */
+export function commitCacheGenerationTransition(
+  forkPath: string,
+  generation: string
+): void {
+  if (!UUID_RE.test(generation)) {
+    throw new Error('Cannot commit an invalid fork cache generation');
+  }
+  writePrivateFile(generationPath(forkPath), `${generation}\n`);
+}
 
 function readJsonFile<T>(path: string, label: string): T {
   try {
@@ -96,6 +151,62 @@ function readLegacyResourceMap(path: string): Record<string, unknown> {
 }
 
 /**
+ * Migrate a 0.6.x resource cache while binding every completeness marker to
+ * the generation observed by the caller. If another process rotates the
+ * snapshot mid-migration, the old markers remain invalid in the new
+ * generation even though the caller can only detect the change afterwards.
+ *
+ * @internal This module is not a package export.
+ */
+export function migrateLegacyResourceCacheAtGeneration(
+  forkPath: string,
+  generation: string
+): void {
+  const cacheDir = join(forkPath, 'cache');
+  const resourcesDir = join(forkPath, 'resources');
+  ensurePrivateDirectory(cacheDir);
+  const completeMarker = generationCompleteMarker(generation);
+  const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
+  if (existsSync(migrationMarker)) return;
+
+  if (existsSync(resourcesDir)) {
+    for (const file of readdirSync(resourcesDir).sort()) {
+      if (!/^0x[0-9a-fA-F]{1,64}\.json$/.test(file)) continue;
+      const legacyPath = join(resourcesDir, file);
+      // Validate legacy JSON before declaring it complete. 0.6.0 wrote these
+      // files non-atomically, so a crash can leave truncated JSON behind —
+      // quarantine such files instead of failing the whole fork (0.6.0's
+      // resetState flow deleted them unread).
+      try {
+        readLegacyResourceMap(legacyPath);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const quarantinePath = `${legacyPath}.corrupt-${Date.now()}-${randomUUID()}.bak`;
+        try {
+          renameSync(legacyPath, quarantinePath);
+        } catch (renameError) {
+          // The file listed by readdirSync is already gone — another process
+          // cleared the cache mid-scan. Nothing to quarantine; the address
+          // simply stays uncached and is refetched on demand.
+          if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') continue;
+          throw renameError;
+        }
+        logger.warning(
+          `Skipping unreadable legacy fork resource cache ${file}: ${msg} ` +
+            `Moved to ${quarantinePath}; the address will be refetched on demand.`
+        );
+        continue;
+      }
+      const address = file.slice(0, -'.json'.length);
+      const marker = join(cacheDir, `${sanitizeAddressForFilename(address)}.all-resources`);
+      testHooks?.beforeLegacyMarkerWrite?.(address);
+      if (!existsSync(marker)) writePrivateFile(marker, completeMarker);
+    }
+  }
+  writePrivateFile(migrationMarker, 'complete\n');
+}
+
+/**
  * Storage system for fork state
  * Manages the file structure and I/O for fork data
  */
@@ -123,24 +234,27 @@ export class ForkStorage {
   getCacheGeneration(): string {
     const cacheDir = join(this.forkPath, 'cache');
     ensurePrivateDirectory(cacheDir);
-    const generationPath = join(cacheDir, CACHE_GENERATION_FILE);
-    if (!existsSync(generationPath)) {
+    const path = generationPath(this.forkPath);
+    if (!existsSync(path)) {
       const generation = randomUUID();
-      writePrivateFile(generationPath, `${generation}\n`);
+      writePrivateFile(path, `${generation}\n`);
       return generation;
     }
-    const generation = readFileSync(generationPath, 'utf8').trim();
+    const generation = readFileSync(path, 'utf8').trim();
+    if (generation.startsWith(CACHE_GENERATION_TRANSITION_PREFIX)) {
+      throw new ForkCacheGenerationTransitionError(path);
+    }
     if (!UUID_RE.test(generation)) {
-      throw new Error(`Invalid fork cache generation at ${generationPath}`);
+      throw new Error(`Invalid fork cache generation at ${path}`);
     }
     return generation;
   }
 
   advanceCacheGeneration(): string {
+    const generation = randomUUID();
     const cacheDir = join(this.forkPath, 'cache');
     ensurePrivateDirectory(cacheDir);
-    const generation = randomUUID();
-    writePrivateFile(join(cacheDir, CACHE_GENERATION_FILE), `${generation}\n`);
+    commitCacheGenerationTransition(this.forkPath, generation);
     return generation;
   }
 
@@ -174,7 +288,12 @@ export class ForkStorage {
 
     const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
     if (!existsSync(migrationMarker)) writePrivateFile(migrationMarker, 'complete\n');
-    this.getCacheGeneration();
+    const path = generationPath(this.forkPath);
+    if (!existsSync(path)) {
+      writePrivateFile(path, `${randomUUID()}\n`);
+    } else {
+      chmodSync(path, PRIVATE_FILE_MODE);
+    }
   }
 
   /**
@@ -184,47 +303,7 @@ export class ForkStorage {
    * global marker last, making interruption safe and the migration idempotent.
    */
   migrateLegacyResourceCache(): void {
-    const cacheDir = join(this.forkPath, 'cache');
-    const resourcesDir = join(this.forkPath, 'resources');
-    ensurePrivateDirectory(cacheDir);
-    this.getCacheGeneration();
-    const migrationMarker = join(cacheDir, LEGACY_MIGRATION_MARKER);
-    if (existsSync(migrationMarker)) return;
-
-    if (existsSync(resourcesDir)) {
-      for (const file of readdirSync(resourcesDir).sort()) {
-        if (!/^0x[0-9a-fA-F]{1,64}\.json$/.test(file)) continue;
-        const legacyPath = join(resourcesDir, file);
-        // Validate legacy JSON before declaring it complete. 0.6.0 wrote these
-        // files non-atomically, so a crash can leave truncated JSON behind —
-        // quarantine such files instead of failing the whole fork (0.6.0's
-        // resetState flow deleted them unread).
-        try {
-          readLegacyResourceMap(legacyPath);
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          const quarantinePath = `${legacyPath}.corrupt-${Date.now()}-${randomUUID()}.bak`;
-          try {
-            renameSync(legacyPath, quarantinePath);
-          } catch (renameError) {
-            // The file listed by readdirSync is already gone — another process
-            // cleared the cache mid-scan. Nothing to quarantine; the address
-            // simply stays uncached and is refetched on demand.
-            if ((renameError as NodeJS.ErrnoException).code === 'ENOENT') continue;
-            throw renameError;
-          }
-          logger.warning(
-            `Skipping unreadable legacy fork resource cache ${file}: ${msg} ` +
-              `Moved to ${quarantinePath}; the address will be refetched on demand.`
-          );
-          continue;
-        }
-        const address = file.slice(0, -'.json'.length);
-        const marker = this.getAllResourcesMarkerPath(address);
-        if (!existsSync(marker)) writePrivateFile(marker, 'complete\n');
-      }
-    }
-    writePrivateFile(migrationMarker, 'complete\n');
+    migrateLegacyResourceCacheAtGeneration(this.forkPath, this.getCacheGeneration());
   }
 
   /**
@@ -339,6 +418,10 @@ export class ForkStorage {
    * Save all resources for an account
    */
   saveAllResources(address: string, resources: Record<string, unknown>): void {
+    // Capture the generation before writing data. If a snapshot replacement
+    // races this operation, the marker remains tied to the old generation and
+    // cannot declare files from the replacement snapshot complete.
+    const completeMarker = generationCompleteMarker(this.getCacheGeneration());
     const resourceFilePath = this.getResourceFilePath(address);
 
     // Ensure resources directory exists
@@ -349,7 +432,7 @@ export class ForkStorage {
 
     const cacheDir = join(this.forkPath, 'cache');
     ensurePrivateDirectory(cacheDir);
-    writePrivateFile(this.getAllResourcesMarkerPath(address), 'complete\n');
+    writePrivateFile(this.getAllResourcesMarkerPath(address), completeMarker);
   }
 
   /**
@@ -370,10 +453,22 @@ export class ForkStorage {
    * address must be refetched rather than served as an empty snapshot.
    */
   hasAllResources(address: string): boolean {
-    return (
-      existsSync(this.getAllResourcesMarkerPath(address)) &&
-      existsSync(this.getResourceFilePath(address))
-    );
+    const markerPath = this.getAllResourcesMarkerPath(address);
+    if (!existsSync(markerPath) || !existsSync(this.getResourceFilePath(address))) {
+      return false;
+    }
+
+    testHooks?.beforeAllResourcesMarkerRead?.(address);
+    const marker = readFileSync(markerPath, 'utf8').trim();
+    // 0.6/0.7 markers predate generation scoping. Continue accepting them
+    // when adopting existing snapshots; all markers written by this version
+    // are generation-scoped and therefore safe across concurrent rotations.
+    if (marker === 'complete') return true;
+    if (!marker.startsWith(CACHE_COMPLETE_GENERATION_PREFIX)) return false;
+
+    const markerGeneration = marker.slice(CACHE_COMPLETE_GENERATION_PREFIX.length);
+    if (!UUID_RE.test(markerGeneration)) return false;
+    return markerGeneration === this.getCacheGeneration();
   }
 
   /**

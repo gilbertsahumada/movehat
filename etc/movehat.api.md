@@ -204,11 +204,25 @@ export interface DeploymentInfo {
 // @public (undocumented)
 export function findMoveliteBinary(options?: FindMoveliteBinaryOptions): string | null;
 
+// @public
+export class ForkCacheGenerationTransitionError extends Error {
+    constructor(path: string);
+}
+
 // @public (undocumented)
 export class ForkDataNotFoundError extends Error {
     constructor(message: string, options?: {
         cause?: unknown;
     });
+}
+
+// @public
+export class ForkIdentityMismatchError extends Error {
+    constructor(storedNetwork: string, requestedNetwork: string, endpointChanged: boolean);
+    readonly endpointChanged: boolean;
+    readonly networkChanged: boolean;
+    readonly requestedNetwork: string;
+    readonly storedNetwork: string;
 }
 
 // @public (undocumented)
@@ -284,6 +298,13 @@ export class ForkServer {
 // @public (undocumented)
 export interface ForkServerOptions {
     corsAllowOrigins?: readonly string[];
+}
+
+// @public (undocumented)
+export class ForkSnapshotChangedError extends Error {
+    constructor(message: string, options?: {
+        cause?: unknown;
+    });
 }
 
 // @public (undocumented)

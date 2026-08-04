@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { vol } from 'memfs';
-import { ForkStorage } from '../storage.js';
+import {
+  beginCacheGenerationTransition,
+  commitCacheGenerationTransition,
+  ForkStorage,
+} from '../storage.js';
+import { ForkCacheGenerationTransitionError } from '../errors.js';
 
 // Mock fs module
 vi.mock('fs', async () => {
@@ -241,6 +246,26 @@ describe('ForkStorage', () => {
       expect(resources['0x1::coin::CoinStore']).toEqual({ value: '100' });
     });
 
+    it('invalidates a complete-resource marker when the cache generation changes', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const originalGeneration = storage.getCacheGeneration();
+
+      storage.saveAllResources(
+        '0x1',
+        { '0x1::coin::CoinStore': { value: '100' } }
+      );
+      expect(storage.hasAllResources('0x1')).toBe(true);
+
+      const replacementGeneration = storage.advanceCacheGeneration();
+
+      expect(replacementGeneration).not.toBe(originalGeneration);
+      expect(storage.hasAllResources('0x1')).toBe(false);
+      expect(storage.getAllResources('0x1')).toEqual({
+        '0x1::coin::CoinStore': { value: '100' },
+      });
+    });
+
     it('should throw a controlled error for corrupt resource JSON', () => {
       vol.fromJSON({
         [`${forkPath}/resources/0x1.json`]: '{bad',
@@ -413,6 +438,37 @@ describe('ForkStorage', () => {
       expect(second).not.toBe(first);
       expect(storage.getCacheGeneration()).toBe(second);
       expect(vol.existsSync(`${forkPath}/cache/.resource-cache-v1`)).toBe(true);
+    });
+
+    it('fails closed between the transition marker and stable generation commit', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const next = beginCacheGenerationTransition(forkPath);
+
+      expect(() => storage.getCacheGeneration()).toThrow(
+        ForkCacheGenerationTransitionError
+      );
+      expect(
+        vol.readFileSync(`${forkPath}/cache/.generation`, 'utf8')
+      ).toBe(`transition:${next}\n`);
+
+      commitCacheGenerationTransition(forkPath, next);
+      expect(storage.getCacheGeneration()).toBe(next);
+    });
+
+    it('initialize preserves an interrupted transition for explicit recovery', () => {
+      const storage = new ForkStorage(forkPath);
+      storage.initialize();
+      const next = beginCacheGenerationTransition(forkPath);
+
+      storage.initialize();
+
+      expect(
+        vol.readFileSync(`${forkPath}/cache/.generation`, 'utf8')
+      ).toBe(`transition:${next}\n`);
+      expect(() => storage.getCacheGeneration()).toThrow(
+        ForkCacheGenerationTransitionError
+      );
     });
   });
 

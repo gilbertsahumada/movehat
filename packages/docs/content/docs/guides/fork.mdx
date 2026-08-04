@@ -158,6 +158,70 @@ console.log(`Forked from: ${metadata.network}`);
 console.log(`Chain ID: ${metadata.chainId}`);
 ```
 
+`load()` is the preferred way to accept the identity already stored in a fork.
+Calling `initialize()` again is also safe for repeated test hooks, but its
+network label and endpoint must match the stored identity (an omitted label
+accepts the stored one). This check is local:
+an unchanged fork can be re-adopted while the upstream is offline, and
+equivalent URL spellings such as a trailing slash are accepted.
+
+```typescript
+import { ForkIdentityMismatchError, ForkManager } from 'movehat';
+
+try {
+  await fork.initialize(nodeUrl, networkName);
+} catch (error) {
+  if (error instanceof ForkIdentityMismatchError) {
+    fork.load(); // Keep using the stored network and endpoint.
+  } else {
+    throw error;
+  }
+}
+```
+
+To deliberately switch the network or endpoint, replace the pinned snapshot
+and its cache explicitly:
+
+```typescript
+await fork.initialize(newNodeUrl, newNetworkName, undefined, { overwrite: true });
+```
+
+The CLI equivalent is `movehat fork create`; confirm its overwrite prompt.
+API keys are process-local and may be changed without replacing the snapshot.
+Forks created by MoveHat 0.6 already persist both identity fields and require no
+metadata migration; their legacy resource cache migration still runs after the
+identity check succeeds.
+
+### Snapshot replacement and long-running processes
+
+Each `ForkManager` stays pinned to the snapshot generation it loaded. If
+another process overwrites or resets the same fork directory, the older
+manager throws `ForkSnapshotChangedError` instead of reading or modifying the
+replacement snapshot:
+
+```typescript
+import { ForkManager, ForkSnapshotChangedError } from 'movehat';
+
+try {
+  await fork.getResource('0x1', '0x1::example::Resource');
+} catch (error) {
+  if (error instanceof ForkSnapshotChangedError) {
+    fork.load(); // Explicitly adopt the current on-disk snapshot.
+  } else {
+    throw error;
+  }
+}
+```
+
+`movehat fork serve` responds with HTTP `409` and
+`fork_snapshot_changed` after its fork is replaced. Restart the server to load
+the new snapshot. MoveHat never switches snapshots silently inside a running
+manager or server.
+
+If an overwrite is interrupted, reads remain blocked rather than accepting
+partially-cleared state. Run `movehat fork create` for the same destination and
+confirm the overwrite to recover it.
+
 ## Fork Storage Structure
 
 Forks are stored as JSON files for easy inspection and version control:
@@ -205,7 +269,7 @@ new ForkManager(forkPath: string)
 
 | Method | Description |
 |--------|-------------|
-| `initialize(nodeUrl, networkName?)` | Initialize a new fork from a network |
+| `initialize(nodeUrl, networkName?, apiKey?, options?)` | Initialize a fork; changing its stored identity requires `overwrite: true` |
 | `load()` | Load an existing fork from disk |
 | `getMetadata()` | Get fork metadata |
 | `getResource(address, resourceType)` | Get a resource with lazy loading |
@@ -274,5 +338,6 @@ But **commit** metadata and resources for reproducible tests.
 |-------|----------|
 | Fork creation fails | Check network URL and verify network is accessible |
 | Resource not found (404) | Verify account address exists and resource type is exact |
+| Fork snapshot changed (409) | Call `load()` on programmatic managers or restart `movehat fork serve` |
 | Port already in use | Use a different port: `--port 8081` |
 | Permission denied | Use a port above 1024 |

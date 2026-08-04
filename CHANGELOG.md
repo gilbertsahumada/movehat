@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Re-initializing an existing fork now validates its persisted network and
+  endpoint identity locally before reusing cached state. Unchanged forks still
+  work offline (including equivalent trailing-slash URL forms), while identity
+  changes fail with the exported, URL-redacted
+  `ForkIdentityMismatchError`. An omitted network label accepts the stored
+  one. Callers can use `load()` to keep the stored identity or
+  `initialize(..., { overwrite: true })` to replace the snapshot and cache
+  explicitly. Closes #405.
+- Long-running `ForkManager` and `movehat fork serve` instances now fail
+  closed with the exported `ForkSnapshotChangedError` after another process
+  overwrites or resets their fork. Snapshot generation rotations use an
+  explicit transition marker, so cached reads, in-flight upstream responses,
+  local mutations, metadata, and account listings cannot silently mix two
+  ledger snapshots. Direct `ForkStorage` consumers can distinguish an
+  interrupted rotation through the exported
+  `ForkCacheGenerationTransitionError`. Fork servers return HTTP 409
+  `fork_snapshot_changed` with restart guidance, and an explicit overwrite can
+  recover an interrupted rotation. Closes #404.
+- Movement API base URLs carrying a query string or fragment are now rejected
+  up front with a clear `invalid_argument` error. Previously the client
+  appended request paths as text, so a URL like `.../v1?tenant=a` silently
+  sent every request to `/v1` with the path buried in the query. A `load()`
+  whose stored `nodeUrl` fails validation also no longer half-adopts the
+  fork's metadata and snapshot generation before throwing.
+
+### Changed
+
+- Warm fork resource cache hits now parse the per-address cache file once
+  instead of twice. `ForkManager.getResource` (and the `fundAccount` cache
+  read) resolved a hit through a `hasResource` + `getResource` pair, each
+  doing its own read and `JSON.parse` of the same `resources/<addr>.json`;
+  a single discriminated read now preserves the missing-vs-cached-null
+  semantics with one parse. Measured at -32% median on 100 warm reads over a
+  500-entry (~1 MB) resource map via the new offline `resource` benchmark
+  suite (`MH_BENCH_SUITES=resource pnpm bench`). Found while fixing #404.
+  Closes #406.
+
+### Internal
+
+- CI now runs `pnpm test:runtime` as a required gate on every PR: the
+  canonical `deploy-counter.ts` flow executes end-to-end against the local
+  movelite backend and the job asserts the terminal "Counter value: 1"
+  output. Previously the flagship credential-free deploy flow was covered
+  only by an advisory, main-only E2E step, so a runtime regression in the
+  first-run experience could merge green. Closes #397.
+
+### Tests
+
+- The fork subsystem gains deterministic, required end-to-end coverage. A genuine MoveHat
+  0.6.0 fork directory (pre-migration layout) is checked in as a fixture,
+  and a new offline gate (`pnpm test:fork-e2e`) drives the real CLI against
+  a copy of it: `fork list`, a `fork view-resource` read asserting the
+  pre-migration value survives the legacy-cache migration, validates the
+  generation-scoped completeness marker, and exercises `fork serve` through
+  singular and plural cached-resource reads. A local sentinel returns the
+  fixture's value but requires zero requests, proving every asserted path is
+  a cache hit without contacting testnet. The gate is required in CI on every
+  PR. The e2e suite's full mode also hard-gates
+  `movehat fork create` against testnet (its failure was previously
+  downgraded to an informational note, so a broken fork path could never
+  fail the run). Previously the fork paths lacked deterministic, required E2E
+  coverage; `initialize()` re-adoption remains covered separately. Closes
+  #398.
+
 ## [0.7.0] - 2026-07-24
 
 ### Breaking

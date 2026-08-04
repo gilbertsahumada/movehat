@@ -33,8 +33,11 @@ export type { MovementApiClientOptions } from "./fork/api.js";
 export { ForkStorage } from "./fork/storage.js";
 export { ForkServer } from "./fork/server.js";
 export {
+  ForkCacheGenerationTransitionError,
+  ForkIdentityMismatchError,
   MovementApiError,
   ForkDataNotFoundError,
+  ForkSnapshotChangedError,
   ForkSnapshotPrunedError,
 } from "./fork/errors.js";
 export type { MovementApiErrorCode } from "./fork/errors.js";

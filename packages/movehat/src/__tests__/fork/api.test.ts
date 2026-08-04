@@ -161,6 +161,16 @@ describe("MovementApiClient — Authorization header (apiKey wiring)", () => {
     );
   });
 
+  it("rejects a base URL carrying a query string or fragment", async () => {
+    const { MovementApiClient } = await import("../../fork/api.js");
+    expect(() => new MovementApiClient("https://example.com/v1?tenant=a")).toThrow(
+      /query string or fragment/i
+    );
+    expect(() => new MovementApiClient("https://example.com/v1#section")).toThrow(
+      /query string or fragment/i
+    );
+  });
+
   it("keeps upstream error bodies private while preserving a safe error_code", async () => {
     httpsRequest.mockImplementation(
       (_url: URL, _options: unknown, callback: (res: IncomingMessage) => void) => {

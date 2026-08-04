@@ -26,6 +26,7 @@ vi.mock("../api.js", () => ({
 }));
 
 import { ForkServer } from "../server.js";
+import { ForkManager } from "../manager.js";
 import { MovementApiError } from "../errors.js";
 
 /**
@@ -186,6 +187,46 @@ describe("ForkServer — POST /v1/view proxy", () => {
     expect(body.error_code).toBe("fork_snapshot_pruned");
     expect(body.message).toMatch(/recreate.*overwrite/i);
     expect(body.message).toMatch(/resetState.*cannot/i);
+  });
+
+  it("returns 409 for every endpoint after another manager replaces the snapshot", async () => {
+    server = new ForkServer(forkDir, 0);
+    await server.start();
+    const internal = (server as unknown as { server: { address(): AddressInfo } }).server;
+    const port = internal.address().port;
+
+    fakeApi.getLedgerInfo.mockResolvedValueOnce({
+      chain_id: 27,
+      ledger_version: "200",
+      ledger_timestamp: "2000",
+      epoch: "6",
+      block_height: "84",
+    });
+    const replacement = new ForkManager(forkDir);
+    await replacement.initialize("http://example.invalid/v1", "test", undefined, {
+      overwrite: true,
+    });
+
+    const requests: Array<[string, RequestInit | undefined]> = [
+      ["/v1/", undefined],
+      ["/v1/accounts/0x1", undefined],
+      [
+        "/v1/view",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ function: "0x1::m::f" }),
+        },
+      ],
+    ];
+    for (const [path, init] of requests) {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`, init);
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error_code: "fork_snapshot_changed",
+      });
+    }
+    expect(fakeApi.view).not.toHaveBeenCalled();
   });
 
   it("redacts upstream view errors before logging or returning them", async () => {
