@@ -345,22 +345,27 @@ export class ForkManager {
     this.migrateLegacyResourceCache(generation);
     const metadata = this.storage.loadMetadata();
     this.assertCacheGeneration(generation);
-    this.metadata = metadata;
-    this.cacheGeneration = generation;
+    // Build the client before committing any instance state, so a rejected
+    // nodeUrl leaves the manager unchanged instead of half-adopted.
+    let apiClient: MovementApiClient;
     try {
-      this.apiClient = new MovementApiClient(metadata.nodeUrl, this.apiKey);
+      apiClient = new MovementApiClient(metadata.nodeUrl, this.apiKey);
     } catch (error) {
       if (error instanceof MovementApiError) {
         throw new MovementApiError(
-          `${error.message}. This fork's metadata.json predates the credential ` +
-            `rules — edit ${this.forkPath}/metadata.json to remove credentials from ` +
-            `nodeUrl (pass an API key via setApiKey instead), or recreate the fork.`,
+          `${error.message}. This fork's metadata.json predates the URL rules — ` +
+            `edit ${this.forkPath}/metadata.json so nodeUrl carries no credentials, ` +
+            `query string, or fragment (pass an API key via setApiKey instead), ` +
+            `or recreate the fork.`,
           error.code,
           { cause: error }
         );
       }
       throw error;
     }
+    this.metadata = metadata;
+    this.cacheGeneration = generation;
+    this.apiClient = apiClient;
   }
 
   getMetadata(): ForkMetadata {

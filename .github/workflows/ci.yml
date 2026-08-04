@@ -338,8 +338,6 @@ jobs:
           set -o pipefail
           pnpm test:runtime 2>&1 | tee runtime.log
           grep -q "Counter value: 1" runtime.log
-        env:
-          MOVEMENT_RPC_URL: https://testnet.movementnetwork.xyz/v1
 
       - name: Fork migration & serve gate (#398)
         # Required offline gate for the fork subsystem: drives the real CLI

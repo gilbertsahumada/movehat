@@ -26,5 +26,11 @@ export function normalizeMovementApiUrl(nodeUrl: string): string {
       'invalid_argument'
     );
   }
+  if (parsed.search !== '' || parsed.hash !== '') {
+    throw new MovementApiError(
+      'Movement API URL must not contain a query string or fragment',
+      'invalid_argument'
+    );
+  }
   return parsed.toString().replace(/\/$/, '');
 }

@@ -107,36 +107,44 @@ async function benchGetResourceWarm(): Promise<Sample> {
   // Fully offline: the fork is fabricated on disk and warm cache hits never
   // touch the upstream API client.
   const dir = mkdtempSync(join(tmpdir(), 'movehat-bench-resource-'));
-  const forkDir = join(dir, 'bench-fork');
-  const address = `0x${'a'.repeat(64)}`;
-  const storage = new ForkStorage(forkDir);
-  storage.initialize();
-  storage.saveMetadata({
-    network: 'custom',
-    nodeUrl: 'http://127.0.0.1:1/v1',
-    chainId: 27,
-    ledgerVersion: '100',
-    timestamp: '0',
-    epoch: '1',
-    blockHeight: '1',
-    createdAt: new Date().toISOString(),
-  });
-  const resources: Record<string, unknown> = {};
-  for (let i = 0; i < 500; i++) {
-    resources[`0x1::bench::R${i}`] = { value: String(i), blob: 'x'.repeat(2000) };
+  try {
+    const forkDir = join(dir, 'bench-fork');
+    const address = `0x${'a'.repeat(64)}`;
+    const storage = new ForkStorage(forkDir);
+    storage.initialize();
+    storage.saveMetadata({
+      network: 'custom',
+      nodeUrl: 'http://127.0.0.1:1/v1',
+      chainId: 27,
+      ledgerVersion: '100',
+      timestamp: '0',
+      epoch: '1',
+      blockHeight: '1',
+      createdAt: new Date().toISOString(),
+    });
+    const resources: Record<string, unknown> = {};
+    for (let i = 0; i < 500; i++) {
+      resources[`0x1::bench::R${i}`] = { value: String(i), blob: 'x'.repeat(2000) };
+    }
+    storage.saveAllResources(address, resources);
+    const manager = new ForkManager(forkDir);
+    manager.load();
+    return await measure(
+      'getResource warm hit (500-entry map)',
+      async () => {
+        for (let i = 0; i < 100; i++) {
+          const resourceType = `0x1::bench::R${i % 500}`;
+          const value = await manager.getResource(address, resourceType);
+          if (value === null) {
+            throw new Error(`Expected a cached resource for ${resourceType}`);
+          }
+        }
+      },
+      20,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  storage.saveAllResources(address, resources);
-  const manager = new ForkManager(forkDir);
-  manager.load();
-  return measure(
-    'getResource warm hit (500-entry map)',
-    async () => {
-      for (let i = 0; i < 100; i++) {
-        await manager.getResource(address, `0x1::bench::R${i % 500}`);
-      }
-    },
-    20,
-  ).finally(() => rmSync(dir, { recursive: true, force: true }));
 }
 
 async function benchRunViewFunction(): Promise<Sample> {
