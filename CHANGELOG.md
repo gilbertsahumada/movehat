@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attaches those to the attribute and warns, and the Movement CLI linter
   exits non-zero on warnings-only output), and the example's lint now runs
   as a required CI gate so both regressions stay caught. Closes #409.
+- `movehat prove` resolves the scaffold's named addresses the same way: it
+  shared lint's missing-`--dev` gap, so it failed on any freshly-initialized
+  project with "Unresolved addresses" before the prover even started.
+  Closes #417.
 
 ## [0.8.0] - 2026-08-04
 

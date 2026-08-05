@@ -16,6 +16,8 @@ deployments/
 # Build output
 dist/
 build/
+# Move Prover intermediate output (written into move/ by movement move prove)
+*.bpl
 
 # Test coverage
 coverage/
