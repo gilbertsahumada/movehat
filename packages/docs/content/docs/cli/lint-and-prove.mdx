@@ -25,9 +25,10 @@ run means warning-free code.
 movehat prove
 ```
 
-Runs `movement move prove` for the configured package. Proving can legitimately
-take much longer than compilation, so Movehat does not impose a timeout. It runs
-until the prover finishes or you press Ctrl+C.
+Runs `movement move prove` for the configured package, with the same
+`[dev-addresses]` resolution as lint. Proving can legitimately take much longer
+than compilation, so Movehat does not impose a timeout. It runs until the
+prover finishes or you press Ctrl+C.
 
 Both commands pass the package path as a direct process argument, including
 paths that contain spaces, rather than evaluating it through a shell.
