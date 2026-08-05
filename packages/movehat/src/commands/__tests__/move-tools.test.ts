@@ -47,7 +47,7 @@ describe("Movement CLI quality commands", () => {
     expect(runCliMock).toHaveBeenCalledWith(
       expect.objectContaining({
         command: "movement",
-        args: ["move", "lint", "--package-dir", packageDir],
+        args: ["move", "lint", "--package-dir", packageDir, "--dev"],
         timeoutMs: 5 * 60 * 1000,
       }),
       { throwOnNonZeroExit: false }
@@ -67,7 +67,7 @@ describe("Movement CLI quality commands", () => {
     await proveCommand();
     expect(runCliUntilInterruptedMock.mock.calls[0]![0]).toEqual(
       expect.objectContaining({
-        args: ["move", "prove", "--package-dir", packageDir],
+        args: ["move", "prove", "--package-dir", packageDir, "--dev"],
         timeoutMs: Infinity,
       })
     );

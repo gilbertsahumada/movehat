@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `movehat lint` now resolves the scaffold's named addresses through the
+  package's `[dev-addresses]` by passing `--dev`, matching `movehat test
+  --move` and `movehat coverage`. Previously it failed on every
+  freshly-initialized project with "Unresolved addresses" because the shipped
+  Move.toml uses `_` placeholders. The example's doc comments placed above
+  `#[view]` attributes were demoted to regular comments (the Move compiler
+  attaches those to the attribute and warns, and the Movement CLI linter
+  exits non-zero on warnings-only output), and the example's lint now runs
+  as a required CI gate so both regressions stay caught. Closes #409.
+- `movehat prove` resolves the scaffold's named addresses the same way: it
+  shared lint's missing-`--dev` gap, so it failed on any freshly-initialized
+  project with "Unresolved addresses" before the prover even started.
+  Closes #417.
+
 ## [0.8.0] - 2026-08-04
 
 ### Fixed

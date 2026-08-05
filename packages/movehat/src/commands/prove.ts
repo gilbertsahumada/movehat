@@ -3,5 +3,5 @@ import { runMovementMoveCommand } from "./move-tool.js";
 
 export default async function proveCommand(): Promise<void> {
   logger.step("Running Move Prover...");
-  await runMovementMoveCommand("prove", { timeoutMs: Infinity });
+  await runMovementMoveCommand("prove", { args: ["--dev"], timeoutMs: Infinity });
 }
