@@ -197,6 +197,13 @@ To opt out of the shared node:
 > construct a `MoveliteManager`; a plain `LocalNodeManager` gives only the
 > degraded event/state trace.
 
+> **mocha `--parallel` is not supported.** Node sharing is per-process, so
+> each parallel worker boots its own movelite node, and only two ports
+> (8090, then 8091) are tried before startup fails with
+> `Ports 8090 and 8091 are in use`. Run your suite in a single mocha
+> process (the default) — the shared node already keeps sequential specs
+> fast.
+
 ## Running All Tests
 
 Run both Move and TypeScript tests together:
