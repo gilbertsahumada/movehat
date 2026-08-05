@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Internal
+
+- Documented in the testing guide that mocha `--parallel` is not supported:
+  the shared movelite node is per-process, so each parallel worker boots its
+  own node and the two-port fallback (8090, then 8091) fails a third worker
+  with "Ports 8090 and 8091 are in use". Also removed the stale
+  `src/templates/types/movehat.d.ts` from the published templates — it
+  declared a pre-0.2.x API surface (`initRuntime`, `setupTestEnvironment`)
+  that no longer exists, was never copied into user projects by `movehat
+  init`, and shipped dead in the tarball. Closes #421.
+
 ## [0.8.1] - 2026-08-05
 
 ### Fixed
