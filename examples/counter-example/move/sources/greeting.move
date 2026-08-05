@@ -21,20 +21,20 @@ module hello_blockchain::greeting {
     /// Error codes
     const ENO_GREETING: u64 = 1;
 
-    /// View function to get the module address
+    // View function to get the module address
     #[view]
     public fun get_module_address(): address {
         @hello_blockchain
     }
 
-    /// View function to get greeting for an address
+    // View function to get greeting for an address
     #[view]
     public fun get_greeting(addr: address): String acquires GreetingHolder {
         assert!(exists<GreetingHolder>(addr), ENO_GREETING);
         borrow_global<GreetingHolder>(addr).greeting
     }
 
-    /// View function to get greeting count
+    // View function to get greeting count
     #[view]
     public fun get_count(addr: address): u64 acquires GreetingHolder {
         assert!(exists<GreetingHolder>(addr), ENO_GREETING);

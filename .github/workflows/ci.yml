@@ -347,6 +347,12 @@ jobs:
         # hit — no network, no keys — so it can gate every PR.
         run: pnpm test:fork-e2e
 
+      - name: Example lint gate (#409)
+        # movement move lint over the example package with --dev address
+        # resolution. Warning-free by construction — the pinned CLI exits 1
+        # on warnings-only output, so any new warning fails this gate.
+        run: pnpm lint:example
+
       - name: Example suite (Tier 2 gate — movelite backend)
         # The counter-example mocha suite is all-local: the fixtures share
         # one implicit movelite node (pulled by pnpm install as movehat's

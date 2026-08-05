@@ -47,7 +47,7 @@ describe("Movement CLI quality commands", () => {
     expect(runCliMock).toHaveBeenCalledWith(
       expect.objectContaining({
         command: "movement",
-        args: ["move", "lint", "--package-dir", packageDir],
+        args: ["move", "lint", "--package-dir", packageDir, "--dev"],
         timeoutMs: 5 * 60 * 1000,
       }),
       { throwOnNonZeroExit: false }

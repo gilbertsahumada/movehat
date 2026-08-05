@@ -10,8 +10,14 @@ icon: ShieldCheck
 movehat lint
 ```
 
-Runs `movement move lint` for the package configured by `moveDir`. Lint is a
-finite command and Movehat stops it if it exceeds five minutes.
+Runs `movement move lint` for the package configured by `moveDir`, resolving
+named addresses through the package's `[dev-addresses]` (the same `--dev`
+resolution `movehat test --move` uses), so the scaffold's `_` placeholder
+addresses lint without extra configuration. Lint is a finite command and
+Movehat stops it if it exceeds five minutes.
+
+The Movement CLI linter exits non-zero when it reports warnings, so a clean
+run means warning-free code.
 
 ## Prove
 
