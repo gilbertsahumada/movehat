@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { AccountAddress, MoveVector, createObjectAddress } from "@aptos-labs/ts-sdk";
 
 import { Harness, HarnessDisposedError } from "../../harness/index.js";
 import {
@@ -345,5 +346,250 @@ describe("Harness.deployCodeObject", () => {
     expect(() => harness.deployCodeObject({ moduleName: "x" })).toThrow(
       HarnessDisposedError
     );
+  });
+
+  describe("SDK execution path (sdkExecute: true)", () => {
+    const SEQ = 5n;
+    const METADATA = Buffer.from([0x01, 0x02, 0x03]);
+    const MODULE = Buffer.from([0x0a, 0x0b]);
+
+    function u64le(v: bigint): number[] {
+      const out: number[] = [];
+      for (let i = 0; i < 8; i++) out.push(Number((v >> BigInt(8 * i)) & 0xffn));
+      return out;
+    }
+
+    /**
+     * Independent re-derivation of the expected object address: the
+     * seed is the BCS of the domain string (single-byte ULEB length
+     * prefix + ASCII bytes) followed by the BCS u64 LE of
+     * `sequence_number + 1`.
+     */
+    function expectedObjectAddress(deployer: AccountAddress): AccountAddress {
+      const domain = new TextEncoder().encode(
+        "aptos_framework::object_code_deployment"
+      );
+      const seed = new Uint8Array([
+        domain.length,
+        ...domain,
+        ...u64le(SEQ + 1n),
+      ]);
+      return createObjectAddress(deployer, seed);
+    }
+
+    function stageBuildArtifacts(): void {
+      const pkg = join(fixture.tmpCwd, "move", "build", "dummy");
+      mkdirSync(join(pkg, "bytecode_modules"), { recursive: true });
+      writeFileSync(join(pkg, "package-metadata.bcs"), METADATA);
+      writeFileSync(join(pkg, "bytecode_modules", "counter.mv"), MODULE);
+    }
+
+    function makeBuildOnlyAdapter(): {
+      adapter: ChildProcessAdapter;
+      calls: RunInput[];
+    } {
+      const calls: RunInput[] = [];
+      const adapter: ChildProcessAdapter = {
+        async run(input) {
+          calls.push(input);
+          if (input.args[1] === "build") {
+            return { exitCode: 0, stdout: "build ok", stderr: "" };
+          }
+          throw new Error(
+            `CLI must not run subcommand '${input.args[1]}' on the SDK path`
+          );
+        },
+        spawn() {
+          throw new Error("spawn not used in codeObject tests");
+        },
+      };
+      return { adapter, calls };
+    }
+
+    function makeMockAptos() {
+      return {
+        getAccountInfo: vi.fn(async () => ({
+          sequence_number: SEQ.toString(),
+        })),
+        transaction: {
+          build: { simple: vi.fn(async () => ({ rawTransaction: "raw" })) },
+          sign: vi.fn(() => "senderAuth"),
+          submit: { simple: vi.fn(async () => ({ hash: TX_HASH })) },
+        },
+        waitForTransaction: vi.fn(async () => ({
+          success: true,
+          vm_status: "Executed successfully",
+        })),
+        getAccountResource: vi.fn(async () => ({ packages: [{ name: "dummy" }] })),
+      };
+    }
+
+    it("derives the object address, compiles against it, and records it without any deploy-object CLI call", async () => {
+      stageBuildArtifacts();
+      const { adapter, calls } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        const derived = expectedObjectAddress(
+          harness.runtime.account.accountAddress
+        ).toString();
+
+        const result = await harness.deployCodeObject({
+          moduleName: "counter",
+          sdkExecute: true,
+          adapter,
+        });
+
+        expect(result.address).toBe(derived);
+        expect(result.txHash).toBe(TX_HASH);
+        expect(result.kind).toBe("code-object");
+
+        // Only one CLI call: the build, with --save-metadata and the
+        // address name bound to the DERIVED address (not the deployer).
+        expect(calls).toHaveLength(1);
+        const buildArgs = calls[0]!.args;
+        expect(buildArgs.slice(0, 2)).toEqual(["move", "build"]);
+        expect(buildArgs).toContain("--save-metadata");
+        const namedIdx = buildArgs.indexOf("--named-addresses");
+        expect(buildArgs[namedIdx + 1]).toBe(`counter=${derived}`);
+
+        // The publish transaction pins the fetched sequence number and
+        // carries metadata + modules as BCS vectors.
+        const buildInput = aptos.transaction.build.simple.mock.calls[0]![0] as {
+          data: { function: string; functionArguments: unknown[] };
+          options?: { accountSequenceNumber?: bigint };
+        };
+        expect(buildInput.data.function).toBe(
+          "0x1::object_code_deployment::publish"
+        );
+        expect(buildInput.options?.accountSequenceNumber).toBe(SEQ);
+        expect(buildInput.data.functionArguments).toHaveLength(2);
+        expect(buildInput.data.functionArguments[0]).toBeInstanceOf(MoveVector);
+        expect(buildInput.data.functionArguments[1]).toBeInstanceOf(MoveVector);
+
+        // Post-commit derivation cross-check hit the derived address.
+        const resourceInput = aptos.getAccountResource.mock.calls[0]![0] as {
+          accountAddress: AccountAddress;
+          resourceType: string;
+        };
+        expect(resourceInput.accountAddress.toString()).toBe(derived);
+        expect(resourceInput.resourceType).toBe("0x1::code::PackageRegistry");
+
+        // Deployment record persisted with the derived address.
+        const saved = JSON.parse(
+          readFileSync(
+            join(fixture.tmpCwd, "deployments", "testnet", "counter.json"),
+            "utf-8"
+          )
+        );
+        expect(saved.address).toBe(derived);
+        expect(saved.txHash).toBe(TX_HASH);
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("throws with the vm_status when the committed transaction failed on-chain", async () => {
+      stageBuildArtifacts();
+      const { adapter } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+      aptos.waitForTransaction.mockResolvedValueOnce({
+        success: false,
+        vm_status: "MODULE_ADDRESS_DOES_NOT_MATCH_SENDER",
+      });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        await expect(
+          harness.deployCodeObject({
+            moduleName: "counter",
+            sdkExecute: true,
+            adapter,
+          })
+        ).rejects.toThrow(/failed on-chain: MODULE_ADDRESS_DOES_NOT_MATCH_SENDER/);
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("wraps an unconfirmable wait in TransactionOutcomeUnknownError", async () => {
+      stageBuildArtifacts();
+      const { adapter } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+      aptos.waitForTransaction.mockRejectedValueOnce(new Error("node gone"));
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        let caught: unknown;
+        try {
+          await harness.deployCodeObject({
+            moduleName: "counter",
+            sdkExecute: true,
+            adapter,
+          });
+        } catch (err) {
+          caught = err;
+        }
+        expect(caught).toBeInstanceOf(TransactionOutcomeUnknownError);
+        expect((caught as TransactionOutcomeUnknownError).txHash).toBe(TX_HASH);
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("treats a missing PackageRegistry at the derived address as an unknown outcome", async () => {
+      stageBuildArtifacts();
+      const { adapter } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+      aptos.getAccountResource.mockRejectedValueOnce(
+        new Error("Resource not found: 0x1::code::PackageRegistry")
+      );
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        let caught: unknown;
+        try {
+          await harness.deployCodeObject({
+            moduleName: "counter",
+            sdkExecute: true,
+            adapter,
+          });
+        } catch (err) {
+          caught = err;
+        }
+        expect(caught).toBeInstanceOf(TransactionOutcomeUnknownError);
+        expect((caught as Error).message).toMatch(
+          /no package registry was found at the derived object address/
+        );
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("fails on missing build artifacts instead of submitting", async () => {
+      // No stageBuildArtifacts() — the build dir does not exist.
+      const { adapter } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        await expect(
+          harness.deployCodeObject({
+            moduleName: "counter",
+            sdkExecute: true,
+            adapter,
+          })
+        ).rejects.toThrow(/Expected exactly one compiled package/);
+        expect(aptos.transaction.build.simple).not.toHaveBeenCalled();
+      } finally {
+        await harness.cleanup();
+      }
+    });
   });
 });

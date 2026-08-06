@@ -1,4 +1,14 @@
-import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
+import {
+  AccountAddress,
+  MoveVector,
+  PrivateKey,
+  PrivateKeyVariants,
+  Serializer,
+  TypeTagAddress,
+  TypeTagVector,
+  createObjectAddress,
+  type EntryFunctionABI,
+} from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
 import type {
   DeployCodeObjectOptions,
@@ -6,6 +16,7 @@ import type {
   CodeObjectInfo,
 } from "../types/harness.js";
 import { extractNamedAddresses } from "../commands/compile.js";
+import { readCompiledPackage } from "../core/buildArtifacts.js";
 import {
   saveDeployment,
   loadDeployment,
@@ -25,7 +36,9 @@ import {
 } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
+import { redactSecrets } from "../utils/redact.js";
 import { logger, isVerbose } from "../ui/index.js";
+import { withSpinner } from "../ui/spinner.js";
 import {
   writeTempKeyFile,
   removeKeyFile,
@@ -74,6 +87,7 @@ export async function deployCodeObject(
     namedAddresses: options.namedAddresses,
     includedArtifacts: options.includedArtifacts,
     adapter: options.adapter,
+    sdkExecute: options.sdkExecute,
     subcommand: "deploy-object",
     extraArgs: [],
     checkIdempotency: true,
@@ -108,6 +122,7 @@ export async function upgradeCodeObject(
     namedAddresses: options.namedAddresses,
     includedArtifacts: options.includedArtifacts,
     adapter: options.adapter,
+    sdkExecute: options.sdkExecute,
     subcommand: "upgrade-object",
     extraArgs: ["--object-address", options.objectAddress],
     checkIdempotency: false,
@@ -127,6 +142,8 @@ interface ExecuteOptions {
   namedAddresses?: Record<string, string> | undefined;
   includedArtifacts?: "none" | "sparse" | "all" | undefined;
   adapter?: import("../utils/childProcessAdapter.js").ChildProcessAdapter | undefined;
+  /** Execute through the TypeScript SDK instead of the Movement CLI. */
+  sdkExecute?: boolean | undefined;
   subcommand: "deploy-object" | "upgrade-object";
   extraArgs: readonly string[];
   /** Whether to throw `ModuleAlreadyDeployedError` if a record exists. */
@@ -247,6 +264,7 @@ async function executeMovementMoveObjectLocked(
 
   logger.section("Transaction preflight");
   logger.kv("Operation", subcommand, 2);
+  logger.kv("Execution", opts.sdkExecute ? "sdk" : "cli", 2);
   logger.kv("Network", config.network, 2);
   logger.kv("Chain ID", config.networkConfig.chainId ?? "unknown", 2);
   logger.kv("RPC", sanitizeRpcUrl(config.rpc), 2);
@@ -280,118 +298,121 @@ async function executeMovementMoveObjectLocked(
         );
       }
     }
-    const namedAddrArgs: string[] =
-      addrMap.size > 0
-        ? [
-            "--named-addresses",
-            Array.from(addrMap.entries())
-              .map(([k, v]) => `${k}=${v}`)
-              .join(","),
-          ]
-        : [];
 
-    // Build step (same as Publisher — produces the bytecode the
-    // subcommand will publish/upgrade).
-    logger.step("Building package...");
-    const buildResult = await runCli(
-      {
-        command: "movement",
-        args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
-        timeoutMs: 120000,
-      },
-      { adapter: opts.adapter }
-    );
-    if (isVerbose() && buildResult.stdout) logger.info(buildResult.stdout.trim(), 2);
+    let objectAddress: string;
+    let txHash: string | undefined;
 
-    // Format the private key into AIP-80 shape so the Movement CLI
-    // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
-    // is idempotent for already-prefixed inputs.
-    const formattedPrivateKey = PrivateKey.formatPrivateKey(
-      config.privateKey,
-      PrivateKeyVariants.Ed25519,
-    );
+    if (opts.sdkExecute) {
+      const sdkResult = await executeObjectViaSdk(opts, safeDir, addrMap);
+      objectAddress = sdkResult.objectAddress;
+      txHash = sdkResult.txHash;
+    } else {
+      const namedAddrArgs = namedAddrArgsFrom(addrMap);
 
-    // Pass the private key via a 0o600 temp file (--private-key-file)
-    // and the on-chain address via --sender-account. This avoids the
-    // CLI's profile-yaml lookup entirely — no CWD / HOME / .aptos /
-    // .movement dance, no CLI-variant dependency.
-    const keyFilePath = writeTempKeyFile(formattedPrivateKey);
-
-    // Register SIGINT-safe sync cleanup BEFORE invoking the CLI so
-    // the private key never persists on disk after an abnormal exit.
-    // The signal-handler path uses the best-effort variant because the
-    // event loop is dead and we cannot logger.warning.
-    ensureSignalHandler();
-    const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
-    cleanupCallbacks.add(syncCleanup);
-
-    let deployOut = "";
-    try {
-      logger.step(
-        `Running 'movement move ${subcommand}'${subcommand === "upgrade-object" ? "" : " (this may take a moment)"}...`
-      );
-      const includedArtifacts: ("--included-artifacts" | string)[] =
-        opts.includedArtifacts
-          ? ["--included-artifacts", opts.includedArtifacts]
-          : [];
-      const result = await runCli(
+      // Build step (same as Publisher — produces the bytecode the
+      // subcommand will publish/upgrade).
+      logger.step("Building package...");
+      const buildResult = await runCli(
         {
           command: "movement",
-          args: [
-            "move",
-            subcommand,
-            "--address-name",
-            opts.addressName ?? moduleName,
-            "--package-dir",
-            safeDir,
-            "--url",
-            config.rpc,
-            "--private-key-file",
-            keyFilePath,
-            "--sender-account",
-            deployerAddress,
-            "--assume-yes",
-            ...includedArtifacts,
-            ...namedAddrArgs,
-            ...opts.extraArgs,
-          ],
-          timeoutMs: 180000, // 3 min — deploy-object can be slow with chunked publishing.
+          args: ["move", "build", "--package-dir", safeDir, ...namedAddrArgs],
+          timeoutMs: 120000,
         },
         { adapter: opts.adapter }
       );
-      deployOut = result.stdout;
-      // Both streams gated behind isVerbose(); see §9 — stream channel
-      // is not by itself a failure signal. Real failures throw via
-      // CliExecutionError and are surfaced from the catch below.
-      if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
-      if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
-    } finally {
-      // Unlink via the observable helper — emit a warning if the file
-      // could not be removed AND still exists on disk (private key
-      // would persist silently otherwise). ENOENT and races are
-      // treated as benign success.
-      const cleanupErr = removeKeyFile(keyFilePath);
-      if (cleanupErr) {
-        logger.warning(
-          `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
-            `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+      if (isVerbose() && buildResult.stdout) logger.info(buildResult.stdout.trim(), 2);
+
+      // Format the private key into AIP-80 shape so the Movement CLI
+      // doesn't emit its raw-hex deprecation warning. `formatPrivateKey`
+      // is idempotent for already-prefixed inputs.
+      const formattedPrivateKey = PrivateKey.formatPrivateKey(
+        config.privateKey,
+        PrivateKeyVariants.Ed25519,
+      );
+
+      // Pass the private key via a 0o600 temp file (--private-key-file)
+      // and the on-chain address via --sender-account. This avoids the
+      // CLI's profile-yaml lookup entirely — no CWD / HOME / .aptos /
+      // .movement dance, no CLI-variant dependency.
+      const keyFilePath = writeTempKeyFile(formattedPrivateKey);
+
+      // Register SIGINT-safe sync cleanup BEFORE invoking the CLI so
+      // the private key never persists on disk after an abnormal exit.
+      // The signal-handler path uses the best-effort variant because the
+      // event loop is dead and we cannot logger.warning.
+      ensureSignalHandler();
+      const syncCleanup = () => removeKeyFileSyncBestEffort(keyFilePath);
+      cleanupCallbacks.add(syncCleanup);
+
+      let deployOut = "";
+      try {
+        logger.step(
+          `Running 'movement move ${subcommand}'${subcommand === "upgrade-object" ? "" : " (this may take a moment)"}...`
+        );
+        const includedArtifacts: ("--included-artifacts" | string)[] =
+          opts.includedArtifacts
+            ? ["--included-artifacts", opts.includedArtifacts]
+            : [];
+        const result = await runCli(
+          {
+            command: "movement",
+            args: [
+              "move",
+              subcommand,
+              "--address-name",
+              opts.addressName ?? moduleName,
+              "--package-dir",
+              safeDir,
+              "--url",
+              config.rpc,
+              "--private-key-file",
+              keyFilePath,
+              "--sender-account",
+              deployerAddress,
+              "--assume-yes",
+              ...includedArtifacts,
+              ...namedAddrArgs,
+              ...opts.extraArgs,
+            ],
+            timeoutMs: 180000, // 3 min — deploy-object can be slow with chunked publishing.
+          },
+          { adapter: opts.adapter }
+        );
+        deployOut = result.stdout;
+        // Both streams gated behind isVerbose(); see §9 — stream channel
+        // is not by itself a failure signal. Real failures throw via
+        // CliExecutionError and are surfaced from the catch below.
+        if (isVerbose() && result.stdout) logger.info(result.stdout.trim(), 2);
+        if (isVerbose() && result.stderr) logger.info(result.stderr.trim(), 2);
+      } finally {
+        // Unlink via the observable helper — emit a warning if the file
+        // could not be removed AND still exists on disk (private key
+        // would persist silently otherwise). ENOENT and races are
+        // treated as benign success.
+        const cleanupErr = removeKeyFile(keyFilePath);
+        if (cleanupErr) {
+          logger.warning(
+            `Failed to remove temp key file '${keyFilePath}': ${cleanupErr.message}. ` +
+              `The file has mode 0o600 but should be removed manually: rm ${keyFilePath}`
+          );
+        }
+        cleanupCallbacks.delete(syncCleanup);
+      }
+
+      // Parse object address (for deploy-object) and txHash (both flows).
+      const parsedAddress = opts.fixedAddress ?? parseObjectAddress(deployOut);
+      txHash = parseTxHash(deployOut);
+
+      if (!parsedAddress) {
+        throw new TransactionOutcomeUnknownError(
+          `'movement move ${subcommand}' exited successfully, but the object address could not be parsed. ` +
+            `Do not retry automatically; inspect the transaction on-chain first.`,
+          subcommand,
+          txHash,
+          deployOut
         );
       }
-      cleanupCallbacks.delete(syncCleanup);
-    }
-
-    // Parse object address (for deploy-object) and txHash (both flows).
-    const objectAddress = opts.fixedAddress ?? parseObjectAddress(deployOut);
-    const txHash = parseTxHash(deployOut);
-
-    if (!objectAddress) {
-      throw new TransactionOutcomeUnknownError(
-        `'movement move ${subcommand}' exited successfully, but the object address could not be parsed. ` +
-          `Do not retry automatically; inspect the transaction on-chain first.`,
-        subcommand,
-        txHash,
-        deployOut
-      );
+      objectAddress = parsedAddress;
     }
 
     logger.success(
@@ -467,6 +488,217 @@ async function executeMovementMoveObjectLocked(
     }
     throw error;
   }
+}
+
+/** Serialize an addrMap into the CLI's `--named-addresses k=v,...` form. */
+function namedAddrArgsFrom(addrMap: Map<string, string>): string[] {
+  return addrMap.size > 0
+    ? [
+        "--named-addresses",
+        Array.from(addrMap.entries())
+          .map(([k, v]) => `${k}=${v}`)
+          .join(","),
+      ]
+    : [];
+}
+
+const OBJECT_CODE_DEPLOYMENT_DOMAIN = "aptos_framework::object_code_deployment";
+
+// ABIs supplied explicitly so payload construction never fetches a
+// remote ABI (movelite may not serve one). `publish` shares the
+// argument encoding of 0x1::code::publish_package_txn; `upgrade` adds
+// the code object, which BCS-encodes as a plain address.
+const OBJECT_PUBLISH_ABI: EntryFunctionABI = {
+  typeParameters: [],
+  parameters: [TypeTagVector.u8(), new TypeTagVector(TypeTagVector.u8())],
+};
+const OBJECT_UPGRADE_ABI: EntryFunctionABI = {
+  typeParameters: [],
+  parameters: [
+    TypeTagVector.u8(),
+    new TypeTagVector(TypeTagVector.u8()),
+    new TypeTagAddress(),
+  ],
+};
+
+/**
+ * Derive the address `0x1::object_code_deployment::publish` will create
+ * for `creator`'s next transaction: a named object whose seed is the
+ * BCS of the domain string concatenated with the BCS of
+ * `sequence_number + 1`.
+ */
+function deriveCodeObjectAddress(
+  creator: AccountAddress,
+  nextSequenceNumber: bigint
+): AccountAddress {
+  const seed = new Serializer();
+  seed.serializeBytes(new TextEncoder().encode(OBJECT_CODE_DEPLOYMENT_DOMAIN));
+  seed.serializeU64(nextSequenceNumber);
+  return createObjectAddress(creator, seed.toUint8Array());
+}
+
+/**
+ * Deploy or upgrade the code object through the TypeScript SDK. Used
+ * when the backend is movelite, whose REST responses the Movement CLI
+ * cannot parse. Signs in-process — no temp key file.
+ *
+ * The target object address is resolved BEFORE building: the modules
+ * must be compiled with `addressName` bound to the object address (the
+ * CLI's `--address-name` does the same internally), not the deployer.
+ * For deploys it is derived from the pinned sequence number; for
+ * upgrades it is the caller-supplied existing address.
+ *
+ * Single-transaction publish: unlike the CLI, this path does not
+ * chunk-publish very large packages.
+ */
+async function executeObjectViaSdk(
+  opts: ExecuteOptions,
+  safeDir: string,
+  addrMap: Map<string, string>
+): Promise<{ objectAddress: string; txHash: string }> {
+  const { runtime, subcommand } = opts;
+  const aptos = runtime.aptos;
+  const account = runtime.account;
+  const addressName = opts.addressName ?? opts.moduleName;
+
+  let targetAddress: AccountAddress;
+  let accountSequenceNumber: bigint | undefined;
+  if (subcommand === "deploy-object") {
+    const info = await aptos.getAccountInfo({
+      accountAddress: account.accountAddress,
+    });
+    accountSequenceNumber = BigInt(info.sequence_number);
+    targetAddress = deriveCodeObjectAddress(
+      account.accountAddress,
+      accountSequenceNumber + 1n
+    );
+  } else {
+    targetAddress = AccountAddress.from(opts.fixedAddress!);
+  }
+  const objectAddress = targetAddress.toString();
+  addrMap.set(addressName, objectAddress);
+
+  if (opts.includedArtifacts) {
+    logger.warning(
+      `includedArtifacts: '${opts.includedArtifacts}' is a Movement CLI publish option; ` +
+        `the SDK path publishes the metadata 'move build --save-metadata' produced and ignores it.`
+    );
+  }
+
+  logger.step("Building package...");
+  const buildResult = await runCli(
+    {
+      command: "movement",
+      args: [
+        "move",
+        "build",
+        "--package-dir",
+        safeDir,
+        "--save-metadata",
+        ...namedAddrArgsFrom(addrMap),
+      ],
+      timeoutMs: 120000,
+    },
+    { adapter: opts.adapter }
+  );
+  if (isVerbose() && buildResult.stdout) logger.info(buildResult.stdout.trim(), 2);
+
+  const { metadataBytes, moduleBytecode } = readCompiledPackage(safeDir);
+
+  const functionArguments = [
+    MoveVector.U8(metadataBytes),
+    new MoveVector(moduleBytecode.map((m) => MoveVector.U8(m))),
+    ...(subcommand === "upgrade-object" ? [targetAddress] : []),
+  ];
+
+  return withSpinner(
+    subcommand === "deploy-object"
+      ? "Deploying code object"
+      : "Upgrading code object",
+    async () => {
+      const transaction = await aptos.transaction.build.simple({
+        sender: account.accountAddress,
+        data: {
+          function:
+            subcommand === "deploy-object"
+              ? "0x1::object_code_deployment::publish"
+              : "0x1::object_code_deployment::upgrade",
+          functionArguments,
+          abi:
+            subcommand === "deploy-object"
+              ? OBJECT_PUBLISH_ABI
+              : OBJECT_UPGRADE_ABI,
+        },
+        // Pin the derivation input: an interleaved transaction from the
+        // same account makes this submit abort with a sequence-number
+        // error instead of silently landing at a different derived
+        // address.
+        ...(accountSequenceNumber !== undefined
+          ? { options: { accountSequenceNumber } }
+          : {}),
+      });
+      const senderAuthenticator = aptos.transaction.sign({
+        signer: account,
+        transaction,
+      });
+      const committed = await aptos.transaction.submit.simple({
+        transaction,
+        senderAuthenticator,
+      });
+
+      let response;
+      try {
+        response = await aptos.waitForTransaction({
+          transactionHash: committed.hash,
+          options: { checkSuccess: false },
+        });
+      } catch (error) {
+        const cause = error instanceof Error ? error : new Error(String(error));
+        const redactedCause = new Error(redactSecrets(cause.message));
+        throw new TransactionOutcomeUnknownError(
+          `Transaction ${committed.hash} was submitted, but its final status could not be confirmed: ${redactedCause.message}`,
+          subcommand,
+          committed.hash,
+          undefined,
+          redactedCause
+        );
+      }
+      if (response.success === false) {
+        const vmStatus =
+          "vm_status" in response ? response.vm_status : "unknown vm_status";
+        throw new Error(
+          `'${subcommand}' transaction ${committed.hash} failed on-chain: ${vmStatus}`
+        );
+      }
+
+      if (subcommand === "deploy-object") {
+        // Cross-check the derivation: a wrong seed would otherwise
+        // record a wrong address and fail confusingly far downstream.
+        // Event-scraping is not an option — movelite omits events.
+        try {
+          await aptos.getAccountResource({
+            accountAddress: targetAddress,
+            resourceType: "0x1::code::PackageRegistry",
+          });
+        } catch (error) {
+          const cause =
+            error instanceof Error ? error : new Error(String(error));
+          const redactedCause = new Error(redactSecrets(cause.message));
+          throw new TransactionOutcomeUnknownError(
+            `Transaction ${committed.hash} committed, but no package registry was found at ` +
+              `the derived object address ${objectAddress}: ${redactedCause.message}. ` +
+              `Do not retry automatically; inspect the transaction on-chain first.`,
+            subcommand,
+            committed.hash,
+            undefined,
+            redactedCause
+          );
+        }
+      }
+
+      return { objectAddress, txHash: committed.hash };
+    }
+  );
 }
 
 /**
