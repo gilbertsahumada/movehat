@@ -80,13 +80,12 @@ describe.skipIf(SKIP_LOCAL)('Harness.createLocal — full lifecycle', () => {
       );
     }
 
-    // Pinned to the full Movement node: this suite drives the CLI flows
-    // (deploy-object, run-script), and the Movement CLI cannot parse
-    // movelite's REST responses. The movelite backend is covered by the
-    // example suite and the backend-assertion gate.
+    // Backend auto-selected: under movelite the write flows execute
+    // through the SDK (sdkExecute defaults true); with
+    // MOVEHAT_USE_MOVELITE=0 the full Movement node drives the CLI
+    // flows. Run both modes when touching either execution path.
     harness = await Harness.createLocal({
       accountLabels: ['deployer', 'alice'],
-      useMovelite: false,
     });
   }, 180_000);
 

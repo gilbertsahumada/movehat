@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that need the CLI's chunked publishing should keep using a full Movement
   node. Closes #424 (tracks #362).
 
+### Tests
+
+- The harness-local integration suite no longer pins `useMovelite: false`
+  (the PR #365 stopgap): the backend auto-selects, so under movelite the
+  suite exercises the new SDK execution paths and under
+  `MOVEHAT_USE_MOVELITE=0` it exercises the Movement CLI flows — both modes
+  verified 5/5. The deployment and scripts guides document the movelite SDK
+  behavior and its two visible constraints (pre-compiled `.mv` scripts,
+  scalar script args). Closes #425, and with it #362.
+
 ### Internal
 
 - Documented in the testing guide that mocha `--parallel` is not supported:
