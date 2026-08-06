@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the CLI path), and signs in-process, so no temporary key file is written.
   The object-deployment flows honor the same option in an upcoming change.
   Closes #423 (tracks #362).
+- `Harness.deployCodeObject` and `upgradeCodeObject` now honor `sdkExecute`
+  too, calling `0x1::object_code_deployment::publish`/`::upgrade` directly
+  through the SDK on movelite. The object address is derived deterministically
+  before submission (the modules are compiled against it, mirroring the CLI's
+  `--address-name` behavior), the sequence number is pinned so a concurrent
+  transaction from the same account aborts loudly instead of landing at a
+  different address, and the derivation is cross-checked post-commit by
+  reading `0x1::code::PackageRegistry` at the derived address (movelite omits
+  events, so event-scraping is not an option). The SDK path always records a
+  transaction hash — the CLI object flows emit none — and signs in-process
+  with no temporary key file. Single-transaction publish: very large packages
+  that need the CLI's chunked publishing should keep using a full Movement
+  node. Closes #424 (tracks #362).
 
 ### Internal
 

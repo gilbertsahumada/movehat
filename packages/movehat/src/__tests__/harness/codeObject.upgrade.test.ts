@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { AccountAddress } from "@aptos-labs/ts-sdk";
 
 import { Harness } from "../../harness/index.js";
 import { CliExecutionError } from "../../errors.js";
@@ -152,5 +153,129 @@ describe("Harness.upgradeCodeObject", () => {
     } finally {
       await harness.cleanup();
     }
+  });
+
+  describe("SDK execution path (sdkExecute: true)", () => {
+    function stageBuildArtifacts(): void {
+      const pkg = join(fixture.tmpCwd, "move", "build", "dummy");
+      mkdirSync(join(pkg, "bytecode_modules"), { recursive: true });
+      writeFileSync(join(pkg, "package-metadata.bcs"), Buffer.from([1, 2, 3]));
+      writeFileSync(
+        join(pkg, "bytecode_modules", "counter.mv"),
+        Buffer.from([9, 9])
+      );
+    }
+
+    function makeBuildOnlyAdapter(): {
+      adapter: ChildProcessAdapter;
+      calls: RunInput[];
+    } {
+      const calls: RunInput[] = [];
+      const adapter: ChildProcessAdapter = {
+        async run(input) {
+          calls.push(input);
+          if (input.args[1] === "build") {
+            return { exitCode: 0, stdout: "build ok", stderr: "" };
+          }
+          throw new Error(
+            `CLI must not run subcommand '${input.args[1]}' on the SDK path`
+          );
+        },
+        spawn() {
+          throw new Error("spawn not used in codeObject.upgrade tests");
+        },
+      };
+      return { adapter, calls };
+    }
+
+    function makeMockAptos() {
+      return {
+        getAccountInfo: vi.fn(async () => ({ sequence_number: "5" })),
+        transaction: {
+          build: { simple: vi.fn(async () => ({ rawTransaction: "raw" })) },
+          sign: vi.fn(() => "senderAuth"),
+          submit: { simple: vi.fn(async () => ({ hash: NEW_TX_HASH })) },
+        },
+        waitForTransaction: vi.fn(async () => ({
+          success: true,
+          vm_status: "Executed successfully",
+        })),
+        getAccountResource: vi.fn(async () => ({ packages: [] })),
+      };
+    }
+
+    it("compiles against the existing object address and submits ::upgrade with it as third argument", async () => {
+      stageBuildArtifacts();
+      const { adapter, calls } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        const result = await harness.upgradeCodeObject({
+          moduleName: "counter",
+          objectAddress: EXISTING_OBJECT,
+          sdkExecute: true,
+          adapter,
+        });
+
+        expect(result.address).toBe(EXISTING_OBJECT);
+        expect(result.txHash).toBe(NEW_TX_HASH);
+        expect(result.kind).toBe("upgrade-object");
+
+        // Build binds the address name to the EXISTING object address.
+        expect(calls).toHaveLength(1);
+        const buildArgs = calls[0]!.args;
+        expect(buildArgs).toContain("--save-metadata");
+        const namedIdx = buildArgs.indexOf("--named-addresses");
+        expect(buildArgs[namedIdx + 1]).toBe(`counter=${EXISTING_OBJECT}`);
+
+        // ::upgrade, third argument = the object address; no sequence
+        // number pin (nothing derives from it) and no derivation
+        // cross-check read.
+        const buildInput = aptos.transaction.build.simple.mock.calls[0]![0] as {
+          data: { function: string; functionArguments: unknown[] };
+          options?: { accountSequenceNumber?: bigint };
+        };
+        expect(buildInput.data.function).toBe(
+          "0x1::object_code_deployment::upgrade"
+        );
+        expect(buildInput.options).toBeUndefined();
+        expect(buildInput.data.functionArguments).toHaveLength(3);
+        const third = buildInput.data.functionArguments[2];
+        expect(third).toBeInstanceOf(AccountAddress);
+        expect((third as AccountAddress).toString()).toBe(EXISTING_OBJECT);
+
+        expect(aptos.getAccountInfo).not.toHaveBeenCalled();
+        expect(aptos.getAccountResource).not.toHaveBeenCalled();
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("throws with the vm_status when the committed upgrade failed on-chain", async () => {
+      stageBuildArtifacts();
+      const { adapter } = makeBuildOnlyAdapter();
+      const aptos = makeMockAptos();
+      aptos.waitForTransaction.mockResolvedValueOnce({
+        success: false,
+        vm_status: "EPACKAGE_DEP_MISSING",
+      });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        await expect(
+          harness.upgradeCodeObject({
+            moduleName: "counter",
+            objectAddress: EXISTING_OBJECT,
+            sdkExecute: true,
+            adapter,
+          })
+        ).rejects.toThrow(/failed on-chain: EPACKAGE_DEP_MISSING/);
+      } finally {
+        await harness.cleanup();
+      }
+    });
   });
 });
