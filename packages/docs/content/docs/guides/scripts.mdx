@@ -59,6 +59,17 @@ main().catch(console.error);
 
 For Move scripts (one-shot transactions, not module publishes), use `harness.runMoveScript`. It accepts either a `.move` source path (CLI auto-compiles) or a pre-compiled `.mv` bytecode path — the extension determines which CLI flag is used.
 
+> **On the movelite backend** (the default for `Harness.createLocal`),
+> the script executes through the TypeScript SDK instead of the
+> Movement CLI, because the CLI cannot parse movelite's responses. Two
+> constraints follow: the script must be a pre-compiled `.mv`
+> (`movement move compile` emits them under
+> `build/<pkg>/bytecode_scripts/`), and `args` supports scalar types
+> only (`bool`, `u8`–`u256`, `address`, `string`, `hex`). Both are
+> lifted when running against a full Movement node
+> (`useMovelite: false`). The `sdkExecute` option overrides the
+> automatic selection.
+
 ```typescript
 import { Harness } from "movehat";
 
