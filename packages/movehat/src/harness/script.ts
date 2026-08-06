@@ -1,4 +1,4 @@
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { extname } from "path";
 import { PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
 import type { MovehatRuntime } from "../types/runtime.js";
@@ -7,9 +7,11 @@ import type {
   MoveScriptResult,
 } from "../types/harness.js";
 import { validatePathSafety } from "../core/shell.js";
-import { CliExecutionError } from "../errors.js";
+import { CliExecutionError, TransactionOutcomeUnknownError } from "../errors.js";
 import { runCli } from "../utils/runCli.js";
 import { parseTxHash } from "../utils/parseCliOutput.js";
+import { parseScriptArgs } from "../utils/scriptArgs.js";
+import { redactSecrets } from "../utils/redact.js";
 import { logger, isVerbose } from "../ui/index.js";
 import {
   writeTempKeyFile,
@@ -20,19 +22,26 @@ import {
 } from "../core/movementProfile.js";
 
 /**
- * Execute a Move script via `movement move run-script`.
+ * Execute a Move script.
  *
- * Auto-detects the script kind from the extension:
+ * Default path wraps `movement move run-script`, auto-detecting the
+ * script kind from the extension:
  *   - `.move` source → `--script-path` (CLI compiles inline)
  *   - `.mv` compiled bytecode → `--compiled-script-path`
  *
- * Reuses Publisher's security model via the shared `movementProfile`
- * helpers: per-invocation temp key file (0o600), SIGINT-safe sync
- * cleanup, `--private-key-file` auth (key never appears in `ps`
- * output or in the user's `~/.aptos/config.yaml`).
+ * With `options.sdkExecute` (defaulted to true by `Harness` on the
+ * movelite backend) the `.mv` bytecode is submitted through the
+ * TypeScript SDK instead — see `runScriptViaSdk`. `.move` sources are
+ * rejected on that path (no inline compilation).
+ *
+ * The CLI path reuses Publisher's security model via the shared
+ * `movementProfile` helpers: per-invocation temp key file (0o600),
+ * SIGINT-safe sync cleanup, `--private-key-file` auth (key never
+ * appears in `ps` output or in the user's `~/.aptos/config.yaml`).
  *
  * Returns {@link MoveScriptResult}. `txHash` is guaranteed; `success`
- * and `vmStatus` are best-effort parsed from the CLI's Result JSON.
+ * and `vmStatus` are best-effort parsed from the CLI's Result JSON
+ * (CLI path) or taken from the committed transaction (SDK path).
  *
  * @internal — called from `Harness.runMoveScript`.
  */
@@ -61,6 +70,15 @@ export async function runMoveScript(
         `Expected '.move' (source — CLI auto-compiles) or '.mv' (pre-compiled bytecode).`
     );
   }
+  if (options.sdkExecute && ext === ".move") {
+    throw new Error(
+      `Harness.runMoveScript: uncompiled '.move' scripts are not supported on the ` +
+        `SDK execution path (used automatically on the movelite backend). ` +
+        `Pre-compile the containing package with 'movement move compile' and pass ` +
+        `the emitted 'build/<pkg>/bytecode_scripts/<name>.mv', or run against a ` +
+        `full Movement node (useMovelite: false).`
+    );
+  }
   if (!existsSync(options.scriptPath)) {
     throw new Error(
       `Harness.runMoveScript: script not found at '${options.scriptPath}'.`
@@ -72,6 +90,10 @@ export async function runMoveScript(
   logger.step(
     `Running Move script '${options.scriptPath}' on ${config.network}...`
   );
+
+  if (options.sdkExecute) {
+    return runScriptViaSdk(runtime, safeScriptPath, options);
+  }
 
   try {
     const deployerAddress = account.accountAddress.toString();
@@ -176,6 +198,81 @@ export async function runMoveScript(
       const err = error instanceof Error ? error : new Error(String(error));
       logger.error(`Failed to run Move script: ${err.message}`);
     }
+    throw error;
+  }
+}
+
+/**
+ * Execute a pre-compiled `.mv` script through the TypeScript SDK.
+ *
+ * Used on backends whose REST responses the Movement CLI cannot parse
+ * (movelite). Signs in-process — no temp key file, no signal-handler
+ * cleanup. Scripts have no on-chain ABI, so `options.args` (CLI-style
+ * `"type:value"` strings) are marshalled into BCS wrapper instances by
+ * `parseScriptArgs` before payload construction.
+ *
+ * Mirrors the CLI path's outcome contract: a committed-but-failed
+ * transaction returns `success: false` instead of throwing.
+ */
+async function runScriptViaSdk(
+  runtime: MovehatRuntime,
+  scriptPath: string,
+  options: RunMoveScriptOptions
+): Promise<MoveScriptResult> {
+  const aptos = runtime.aptos;
+  const account = runtime.account;
+
+  const functionArguments = parseScriptArgs(options.args ?? []);
+  const bytecode = new Uint8Array(readFileSync(scriptPath));
+
+  try {
+    const transaction = await aptos.transaction.build.simple({
+      sender: account.accountAddress,
+      data: {
+        bytecode,
+        typeArguments: options.typeArgs ?? [],
+        functionArguments,
+      },
+    });
+    const senderAuthenticator = aptos.transaction.sign({
+      signer: account,
+      transaction,
+    });
+    const committed = await aptos.transaction.submit.simple({
+      transaction,
+      senderAuthenticator,
+    });
+
+    let response;
+    try {
+      // checkSuccess: false — parity with the CLI path, which reports a
+      // committed-but-failed script via `success`/`vmStatus` rather than
+      // throwing.
+      response = await aptos.waitForTransaction({
+        transactionHash: committed.hash,
+        options: { checkSuccess: false },
+      });
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      const redactedCause = new Error(redactSecrets(cause.message));
+      throw new TransactionOutcomeUnknownError(
+        `Transaction ${committed.hash} was submitted, but its final status could not be confirmed: ${redactedCause.message}`,
+        "run-script",
+        committed.hash,
+        undefined,
+        redactedCause
+      );
+    }
+
+    logger.success(`Move script executed (tx ${committed.hash}).`);
+
+    const out: MoveScriptResult = { txHash: committed.hash };
+    if (typeof response.success === "boolean") out.success = response.success;
+    if (typeof response.vm_status === "string") out.vmStatus = response.vm_status;
+    return out;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error(`Failed to run Move script: ${redactSecrets(err.message)}`);
     throw error;
   }
 }

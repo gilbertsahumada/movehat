@@ -14,6 +14,7 @@ import type {
   CreateForkOptions,
 } from "../types/harness.js";
 import { setupLocalTesting } from "../helpers/setupLocalTesting.js";
+import { MoveliteManager } from "../node/MoveliteManager.js";
 import { initRuntime } from "../runtime.js";
 import { createHarnessProxy, createForkContractProxy } from "./proxy.js";
 import { deployCodeObject, upgradeCodeObject } from "./codeObject.js";
@@ -86,11 +87,19 @@ export class Harness {
   private _poisoned = false;
   private readonly ownsLocalNode: boolean;
 
+  /**
+   * Default for the `sdkExecute` option on the write flows: true when
+   * the backend is movelite, whose REST responses the Movement CLI
+   * cannot parse. Per-call `sdkExecute` always wins.
+   */
+  private readonly sdkExecuteDefault: boolean;
+
   private constructor(init: HarnessInit) {
     this.mode = init.mode;
     this.runtime = init.runtime;
     this.accounts = init.runtime.accountManager.getLabeledAccounts();
     this.ownsLocalNode = init.ownsLocalNode ?? true;
+    this.sdkExecuteDefault = init.localNode instanceof MoveliteManager;
     if (init.localNode) this.localNode = init.localNode;
     if (init.forkServer) this.forkServer = init.forkServer;
     if (init.forkManager) this.forkManager = init.forkManager;
@@ -236,7 +245,7 @@ export class Harness {
         "Harness.createFork is read-only; code-object deployment requires Harness.createLocal or createLive."
       );
     }
-    return deployCodeObject(this.runtime, options);
+    return deployCodeObject(this.runtime, this.withSdkExecuteDefault(options));
   }
 
   /**
@@ -256,7 +265,7 @@ export class Harness {
         "Harness.createFork is read-only; code-object upgrade requires Harness.createLocal or createLive."
       );
     }
-    return upgradeCodeObject(this.runtime, options);
+    return upgradeCodeObject(this.runtime, this.withSdkExecuteDefault(options));
   }
 
   /**
@@ -287,6 +296,17 @@ export class Harness {
         "Harness.createFork is read-only; script execution requires Harness.createLocal or createLive."
       );
     }
-    return runMoveScript(this.runtime, options);
+    return runMoveScript(this.runtime, this.withSdkExecuteDefault(options));
+  }
+
+  /**
+   * Apply `sdkExecuteDefault` when the caller did not set `sdkExecute`.
+   * Returns the options object untouched otherwise.
+   */
+  private withSdkExecuteDefault<T extends { sdkExecute?: boolean }>(
+    options: T
+  ): T {
+    if (options.sdkExecute !== undefined) return options;
+    return { ...options, sdkExecute: this.sdkExecuteDefault };
   }
 }

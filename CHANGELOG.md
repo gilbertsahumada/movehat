@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Harness.runMoveScript` can now execute through the TypeScript SDK instead
+  of the Movement CLI, controlled by a new `sdkExecute` option on
+  `RunMoveScriptOptions` and `DeployCodeObjectOptions` that the harness
+  defaults to `true` when its backend is movelite — whose REST responses the
+  Movement CLI cannot parse. The SDK path submits pre-compiled `.mv` script
+  bytecode as a script payload, marshalling the CLI-style `"type:value"`
+  argument strings into BCS values (scalars only; `vector`/`raw` fall back to
+  the CLI path), and signs in-process, so no temporary key file is written.
+  The object-deployment flows honor the same option in an upcoming change.
+  Closes #423 (tracks #362).
+
 ### Internal
 
 - Documented in the testing guide that mocha `--parallel` is not supported:

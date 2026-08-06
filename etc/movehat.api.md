@@ -164,6 +164,7 @@ export interface DeployCodeObjectOptions {
     namedAddresses?: Record<string, string>;
     packageDir?: string;
     redeploy?: boolean;
+    sdkExecute?: boolean;
 }
 
 // @public (undocumented)
@@ -796,6 +797,7 @@ export interface RunMoveScriptOptions {
     args?: string[];
     packageDir?: string;
     scriptPath: string;
+    sdkExecute?: boolean;
     typeArgs?: string[];
 }
 
