@@ -84,6 +84,17 @@ export interface DeployCodeObjectOptions {
   redeploy?: boolean;
 
   /**
+   * Execute through the TypeScript SDK instead of the Movement CLI.
+   *
+   * Defaults to `true` when the harness backend is movelite (whose REST
+   * responses the Movement CLI cannot parse) and `false` otherwise —
+   * set it explicitly mainly in tests. The SDK path signs in-process
+   * (no temp key file) and submits a single transaction, so it does not
+   * chunk-publish very large packages the way the CLI can.
+   */
+  sdkExecute?: boolean;
+
+  /**
    * Test-only override for the child-process adapter. Production callers
    * leave this undefined so the default spawn-based adapter is used.
    * @internal
@@ -181,6 +192,18 @@ export interface RunMoveScriptOptions {
    * this undefined — the CLI uses the script's parent directory.
    */
   packageDir?: string;
+
+  /**
+   * Execute through the TypeScript SDK instead of the Movement CLI.
+   *
+   * Defaults to `true` when the harness backend is movelite (whose REST
+   * responses the Movement CLI cannot parse) and `false` otherwise —
+   * set it explicitly mainly in tests. The SDK path requires a
+   * pre-compiled `.mv` script (`movement move compile` emits them under
+   * `build/<pkg>/bytecode_scripts/`) and supports scalar `args` only
+   * (`bool`, `u8`-`u256`, `address`, `string`, `hex`).
+   */
+  sdkExecute?: boolean;
 
   /**
    * Test-only override for the child-process adapter.
