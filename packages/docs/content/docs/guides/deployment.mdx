@@ -61,8 +61,9 @@ main().catch((error) => {
 > TypeScript SDK instead of the Movement CLI — the CLI cannot parse
 > movelite's responses. Behavior is the same, with two visible
 > differences: the deployment record always carries a `txHash` (the CLI
-> object flows emit none), and very large packages that need the CLI's
-> chunked publishing should run against a full Movement node
+> object flows omit it on current Movement CLI versions), and large
+> packages that need the CLI's chunked publishing should run against a
+> full Movement node
 > (`useMovelite: false`). The `sdkExecute` option overrides the
 > automatic selection.
 

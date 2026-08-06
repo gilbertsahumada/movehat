@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { AccountAddress } from "@aptos-labs/ts-sdk";
 
 import { Harness } from "../../harness/index.js";
+import { fingerprintRpcUrl, saveDeployment } from "../../core/deployments.js";
 import { CliExecutionError } from "../../errors.js";
 import type {
   ChildProcessAdapter,
@@ -208,10 +209,28 @@ describe("Harness.upgradeCodeObject", () => {
       stageBuildArtifacts();
       const { adapter, calls } = makeBuildOnlyAdapter();
       const aptos = makeMockAptos();
+      const PRIOR_TX_HASH =
+        "0x3333333333333333333333333333333333333333333333333333333333333333";
 
       const harness = await Harness.createLive("testnet");
       try {
         (harness.runtime as { aptos: unknown }).aptos = aptos;
+
+        // Pre-existing record for the object being upgraded — lets the
+        // test cover the previousTxHash chaining in the persisted record.
+        saveDeployment({
+          address: EXISTING_OBJECT,
+          moduleName: "counter",
+          network: "testnet",
+          deployer: harness.runtime.account.accountAddress.toString(),
+          timestamp: Date.now(),
+          txHash: PRIOR_TX_HASH,
+          schemaVersion: 2,
+          chainId: "testnet",
+          rpcFingerprint: fingerprintRpcUrl(harness.runtime.config.rpc),
+          kind: "code-object",
+        });
+
         const result = await harness.upgradeCodeObject({
           moduleName: "counter",
           objectAddress: EXISTING_OBJECT,
@@ -222,6 +241,18 @@ describe("Harness.upgradeCodeObject", () => {
         expect(result.address).toBe(EXISTING_OBJECT);
         expect(result.txHash).toBe(NEW_TX_HASH);
         expect(result.kind).toBe("upgrade-object");
+
+        // Persisted record: same address, new hash, prior hash chained.
+        const saved = JSON.parse(
+          readFileSync(
+            join(fixture.tmpCwd, "deployments", "testnet", "counter.json"),
+            "utf-8"
+          )
+        );
+        expect(saved.address).toBe(EXISTING_OBJECT);
+        expect(saved.txHash).toBe(NEW_TX_HASH);
+        expect(saved.previousTxHash).toBe(PRIOR_TX_HASH);
+        expect(saved.kind).toBe("upgrade-object");
 
         // Build binds the address name to the EXISTING object address.
         expect(calls).toHaveLength(1);
