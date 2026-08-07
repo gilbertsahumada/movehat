@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bytecode as a script payload, marshalling the CLI-style `"type:value"`
   argument strings into BCS values (scalars only; `vector`/`raw` fall back to
   the CLI path), and signs in-process, so no temporary key file is written.
-  The object-deployment flows honor the same option in an upcoming change.
+  The object-deployment flows (`DeployCodeObjectOptions` and, by extension,
+  `UpgradeCodeObjectOptions`) honor the same option — see the next entry.
   Closes #423 (tracks #362).
 - `Harness.deployCodeObject` and `upgradeCodeObject` now honor `sdkExecute`
   too, calling `0x1::object_code_deployment::publish`/`::upgrade` directly
