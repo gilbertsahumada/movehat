@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { U64 } from "@aptos-labs/ts-sdk";
 
 import { Harness } from "../../harness/index.js";
-import { CliExecutionError } from "../../errors.js";
+import { CliExecutionError, TransactionOutcomeUnknownError } from "../../errors.js";
 import type {
   ChildProcessAdapter,
   RunInput,
@@ -241,5 +242,197 @@ describe("Harness.runMoveScript", () => {
     } finally {
       await harness.cleanup();
     }
+  });
+
+  describe("SDK execution path (sdkExecute: true)", () => {
+    const SCRIPT_BYTES = Buffer.from([0xa1, 0x1c, 0xeb, 0x0b, 0x06]);
+
+    function makeMockAptos(waitResponse: Record<string, unknown>) {
+      const aptos = {
+        transaction: {
+          build: {
+            simple: vi.fn(async () => ({ rawTransaction: "raw" })),
+          },
+          sign: vi.fn(() => "senderAuth"),
+          submit: {
+            simple: vi.fn(async () => ({ hash: TX_HASH })),
+          },
+        },
+        waitForTransaction: vi.fn(async () => waitResponse),
+      };
+      return aptos;
+    }
+
+    function writeCompiledScript(): string {
+      const scriptPath = join(fixture.tmpCwd, "build", "main.mv");
+      mkdirSync(join(fixture.tmpCwd, "build"), { recursive: true });
+      writeFileSync(scriptPath, SCRIPT_BYTES);
+      return scriptPath;
+    }
+
+    it("submits the .mv bytecode via the SDK and never invokes the CLI", async () => {
+      const scriptPath = writeCompiledScript();
+      const { adapter, calls } = makeAdapter({
+        exitCode: 0,
+        stdout: successStdout(),
+        stderr: "",
+      });
+      const aptos = makeMockAptos({
+        type: "user_transaction",
+        success: true,
+        vm_status: "Executed successfully",
+      });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        const result = await harness.runMoveScript({
+          scriptPath,
+          args: ["u64:42"],
+          typeArgs: ["0x1::aptos_coin::AptosCoin"],
+          sdkExecute: true,
+          adapter,
+        });
+
+        expect(result).toEqual({
+          txHash: TX_HASH,
+          success: true,
+          vmStatus: "Executed successfully",
+        });
+        expect(calls).toHaveLength(0);
+
+        const buildInput = aptos.transaction.build.simple.mock.calls[0]![0] as {
+          data: {
+            bytecode: Uint8Array;
+            typeArguments: string[];
+            functionArguments: unknown[];
+          };
+        };
+        expect(Buffer.from(buildInput.data.bytecode)).toEqual(SCRIPT_BYTES);
+        expect(buildInput.data.typeArguments).toEqual([
+          "0x1::aptos_coin::AptosCoin",
+        ]);
+        expect(buildInput.data.functionArguments).toHaveLength(1);
+        expect(buildInput.data.functionArguments[0]).toBeInstanceOf(U64);
+        expect((buildInput.data.functionArguments[0] as U64).value).toBe(42n);
+
+        const waitInput = aptos.waitForTransaction.mock.calls[0]![0] as {
+          options?: { checkSuccess?: boolean };
+        };
+        expect(waitInput.options?.checkSuccess).toBe(false);
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("rejects uncompiled .move sources with a pre-compile pointer", async () => {
+      const scriptPath = join(fixture.tmpCwd, "scripts", "init.move");
+      mkdirSync(join(fixture.tmpCwd, "scripts"), { recursive: true });
+      writeFileSync(scriptPath, "// dummy move script\n");
+      const { adapter, calls } = makeAdapter({
+        exitCode: 0,
+        stdout: successStdout(),
+        stderr: "",
+      });
+      const aptos = makeMockAptos({ success: true });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        await expect(
+          harness.runMoveScript({ scriptPath, sdkExecute: true, adapter })
+        ).rejects.toThrow(/movement move compile/);
+        expect(calls).toHaveLength(0);
+        expect(aptos.transaction.build.simple).not.toHaveBeenCalled();
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("returns success:false without throwing when the committed tx failed", async () => {
+      const scriptPath = writeCompiledScript();
+      const aptos = makeMockAptos({
+        type: "user_transaction",
+        success: false,
+        vm_status: "ABORTED",
+      });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        const result = await harness.runMoveScript({
+          scriptPath,
+          sdkExecute: true,
+        });
+        expect(result.txHash).toBe(TX_HASH);
+        expect(result.success).toBe(false);
+        expect(result.vmStatus).toBe("ABORTED");
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("wraps an unconfirmable wait in TransactionOutcomeUnknownError carrying the hash", async () => {
+      const scriptPath = writeCompiledScript();
+      const aptos = makeMockAptos({});
+      aptos.waitForTransaction.mockRejectedValueOnce(
+        new Error("node went away")
+      );
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        let caught: unknown;
+        try {
+          await harness.runMoveScript({ scriptPath, sdkExecute: true });
+        } catch (err) {
+          caught = err;
+        }
+        expect(caught).toBeInstanceOf(TransactionOutcomeUnknownError);
+        expect((caught as TransactionOutcomeUnknownError).txHash).toBe(TX_HASH);
+        expect((caught as TransactionOutcomeUnknownError).operation).toBe(
+          "run-script"
+        );
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("tolerates a movelite-shaped response missing success/vm_status", async () => {
+      const scriptPath = writeCompiledScript();
+      const aptos = makeMockAptos({ type: "user_transaction" });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        const result = await harness.runMoveScript({
+          scriptPath,
+          sdkExecute: true,
+        });
+        expect(result).toEqual({ txHash: TX_HASH });
+      } finally {
+        await harness.cleanup();
+      }
+    });
+
+    it("defaults to the CLI path when sdkExecute is not set (live harness)", async () => {
+      const scriptPath = writeCompiledScript();
+      const { adapter, calls } = makeAdapter({
+        exitCode: 0,
+        stdout: successStdout(),
+        stderr: "",
+      });
+      const aptos = makeMockAptos({ success: true });
+
+      const harness = await Harness.createLive("testnet");
+      try {
+        (harness.runtime as { aptos: unknown }).aptos = aptos;
+        await harness.runMoveScript({ scriptPath, adapter });
+        expect(calls).toHaveLength(1);
+        expect(aptos.transaction.build.simple).not.toHaveBeenCalled();
+      } finally {
+        await harness.cleanup();
+      }
+    });
   });
 });

@@ -1,8 +1,7 @@
 import { Account, Aptos, PrivateKey, PrivateKeyVariants } from "@aptos-labs/ts-sdk";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { MovehatConfig } from "../types/config.js";
 import { extractNamedAddresses } from "../commands/compile.js";
+import { readCompiledPackage } from "./buildArtifacts.js";
 import {
   saveDeployment,
   loadDeployment,
@@ -445,34 +444,7 @@ export class Publisher {
       throw new Error("sdkPublish requires an Aptos client");
     }
 
-    const buildRoot = join(safeDir, "build");
-    // The root package's compiled output is the single directory under
-    // build/ that carries a package-metadata.bcs; dependency builds live
-    // in nested bytecode_modules/dependencies/ and have no metadata here.
-    const pkgDirs = existsSync(buildRoot)
-      ? readdirSync(buildRoot, { withFileTypes: true })
-          .filter((e) => e.isDirectory())
-          .map((e) => join(buildRoot, e.name))
-          .filter((d) => existsSync(join(d, "package-metadata.bcs")))
-      : [];
-    if (pkgDirs.length !== 1) {
-      throw new Error(
-        `Expected exactly one compiled package under ${buildRoot}, found ${pkgDirs.length}.`
-      );
-    }
-    const pkgDir = pkgDirs[0]!;
-
-    const metadataBytes = new Uint8Array(
-      readFileSync(join(pkgDir, "package-metadata.bcs"))
-    );
-    const modulesDir = join(pkgDir, "bytecode_modules");
-    const moduleBytecode = readdirSync(modulesDir)
-      .filter((f) => f.endsWith(".mv"))
-      .sort()
-      .map((f) => new Uint8Array(readFileSync(join(modulesDir, f))));
-    if (moduleBytecode.length === 0) {
-      throw new Error(`No compiled modules (*.mv) found in ${modulesDir}`);
-    }
+    const { metadataBytes, moduleBytecode } = readCompiledPackage(safeDir);
 
     return withSpinner("Publishing to blockchain", async () => {
       const tx = await aptos.publishPackageTransaction({

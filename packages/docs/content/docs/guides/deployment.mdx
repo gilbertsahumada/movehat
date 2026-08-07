@@ -56,6 +56,17 @@ main().catch((error) => {
 
 > **Re-deploying:** the local deployment record lives at `deployments/{network}/{moduleName}.json`. A second `deployCodeObject({ moduleName: "counter" })` call refuses with `ModuleAlreadyDeployedError`. To force a re-deploy, set `MH_CLI_REDEPLOY=true` in the environment.
 
+> **On the movelite backend** (the default for `Harness.createLocal`),
+> `deployCodeObject` and `upgradeCodeObject` execute through the
+> TypeScript SDK instead of the Movement CLI — the CLI cannot parse
+> movelite's responses. Behavior is the same, with two visible
+> differences: the deployment record always carries a `txHash` (the CLI
+> object flows omit it on current Movement CLI versions), and large
+> packages that need the CLI's chunked publishing should run against a
+> full Movement node
+> (`useMovelite: false`). The `sdkExecute` option overrides the
+> automatic selection.
+
 ## Running Deployment Scripts
 
 ```bash
@@ -134,10 +145,10 @@ const harness = await Harness.createLive("testnet");
 
 // Harness methods
 harness.mode               // 'local' | 'fork' | 'live'
-harness.deployCodeObject   // movement move deploy-object
-harness.upgradeCodeObject  // movement move upgrade-object
+harness.deployCodeObject   // movement move deploy-object (SDK on movelite)
+harness.upgradeCodeObject  // movement move upgrade-object (SDK on movelite)
 harness.runViewFunction    // aptos.view
-harness.runMoveScript      // movement move run-script
+harness.runMoveScript      // movement move run-script (SDK on movelite)
 harness.cleanup            // release resources + poison
 
 // Underlying runtime

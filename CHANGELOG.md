@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `Harness.runMoveScript` can now execute through the TypeScript SDK instead
+  of the Movement CLI, controlled by a new `sdkExecute` option on
+  `RunMoveScriptOptions` and `DeployCodeObjectOptions` that the harness
+  defaults to `true` when its backend is movelite — whose REST responses the
+  Movement CLI cannot parse. The SDK path submits pre-compiled `.mv` script
+  bytecode as a script payload, marshalling the CLI-style `"type:value"`
+  argument strings into BCS values (scalars only; `vector`/`raw` fall back to
+  the CLI path), and signs in-process, so no temporary key file is written.
+  The object-deployment flows (`DeployCodeObjectOptions` and, by extension,
+  `UpgradeCodeObjectOptions`) honor the same option — see the next entry.
+  Closes #423 (tracks #362).
+- `Harness.deployCodeObject` and `upgradeCodeObject` now honor `sdkExecute`
+  too, calling `0x1::object_code_deployment::publish`/`::upgrade` directly
+  through the SDK on movelite. The object address is derived deterministically
+  before submission (the modules are compiled against it, mirroring the CLI's
+  `--address-name` behavior), the sequence number is pinned so a concurrent
+  transaction from the same account aborts loudly instead of landing at a
+  different address, and the derivation is cross-checked post-commit by
+  reading `0x1::code::PackageRegistry` at the derived address (movelite omits
+  events, so event-scraping is not an option). The SDK path always records a
+  transaction hash — the CLI object flows emit none — and signs in-process
+  with no temporary key file. Single-transaction publish: very large packages
+  that need the CLI's chunked publishing should keep using a full Movement
+  node. Closes #424 (tracks #362).
+
+### Tests
+
+- The harness-local integration suite no longer pins `useMovelite: false`
+  (the PR #365 stopgap): the backend auto-selects, so under movelite the
+  suite exercises the new SDK execution paths and under
+  `MOVEHAT_USE_MOVELITE=0` it exercises the Movement CLI flows — both modes
+  verified 5/5. The deployment and scripts guides document the movelite SDK
+  behavior and its two visible constraints (pre-compiled `.mv` scripts,
+  scalar script args). Closes #425, and with it #362.
+
+### Internal
+
+- Documented in the testing guide that mocha `--parallel` is not supported:
+  the shared movelite node is per-process, so each parallel worker boots its
+  own node and the two-port fallback (8090, then 8091) fails a third worker
+  with "Ports 8090 and 8091 are in use". Also removed the stale
+  `src/templates/types/movehat.d.ts` from the published templates — it
+  declared a pre-0.2.x API surface (`initRuntime`, `setupTestEnvironment`)
+  that no longer exists, was never copied into user projects by `movehat
+  init`, and shipped dead in the tarball. Closes #421.
+
 ## [0.8.1] - 2026-08-05
 
 ### Fixed
